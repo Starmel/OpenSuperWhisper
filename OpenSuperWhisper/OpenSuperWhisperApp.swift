@@ -19,10 +19,13 @@ struct OpenSuperWhisperApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
+
     }
 
     init() {
         // Request microphone access on app launch
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
+
+        _ = ShortcutManager.shared
     }
 }

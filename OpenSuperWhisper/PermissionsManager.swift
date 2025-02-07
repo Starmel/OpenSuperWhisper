@@ -1,6 +1,11 @@
 import Foundation
 import AVFoundation
-import Cocoa
+import AppKit
+
+enum Permission {
+    case microphone
+    case accessibility
+}
 
 class PermissionsManager: ObservableObject {
     @Published var isMicrophonePermissionGranted = false
@@ -38,8 +43,7 @@ class PermissionsManager: ObservableObject {
     }
     
     func checkAccessibilityPermission() {
-        let trusted = AXIsProcessTrusted()
-        isAccessibilityPermissionGranted = trusted
+        isAccessibilityPermissionGranted = AXIsProcessTrusted()
     }
     
     private func requestAccessibilityPermission() {
@@ -52,7 +56,7 @@ class PermissionsManager: ObservableObject {
         checkAccessibilityPermission()
     }
     
-    func openSystemPreferences(for permission: SystemPermission) {
+    func openSystemPreferences(for permission: Permission) {
         switch permission {
         case .microphone:
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
@@ -64,9 +68,4 @@ class PermissionsManager: ObservableObject {
             }
         }
     }
-}
-
-enum SystemPermission {
-    case microphone
-    case accessibility
 } 

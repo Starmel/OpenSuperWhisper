@@ -7,6 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		36EBC0227428844AC8411325 /* WhisperSamplingStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC6683FF3FCB407AC039A /* WhisperSamplingStrategy.swift */; };
+		36EBC1B35882771B03CCEE49 /* WhisperAlignmentHeadsPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCAB0FC29A334904315BA /* WhisperAlignmentHeadsPreset.swift */; };
+		36EBC306D04008635328DAE1 /* WhisperGrammarElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCAA00AB5DEC1E4CC2EBA /* WhisperGrammarElement.swift */; };
+		36EBC6D475C8352BF3EA9EAF /* WhisperGrammarElementType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCFBC57C80A15672C5791 /* WhisperGrammarElementType.swift */; };
+		36EBC8F7DA3F51E4D546612A /* WhisperAheads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC741D6673D57337B1DBF /* WhisperAheads.swift */; };
+		36EBC907DA520E4D7D750096 /* Whis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC58D48934E0C3BA8CB87 /* Whis.swift */; };
+		36EBCA42DBEDA791E9C785E5 /* WhisperFullParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC8DDC3282BC197C962AD /* WhisperFullParams.swift */; };
+		36EBCB7D2726BE5C80C0338A /* WhisperContextParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC6AF723738D1C4E1EA13 /* WhisperContextParams.swift */; };
+		36EBCC92099BD2EC03912BC9 /* WhisperTokenData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC0C80664CACC7607572F /* WhisperTokenData.swift */; };
+		36EBCD229289171650A4E267 /* WhisperAhead.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCFCB9B6EDF4782439B88 /* WhisperAhead.swift */; };
+		36EBCD57CC6B8E2D3FC51EF5 /* WhisperTimings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCA00779B228F345D6A94 /* WhisperTimings.swift */; };
+		36EBCE4EA0197EA30ECFA1F7 /* WhisperModelLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC0C8929E516C36FC3899 /* WhisperModelLoader.swift */; };
 		CE84DF682D55762F00C54EA6 /* libwhisper.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF672D55762200C54EA6 /* libwhisper.a */; };
 		CE84DF692D55762F00C54EA6 /* libggml.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF632D55762200C54EA6 /* libggml.a */; };
 		CE84DF6A2D55762F00C54EA6 /* libggml-metal.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF652D55762200C54EA6 /* libggml-metal.a */; };
@@ -19,6 +31,7 @@
 		CE84DF762D5577D200C54EA6 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF752D5577D200C54EA6 /* Accelerate.framework */; };
 		CE84DF782D55789800C54EA6 /* ggml-tiny.en.bin in Resources */ = {isa = PBXBuildFile; fileRef = CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */; };
 		CE84DF7A2D5578BE00C54EA6 /* jfk.wav in Resources */ = {isa = PBXBuildFile; fileRef = CE84DF792D5578BE00C54EA6 /* jfk.wav */; };
+		CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +126,7 @@
 				CE84DF722D55778000C54EA6 /* MetalKit.framework in Frameworks */,
 				CE84DF6E2D55777800C54EA6 /* libc++.tbd in Frameworks */,
 				CE84DF6C2D55762F00C54EA6 /* libggml-base.a in Frameworks */,
+				CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */,
 				CE84DF6A2D55762F00C54EA6 /* libggml-metal.a in Frameworks */,
 				CE84DF692D55762F00C54EA6 /* libggml.a in Frameworks */,
 				CE84DF682D55762F00C54EA6 /* libwhisper.a in Frameworks */,
@@ -156,6 +170,18 @@
 				CE84DF432D5557F600C54EA6 /* libwhisper.1.7.4.dylib */,
 				CE84DF422D550BD500C54EA6 /* Release-iphoneos */,
 				CE84DF332D550BB400C54EA6 /* ggml.build */,
+				36EBCAB0FC29A334904315BA /* WhisperAlignmentHeadsPreset.swift */,
+				36EBCFBC57C80A15672C5791 /* WhisperGrammarElementType.swift */,
+				36EBC6683FF3FCB407AC039A /* WhisperSamplingStrategy.swift */,
+				36EBCFCB9B6EDF4782439B88 /* WhisperAhead.swift */,
+				36EBC741D6673D57337B1DBF /* WhisperAheads.swift */,
+				36EBC6AF723738D1C4E1EA13 /* WhisperContextParams.swift */,
+				36EBC0C80664CACC7607572F /* WhisperTokenData.swift */,
+				36EBC0C8929E516C36FC3899 /* WhisperModelLoader.swift */,
+				36EBCAA00AB5DEC1E4CC2EBA /* WhisperGrammarElement.swift */,
+				36EBC8DDC3282BC197C962AD /* WhisperFullParams.swift */,
+				36EBCA00779B228F345D6A94 /* WhisperTimings.swift */,
+				36EBC58D48934E0C3BA8CB87 /* Whis.swift */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -299,6 +325,7 @@
 			);
 			name = OpenSuperWhisper;
 			packageProductDependencies = (
+				CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */,
 			);
 			productName = OpenSuperWhisper;
 			productReference = CE57B0282D52C7BB00929AF3 /* OpenSuperWhisper.app */;
@@ -383,6 +410,7 @@
 			mainGroup = CE57B01F2D52C7BB00929AF3;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CE57B0292D52C7BB00929AF3 /* Products */;
@@ -427,6 +455,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				36EBC1B35882771B03CCEE49 /* WhisperAlignmentHeadsPreset.swift in Sources */,
+				36EBC6D475C8352BF3EA9EAF /* WhisperGrammarElementType.swift in Sources */,
+				36EBC0227428844AC8411325 /* WhisperSamplingStrategy.swift in Sources */,
+				36EBCD229289171650A4E267 /* WhisperAhead.swift in Sources */,
+				36EBC8F7DA3F51E4D546612A /* WhisperAheads.swift in Sources */,
+				36EBCB7D2726BE5C80C0338A /* WhisperContextParams.swift in Sources */,
+				36EBCC92099BD2EC03912BC9 /* WhisperTokenData.swift in Sources */,
+				36EBCE4EA0197EA30ECFA1F7 /* WhisperModelLoader.swift in Sources */,
+				36EBC306D04008635328DAE1 /* WhisperGrammarElement.swift in Sources */,
+				36EBCA42DBEDA791E9C785E5 /* WhisperFullParams.swift in Sources */,
+				36EBCD57CC6B8E2D3FC51EF5 /* WhisperTimings.swift in Sources */,
+				36EBC907DA520E4D7D750096 /* Whis.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,6 +504,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -518,8 +559,11 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				VALID_ARCHS = arm64;
 			};
 			name = Debug;
 		};
@@ -527,6 +571,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -574,13 +619,17 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				VALID_ARCHS = arm64;
 			};
 			name = Release;
 		};
 		CE57B04E2D52C7BC00929AF3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenSuperWhisper/OpenSuperWhisper.entitlements;
@@ -592,6 +641,7 @@
 				DEVELOPMENT_TEAM = 8LLDD7HWZK;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_ARCHS = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
@@ -629,6 +679,7 @@
 		CE57B04F2D52C7BC00929AF3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenSuperWhisper/OpenSuperWhisper.entitlements;
@@ -640,6 +691,7 @@
 				DEVELOPMENT_TEAM = 8LLDD7HWZK;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_ARCHS = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
@@ -782,6 +834,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CE57B0202D52C7BB00929AF3 /* Project object */;
 }

@@ -8,11 +8,11 @@
 import AVFoundation
 import SwiftUI
 
-
 struct ContentView: View {
-    @StateObject private var audioRecorder = AudioRecorder()
-    @StateObject private var settings = Settings()
+    @StateObject private var audioRecorder = AudioRecorder.shared
+    @StateObject private var settings = Settings.shared
     @StateObject private var permissionsManager = PermissionsManager()
+    @StateObject private var transcriptionService = TranscriptionService.shared
     @State private var isSettingsPresented = false
     
     var body: some View {
@@ -23,14 +23,15 @@ struct ContentView: View {
                 } else {
                     List {
                         ForEach(audioRecorder.recordings, id: \.self) { recording in
-                            RecordingRow(url: recording, audioRecorder: audioRecorder)
+                            RecordingRow(url: recording, audioRecorder: audioRecorder, settings: settings)
                         }
                     }
+                    .disabled(transcriptionService.isLoading)
                     
                     HStack {
-                        Text("Recording Shortcut: \(settings.recordingShortcut.description)")
-                            .foregroundColor(.secondary)
-                        
+//                        Text("Recording Shortcut: \(settings.recordingShortcut.description)")
+//                            .foregroundColor(.secondary)
+//
                         Spacer()
                         
                         Button(action: {
@@ -41,25 +42,67 @@ struct ContentView: View {
                         }
                     }
                     .padding()
+                    .disabled(transcriptionService.isLoading)
                     
-                    Button(action: {
-                        audioRecorder.startRecording()
-                    }) {
-                        Image(systemName: audioRecorder.isRecording ? "stop.circle.fill" : "record.circle")
-                            .font(.system(size: 64))
-                            .foregroundColor(audioRecorder.isRecording ? .red : .accentColor)
+                    VStack(spacing: 16) {
+                        if audioRecorder.isRecording {
+                            Text(transcriptionService.currentSegment)
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(10)
+                                .animation(.easeInOut, value: transcriptionService.currentSegment)
+                        }
+                        
+                        Button(action: {
+                            let viewModel = IndicatorWindowManager.shared.show()
+                            viewModel.startRecording()
+
+                            if audioRecorder.isRecording {
+                                audioRecorder.stopRecording()
+                                transcriptionService.stopTranscribing()
+                            } else {
+                                audioRecorder.startRecording()
+                                transcriptionService.startRealTimeTranscription(settings: settings)
+                            }
+                        }) {
+                            Image(systemName: audioRecorder.isRecording ? "stop.circle.fill" : "record.circle")
+                                .font(.system(size: 64))
+                                .foregroundColor(audioRecorder.isRecording ? .red : .accentColor)
+                        }
+                        .disabled(transcriptionService.isLoading)
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Audio Recorder")
-            .sheet(isPresented: $isSettingsPresented) {
-                SettingsView(settings: settings)
+            .overlay {
+                if transcriptionService.isLoading {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                            Text("Loading Whisper Model...")
+                                .foregroundColor(.white)
+                                .font(.headline)
+                        }
+                    }
+                    .ignoresSafeArea()
+                }
             }
+            .navigationTitle("OpenSuperWhisper")
+        }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsView(settings: settings)
         }
         .onAppear {
-            settings.onShortcutTriggered = {
-                audioRecorder.startRecording()
+            if UserDefaults.standard.string(forKey: "selectedModelPath") == nil {
+                // Set default model on first launch
+                if let defaultModel = WhisperModelManager.shared.getAvailableModels().first {
+                    UserDefaults.standard.set(defaultModel.path, forKey: "selectedModelPath")
+                }
             }
         }
     }
@@ -132,80 +175,104 @@ struct PermissionRow: View {
 struct RecordingRow: View {
     let url: URL
     let audioRecorder: AudioRecorder
+    let settings: Settings
+    @StateObject private var transcriptionService = TranscriptionService.shared
+    @State private var showTranscription = false
     
     var body: some View {
-        HStack {
-            Text(url.lastPathComponent)
-            
-            Spacer()
-            
-            Button(action: {
-                audioRecorder.playRecording(url: url)
-            }) {
-                Image(systemName: "play.circle")
-                    .font(.title2)
+        VStack(alignment: .leading) {
+            HStack {
+                Text(url.lastPathComponent)
+                
+                Spacer()
+                
+                Button(action: {
+                    audioRecorder.playRecording(url: url)
+                }) {
+                    Image(systemName: "play.circle")
+                        .font(.title2)
+                }
+                
+                Button(action: {
+                    Task {
+                        do {
+                            showTranscription = true
+                            _ = try await transcriptionService.transcribeAudio(url: url, settings: settings)
+                        } catch {
+                            print("Transcription failed: \(error)")
+                        }
+                    }
+                }) {
+                    Image(systemName: "waveform")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
+                .disabled(transcriptionService.isTranscribing)
+                
+                Button(action: {
+                    audioRecorder.deleteRecording(url: url)
+                }) {
+                    Image(systemName: "trash")
+                        .font(.title2)
+                        .foregroundColor(.red)
+                }
             }
             
-            Button(action: {
-                audioRecorder.deleteRecording(url: url)
-            }) {
-                Image(systemName: "trash")
-                    .font(.title2)
-                    .foregroundColor(.red)
+            if transcriptionService.isTranscribing {
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView("Transcribing...")
+                        .padding(.vertical, 4)
+                    
+                    if !transcriptionService.currentSegment.isEmpty {
+                        Text(transcriptionService.currentSegment)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            
+            if !transcriptionService.transcribedText.isEmpty {
+                TranscriptionView(transcribedText: transcriptionService.transcribedText, isExpanded: $showTranscription)
             }
         }
         .padding(.vertical, 4)
+        .animation(.easeInOut, value: transcriptionService.isTranscribing)
+        .animation(.easeInOut, value: transcriptionService.currentSegment)
     }
 }
 
-struct SettingsView: View {
-    @ObservedObject var settings: Settings
-    @Environment(\.presentationMode) var presentationMode
-    @State private var isRecordingNewShortcut = false
+struct TranscriptionView: View {
+    let transcribedText: String
+    @Binding var isExpanded: Bool
     
     var body: some View {
-        NavigationView {
-            Form {
-                Section("Recording Shortcut") {
-                    HStack {
-                        Text(settings.recordingShortcut.description)
-                            .font(.title2)
-                        
-                        Spacer()
-                        
-                        Button(isRecordingNewShortcut ? "Press any key..." : "Change") {
-                            isRecordingNewShortcut.toggle()
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
+        VStack(alignment: .leading) {
+            HStack {
+                Text("Transcription")
+                    .font(.headline)
+                Spacer()
+                Button(action: { isExpanded.toggle() }) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                 }
             }
-            .padding()
-            .frame(minWidth: 300, minHeight: 200)
-            .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
+            
+            if isExpanded {
+                ScrollView {
+                    Text(transcribedText)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
                 }
+                .frame(maxHeight: 200)
             }
         }
-        .onAppear {
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if isRecordingNewShortcut {
-                    let shortcut = Settings.KeyboardShortcut(
-                        keyCode: Int(event.keyCode),
-                        modifiers: Int(event.modifierFlags.rawValue)
-                    )
-                    settings.recordingShortcut = shortcut
-                    settings.saveSettings()
-                    isRecordingNewShortcut = false
-                    return nil
-                }
-                return event
-            }
-        }
+        .padding(.vertical, 4)
     }
 }
 

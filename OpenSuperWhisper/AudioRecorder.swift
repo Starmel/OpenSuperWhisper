@@ -1,52 +1,89 @@
 import AVFoundation
 import Foundation
-// import whisper
 
 class AudioRecorder: NSObject, ObservableObject {
-    private var audioRecorder: AVAudioRecorder?
-    private var audioPlayer: AVAudioPlayer?
     @Published var isRecording = false
     @Published var recordings: [URL] = []
     
-    override init() {
+    private var audioRecorder: AVAudioRecorder?
+    private var audioPlayer: AVAudioPlayer?
+    private let recordingsDirectory: URL
+    private var currentRecordingURL: URL? // To store the current recording's URL
+
+    // MARK: - Singleton Instance
+
+    static let shared = AudioRecorder() // The shared instance
+    
+    override private init() { // Private initializer to prevent external instantiation
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appDirectory = applicationSupport.appendingPathComponent(Bundle.main.bundleIdentifier!)
+        recordingsDirectory = appDirectory.appendingPathComponent("recordings")
+        
         super.init()
+        
+        createRecordingsDirectoryIfNeeded()
         loadRecordings()
+    }
+    
+    private func createRecordingsDirectoryIfNeeded() {
+        do {
+            try FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("Failed to create recordings directory: \(error)")
+        }
+    }
+    
+    private func loadRecordings() {
+        do {
+            recordings = try FileManager.default.contentsOfDirectory(at: recordingsDirectory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "wav" }
+                .sorted { $0.lastPathComponent > $1.lastPathComponent }
+        } catch {
+            print("Failed to load recordings: \(error)")
+        }
     }
     
     func startRecording() {
         if isRecording {
             stopRecording()
+            print("Wtf return")
             return
         }
-        var cparams = whisper_context_default_params()
-        print(cparams)
         
-//        cparams.use_gpu = true
-//        let ctx = whisper_init_from_file_with_params("", cparams)
-//        whisper_pos()
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let filename = "\(timestamp).wav"
+        let fileURL = recordingsDirectory.appendingPathComponent(filename)
+        currentRecordingURL = fileURL // Save the URL of the current recording
         
-        let audioFilename = getDocumentsDirectory().appendingPathComponent("\(Date().timeIntervalSince1970).m4a")
+        print("start record file to \(fileURL)")
         
-        let settings = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 16000.0,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false
         ]
         
         do {
-            audioRecorder = try AVAudioRecorder(url: audioFilename, settings: settings)
+            audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
+            audioRecorder?.delegate = self
             audioRecorder?.record()
             isRecording = true
         } catch {
-            print("Could not start recording: \(error)")
+            print("Failed to start recording: \(error)")
+            currentRecordingURL = nil // Reset the URL if recording fails
         }
     }
     
-    func stopRecording() {
+    func stopRecording() -> URL? { // Changed to return URL?
         audioRecorder?.stop()
         isRecording = false
         loadRecordings()
+        let url = currentRecordingURL
+        currentRecordingURL = nil // Reset the URL
+        return url // Return the URL of the stopped recording
     }
     
     func playRecording(url: URL) {
@@ -54,7 +91,7 @@ class AudioRecorder: NSObject, ObservableObject {
             audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer?.play()
         } catch {
-            print("Could not play recording: \(error)")
+            print("Failed to play recording: \(error)")
         }
     }
     
@@ -63,24 +100,15 @@ class AudioRecorder: NSObject, ObservableObject {
             try FileManager.default.removeItem(at: url)
             loadRecordings()
         } catch {
-            print("Could not delete recording: \(error)")
+            print("Failed to delete recording: \(error)")
         }
     }
-    
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-    
-    private func loadRecordings() {
-        do {
-            let urls = try FileManager.default.contentsOfDirectory(
-                at: getDocumentsDirectory(),
-                includingPropertiesForKeys: nil
-            )
-            recordings = urls.filter { $0.pathExtension == "m4a" }
-                .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
-        } catch {
-            print("Could not load recordings: \(error)")
+}
+
+extension AudioRecorder: AVAudioRecorderDelegate {
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        if flag {
+            loadRecordings()
         }
     }
 }

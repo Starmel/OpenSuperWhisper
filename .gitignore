@@ -103,3 +103,4 @@ htmlcov/
 dmypy.json
 
 tools/
+/SourcePackages
