@@ -10,22 +10,45 @@ import SwiftUI
 
 @main
 struct OpenSuperWhisperApp: App {
+    @StateObject private var appState = AppState()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .frame(minWidth: 400, minHeight: 500)
+            Group {
+                if !appState.hasCompletedOnboarding {
+                    OnboardingView()
+                } else {
+                    ContentView()
+                }
+            }
+            .frame(width: 450, height: 650)
+            .environmentObject(appState)
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 450, height: 650)
+        .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
-
     }
 
     init() {
-        // Request microphone access on app launch
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+//        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != nil {
+//            fatalError("LOL")
+//        }
 
         _ = ShortcutManager.shared
+    }
+}
+
+class AppState: ObservableObject {
+    @Published var hasCompletedOnboarding: Bool {
+        didSet {
+            AppPreferences.shared.hasCompletedOnboarding = hasCompletedOnboarding
+        }
+    }
+
+    init() {
+        self.hasCompletedOnboarding = AppPreferences.shared.hasCompletedOnboarding
     }
 }

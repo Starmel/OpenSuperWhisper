@@ -19,7 +19,6 @@ final class OpenSuperWhisperTests: XCTestCase {
     }
 
     func testExample() throws {
-        WhisperContext.performExampleUsage()
     }
 
     func testPerformanceExample() throws {

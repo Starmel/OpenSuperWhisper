@@ -7,18 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		36EBC0227428844AC8411325 /* WhisperSamplingStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC6683FF3FCB407AC039A /* WhisperSamplingStrategy.swift */; };
-		36EBC1B35882771B03CCEE49 /* WhisperAlignmentHeadsPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCAB0FC29A334904315BA /* WhisperAlignmentHeadsPreset.swift */; };
-		36EBC306D04008635328DAE1 /* WhisperGrammarElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCAA00AB5DEC1E4CC2EBA /* WhisperGrammarElement.swift */; };
-		36EBC6D475C8352BF3EA9EAF /* WhisperGrammarElementType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCFBC57C80A15672C5791 /* WhisperGrammarElementType.swift */; };
-		36EBC8F7DA3F51E4D546612A /* WhisperAheads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC741D6673D57337B1DBF /* WhisperAheads.swift */; };
-		36EBC907DA520E4D7D750096 /* Whis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC58D48934E0C3BA8CB87 /* Whis.swift */; };
-		36EBCA42DBEDA791E9C785E5 /* WhisperFullParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC8DDC3282BC197C962AD /* WhisperFullParams.swift */; };
-		36EBCB7D2726BE5C80C0338A /* WhisperContextParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC6AF723738D1C4E1EA13 /* WhisperContextParams.swift */; };
-		36EBCC92099BD2EC03912BC9 /* WhisperTokenData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC0C80664CACC7607572F /* WhisperTokenData.swift */; };
-		36EBCD229289171650A4E267 /* WhisperAhead.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCFCB9B6EDF4782439B88 /* WhisperAhead.swift */; };
-		36EBCD57CC6B8E2D3FC51EF5 /* WhisperTimings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBCA00779B228F345D6A94 /* WhisperTimings.swift */; };
-		36EBCE4EA0197EA30ECFA1F7 /* WhisperModelLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EBC0C8929E516C36FC3899 /* WhisperModelLoader.swift */; };
+		36EBC0227428844AC8411325 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBC1B35882771B03CCEE49 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBC306D04008635328DAE1 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBC6D475C8352BF3EA9EAF /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBC8F7DA3F51E4D546612A /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBC907DA520E4D7D750096 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCA42DBEDA791E9C785E5 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCB7D2726BE5C80C0338A /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCC92099BD2EC03912BC9 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCD229289171650A4E267 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCD57CC6B8E2D3FC51EF5 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		36EBCE4EA0197EA30ECFA1F7 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		CE0EAD6E2D56ACA80067FDEE /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = CE0EAD6D2D56ACA80067FDEE /* GRDB */; };
 		CE84DF682D55762F00C54EA6 /* libwhisper.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF672D55762200C54EA6 /* libwhisper.a */; };
 		CE84DF692D55762F00C54EA6 /* libggml.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF632D55762200C54EA6 /* libggml.a */; };
 		CE84DF6A2D55762F00C54EA6 /* libggml-metal.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF652D55762200C54EA6 /* libggml-metal.a */; };
@@ -29,8 +30,6 @@
 		CE84DF722D55778000C54EA6 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF702D55778000C54EA6 /* MetalKit.framework */; };
 		CE84DF742D5577B000C54EA6 /* libggml-blas.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF732D5577A700C54EA6 /* libggml-blas.a */; };
 		CE84DF762D5577D200C54EA6 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF752D5577D200C54EA6 /* Accelerate.framework */; };
-		CE84DF782D55789800C54EA6 /* ggml-tiny.en.bin in Resources */ = {isa = PBXBuildFile; fileRef = CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */; };
-		CE84DF7A2D5578BE00C54EA6 /* jfk.wav in Resources */ = {isa = PBXBuildFile; fileRef = CE84DF792D5578BE00C54EA6 /* jfk.wav */; };
 		CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
@@ -123,6 +122,7 @@
 				CE84DF762D5577D200C54EA6 /* Accelerate.framework in Frameworks */,
 				CE84DF742D5577B000C54EA6 /* libggml-blas.a in Frameworks */,
 				CE84DF712D55778000C54EA6 /* Metal.framework in Frameworks */,
+				CE0EAD6E2D56ACA80067FDEE /* GRDB in Frameworks */,
 				CE84DF722D55778000C54EA6 /* MetalKit.framework in Frameworks */,
 				CE84DF6E2D55777800C54EA6 /* libc++.tbd in Frameworks */,
 				CE84DF6C2D55762F00C54EA6 /* libggml-base.a in Frameworks */,
@@ -170,18 +170,6 @@
 				CE84DF432D5557F600C54EA6 /* libwhisper.1.7.4.dylib */,
 				CE84DF422D550BD500C54EA6 /* Release-iphoneos */,
 				CE84DF332D550BB400C54EA6 /* ggml.build */,
-				36EBCAB0FC29A334904315BA /* WhisperAlignmentHeadsPreset.swift */,
-				36EBCFBC57C80A15672C5791 /* WhisperGrammarElementType.swift */,
-				36EBC6683FF3FCB407AC039A /* WhisperSamplingStrategy.swift */,
-				36EBCFCB9B6EDF4782439B88 /* WhisperAhead.swift */,
-				36EBC741D6673D57337B1DBF /* WhisperAheads.swift */,
-				36EBC6AF723738D1C4E1EA13 /* WhisperContextParams.swift */,
-				36EBC0C80664CACC7607572F /* WhisperTokenData.swift */,
-				36EBC0C8929E516C36FC3899 /* WhisperModelLoader.swift */,
-				36EBCAA00AB5DEC1E4CC2EBA /* WhisperGrammarElement.swift */,
-				36EBC8DDC3282BC197C962AD /* WhisperFullParams.swift */,
-				36EBCA00779B228F345D6A94 /* WhisperTimings.swift */,
-				36EBC58D48934E0C3BA8CB87 /* Whis.swift */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -326,6 +314,7 @@
 			name = OpenSuperWhisper;
 			packageProductDependencies = (
 				CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */,
+				CE0EAD6D2D56ACA80067FDEE /* GRDB */,
 			);
 			productName = OpenSuperWhisper;
 			productReference = CE57B0282D52C7BB00929AF3 /* OpenSuperWhisper.app */;
@@ -411,6 +400,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CE57B0292D52C7BB00929AF3 /* Products */;
@@ -429,8 +419,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CE84DF7A2D5578BE00C54EA6 /* jfk.wav in Resources */,
-				CE84DF782D55789800C54EA6 /* ggml-tiny.en.bin in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -455,18 +443,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				36EBC1B35882771B03CCEE49 /* WhisperAlignmentHeadsPreset.swift in Sources */,
-				36EBC6D475C8352BF3EA9EAF /* WhisperGrammarElementType.swift in Sources */,
-				36EBC0227428844AC8411325 /* WhisperSamplingStrategy.swift in Sources */,
-				36EBCD229289171650A4E267 /* WhisperAhead.swift in Sources */,
-				36EBC8F7DA3F51E4D546612A /* WhisperAheads.swift in Sources */,
-				36EBCB7D2726BE5C80C0338A /* WhisperContextParams.swift in Sources */,
-				36EBCC92099BD2EC03912BC9 /* WhisperTokenData.swift in Sources */,
-				36EBCE4EA0197EA30ECFA1F7 /* WhisperModelLoader.swift in Sources */,
-				36EBC306D04008635328DAE1 /* WhisperGrammarElement.swift in Sources */,
-				36EBCA42DBEDA791E9C785E5 /* WhisperFullParams.swift in Sources */,
-				36EBCD57CC6B8E2D3FC51EF5 /* WhisperTimings.swift in Sources */,
-				36EBC907DA520E4D7D750096 /* Whis.swift in Sources */,
+				36EBC1B35882771B03CCEE49 /* (null) in Sources */,
+				36EBC6D475C8352BF3EA9EAF /* (null) in Sources */,
+				36EBC0227428844AC8411325 /* (null) in Sources */,
+				36EBCD229289171650A4E267 /* (null) in Sources */,
+				36EBC8F7DA3F51E4D546612A /* (null) in Sources */,
+				36EBCB7D2726BE5C80C0338A /* (null) in Sources */,
+				36EBCC92099BD2EC03912BC9 /* (null) in Sources */,
+				36EBCE4EA0197EA30ECFA1F7 /* (null) in Sources */,
+				36EBC306D04008635328DAE1 /* (null) in Sources */,
+				36EBCA42DBEDA791E9C785E5 /* (null) in Sources */,
+				36EBCD57CC6B8E2D3FC51EF5 /* (null) in Sources */,
+				36EBC907DA520E4D7D750096 /* (null) in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -538,7 +526,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -555,7 +543,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
@@ -601,19 +589,15 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
+				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				LLVM_LTO = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -622,6 +606,7 @@
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALID_ARCHS = arm64;
 			};
 			name = Release;
@@ -652,9 +637,10 @@
 					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = "OpenSuperWhisper/OpenSuperWhisper-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "OpenSuperWhisper needs accessibility access to provide system-wide functionality.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenSuperWhisper needs microphone access to record audio for transcription.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -663,6 +649,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lwhisper",
@@ -696,15 +683,17 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
+				GCC_OPTIMIZATION_LEVEL = s;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = "OpenSuperWhisper/OpenSuperWhisper-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "OpenSuperWhisper needs accessibility access to provide system-wide functionality.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenSuperWhisper needs microphone access to record audio for transcription.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -713,6 +702,8 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
+				LLVM_LTO = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lwhisper",
@@ -722,6 +713,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(PROJECT_DIR)/Bridge.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -836,6 +828,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -847,6 +847,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CE0EAD6D2D56ACA80067FDEE /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
 		CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;

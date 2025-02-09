@@ -9,7 +9,7 @@ class SettingsViewModel: ObservableObject {
     @Published var selectedModelURL: URL? {
         didSet {
             if let url = selectedModelURL {
-                UserDefaults.standard.set(url.path, forKey: "selectedModelPath")
+                AppPreferences.shared.selectedModelPath = url.path
             }
         }
     }
@@ -17,107 +17,78 @@ class SettingsViewModel: ObservableObject {
     @Published var availableModels: [URL] = []
     @Published var selectedLanguage: String {
         didSet {
-            UserDefaults.standard.set(selectedLanguage, forKey: "whisperLanguage")
+            AppPreferences.shared.whisperLanguage = selectedLanguage
         }
     }
 
     @Published var translateToEnglish: Bool {
         didSet {
-            UserDefaults.standard.set(translateToEnglish, forKey: "translateToEnglish")
+            AppPreferences.shared.translateToEnglish = translateToEnglish
         }
     }
 
     @Published var suppressBlankAudio: Bool {
         didSet {
-            UserDefaults.standard.set(suppressBlankAudio, forKey: "suppressBlankAudio")
+            AppPreferences.shared.suppressBlankAudio = suppressBlankAudio
         }
     }
 
     @Published var showTimestamps: Bool {
         didSet {
-            UserDefaults.standard.set(showTimestamps, forKey: "showTimestamps")
+            AppPreferences.shared.showTimestamps = showTimestamps
         }
     }
     
-    // New settings
     @Published var temperature: Double {
         didSet {
-            UserDefaults.standard.set(temperature, forKey: "temperature")
+            AppPreferences.shared.temperature = temperature
         }
     }
 
     @Published var noSpeechThreshold: Double {
         didSet {
-            UserDefaults.standard.set(noSpeechThreshold, forKey: "noSpeechThreshold")
+            AppPreferences.shared.noSpeechThreshold = noSpeechThreshold
         }
     }
 
     @Published var initialPrompt: String {
         didSet {
-            UserDefaults.standard.set(initialPrompt, forKey: "initialPrompt")
+            AppPreferences.shared.initialPrompt = initialPrompt
         }
     }
 
     @Published var useBeamSearch: Bool {
         didSet {
-            UserDefaults.standard.set(useBeamSearch, forKey: "useBeamSearch")
+            AppPreferences.shared.useBeamSearch = useBeamSearch
         }
     }
 
     @Published var beamSize: Int {
         didSet {
-            UserDefaults.standard.set(beamSize, forKey: "beamSize")
+            AppPreferences.shared.beamSize = beamSize
         }
     }
 
     @Published var debugMode: Bool {
         didSet {
-            UserDefaults.standard.set(debugMode, forKey: "debugMode")
+            AppPreferences.shared.debugMode = debugMode
         }
-    }
-    
-    let availableLanguages = [
-        "auto", "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it", "id", "hi", "fi"
-    ]
-    
-    let languageNames = [
-        "auto": "Auto-detect",
-        "en": "English",
-        "zh": "Chinese",
-        "de": "German",
-        "es": "Spanish",
-        "ru": "Russian",
-        "ko": "Korean",
-        "fr": "French",
-        "ja": "Japanese",
-        "pt": "Portuguese",
-        "tr": "Turkish",
-        "pl": "Polish",
-        "ca": "Catalan",
-        "nl": "Dutch",
-        "ar": "Arabic",
-        "sv": "Swedish",
-        "it": "Italian",
-        "id": "Indonesian",
-        "hi": "Hindi",
-        "fi": "Finnish"
-    ]
+    }    
     
     init() {
-        self.selectedLanguage = UserDefaults.standard.string(forKey: "whisperLanguage") ?? "auto"
-        self.translateToEnglish = UserDefaults.standard.bool(forKey: "translateToEnglish")
-        self.suppressBlankAudio = UserDefaults.standard.bool(forKey: "suppressBlankAudio")
-        self.showTimestamps = UserDefaults.standard.bool(forKey: "showTimestamps")
+        let prefs = AppPreferences.shared
+        self.selectedLanguage = prefs.whisperLanguage
+        self.translateToEnglish = prefs.translateToEnglish
+        self.suppressBlankAudio = prefs.suppressBlankAudio
+        self.showTimestamps = prefs.showTimestamps
+        self.temperature = prefs.temperature
+        self.noSpeechThreshold = prefs.noSpeechThreshold
+        self.initialPrompt = prefs.initialPrompt
+        self.useBeamSearch = prefs.useBeamSearch
+        self.beamSize = prefs.beamSize
+        self.debugMode = prefs.debugMode
         
-        // Initialize new settings
-        self.temperature = UserDefaults.standard.double(forKey: "temperature") != 0 ? UserDefaults.standard.double(forKey: "temperature") : 0.0
-        self.noSpeechThreshold = UserDefaults.standard.double(forKey: "noSpeechThreshold") != 0 ? UserDefaults.standard.double(forKey: "noSpeechThreshold") : 0.6
-        self.initialPrompt = UserDefaults.standard.string(forKey: "initialPrompt") ?? ""
-        self.useBeamSearch = UserDefaults.standard.bool(forKey: "useBeamSearch")
-        self.beamSize = UserDefaults.standard.integer(forKey: "beamSize") != 0 ? UserDefaults.standard.integer(forKey: "beamSize") : 5
-        self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
-        
-        if let savedPath = UserDefaults.standard.string(forKey: "selectedModelPath") {
+        if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
         loadAvailableModels()
@@ -133,6 +104,17 @@ class SettingsViewModel: ObservableObject {
 
 final class Settings: ObservableObject {
     @Published var viewModel: SettingsViewModel
+    @Published var selectedModelPath: String?
+    @Published var selectedLanguage: String
+    @Published var translateToEnglish: Bool
+    @Published var suppressBlankAudio: Bool
+    @Published var showTimestamps: Bool
+    @Published var temperature: Double
+    @Published var noSpeechThreshold: Double
+    @Published var initialPrompt: String
+    @Published var useBeamSearch: Bool
+    @Published var beamSize: Int
+    @Published var debugMode: Bool
     
     static let shared = Settings()
     
@@ -140,8 +122,74 @@ final class Settings: ObservableObject {
         // Get the current shortcut from ShortcutManager
      
         self.viewModel = SettingsViewModel()
+        let prefs = AppPreferences.shared
+        self.selectedLanguage = prefs.whisperLanguage
+        self.translateToEnglish = prefs.translateToEnglish
+        self.suppressBlankAudio = prefs.suppressBlankAudio
+        self.showTimestamps = prefs.showTimestamps
+        self.temperature = prefs.temperature
+        self.noSpeechThreshold = prefs.noSpeechThreshold
+        self.initialPrompt = prefs.initialPrompt
+        self.useBeamSearch = prefs.useBeamSearch
+        self.beamSize = prefs.beamSize
+        self.debugMode = prefs.debugMode
+        self.selectedModelPath = prefs.selectedModelPath
     }
     
+    func setModelPath(_ url: URL) {
+        selectedModelPath = url.path
+        AppPreferences.shared.selectedModelPath = url.path
+    }
+    
+    func setLanguage(_ selectedLanguage: String) {
+        self.selectedLanguage = selectedLanguage
+        AppPreferences.shared.whisperLanguage = selectedLanguage
+    }
+    
+    func setTranslateToEnglish(_ translateToEnglish: Bool) {
+        self.translateToEnglish = translateToEnglish
+        AppPreferences.shared.translateToEnglish = translateToEnglish
+    }
+    
+    func setSuppressBlankAudio(_ suppressBlankAudio: Bool) {
+        self.suppressBlankAudio = suppressBlankAudio
+        AppPreferences.shared.suppressBlankAudio = suppressBlankAudio
+    }
+    
+    func setShowTimestamps(_ showTimestamps: Bool) {
+        self.showTimestamps = showTimestamps
+        AppPreferences.shared.showTimestamps = showTimestamps
+    }
+    
+    func setTemperature(_ temperature: Double) {
+        self.temperature = temperature
+        AppPreferences.shared.temperature = temperature
+    }
+    
+    func setNoSpeechThreshold(_ noSpeechThreshold: Double) {
+        self.noSpeechThreshold = noSpeechThreshold
+        AppPreferences.shared.noSpeechThreshold = noSpeechThreshold
+    }
+    
+    func setInitialPrompt(_ initialPrompt: String) {
+        self.initialPrompt = initialPrompt
+        AppPreferences.shared.initialPrompt = initialPrompt
+    }
+    
+    func setUseBeamSearch(_ useBeamSearch: Bool) {
+        self.useBeamSearch = useBeamSearch
+        AppPreferences.shared.useBeamSearch = useBeamSearch
+    }
+    
+    func setBeamSize(_ beamSize: Int) {
+        self.beamSize = beamSize
+        AppPreferences.shared.beamSize = beamSize
+    }
+    
+    func setDebugMode(_ debugMode: Bool) {
+        self.debugMode = debugMode
+        AppPreferences.shared.debugMode = debugMode
+    }
 }
 
 struct SettingsView: View {
@@ -154,34 +202,34 @@ struct SettingsView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
+
+             // Shortcut Settings
+            shortcutSettings
+                .tabItem {
+                    Label("Shortcuts", systemImage: "command")
+                }
+                .tag(0)
             // Model Settings
             modelSettings
                 .tabItem {
                     Label("Model", systemImage: "cpu")
                 }
-                .tag(0)
+                .tag(1)
             
             // Transcription Settings
             transcriptionSettings
                 .tabItem {
                     Label("Transcription", systemImage: "text.bubble")
                 }
-                .tag(1)
+                .tag(2)
             
             // Advanced Settings
             advancedSettings
                 .tabItem {
                     Label("Advanced", systemImage: "gear")
                 }
-                .tag(2)
-            
-            // Shortcut Settings
-            shortcutSettings
-                .tabItem {
-                    Label("Shortcuts", systemImage: "command")
-                }
                 .tag(3)
-        }
+            }
         .padding()
         .frame(width: 500, height: 400)
         .toolbar {
@@ -239,8 +287,8 @@ struct SettingsView: View {
         Form {
             Section(header: Text("Language Settings").bold()) {
                 Picker("Language", selection: $viewModel.selectedLanguage) {
-                    ForEach(viewModel.availableLanguages, id: \.self) { code in
-                        Text(viewModel.languageNames[code] ?? code)
+                    ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                        Text(LanguageUtil.languageNames[code] ?? code)
                             .tag(code)
                     }
                 }

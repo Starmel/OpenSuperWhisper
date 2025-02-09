@@ -21,7 +21,6 @@ class ShortcutManager {
 
         KeyboardShortcuts.onKeyUp(for: .toggleRecord) {
             
-            print("Toggle record, active = \(activeVm)")
             if activeVm != nil {
             
                 IndicatorWindowManager.shared.stopRecording()
@@ -48,8 +47,7 @@ class ShortcutManager {
 
         KeyboardShortcuts.onKeyUp(for: .escape) {
             
-            print("active \(activeVm)")
-            if let vm = activeVm {
+            if activeVm != nil {
                 
 //                if vm.isRecording {
                 IndicatorWindowManager.shared.stopForce()
@@ -62,6 +60,7 @@ class ShortcutManager {
 //                }
             }
         }
+        KeyboardShortcuts.disable(.escape)
     }
 
 }

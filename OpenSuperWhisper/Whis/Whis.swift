@@ -414,7 +414,7 @@ public class MyWhisperContext {
     }
     
     public static func contextDefaultParamsByRef() -> UnsafeMutablePointer<WhisperContextParams>? {
-        guard var defaultParams = whisper_context_default_params_by_ref()?.pointee else { return nil }
+        guard let defaultParams = whisper_context_default_params_by_ref()?.pointee else { return nil }
         
         // Allocate memory for a new WhisperContextParams instance
         let swiftParamsPointer = UnsafeMutablePointer<WhisperContextParams>.allocate(capacity: 1)
@@ -623,7 +623,7 @@ public class MyWhisperContext {
     public func full(samples: [Float], params: inout WhisperFullParams) -> Bool {
         guard let ctx = ctx else { return false }
         let result = samples.withUnsafeBufferPointer { buffer in
-            var cParams = params.toC() // Convert to C struct here.
+            let cParams = params.toC() // Convert to C struct here.
             let result: Int32
             if let state = state {
                 result = whisper_full_with_state(ctx, state, cParams, buffer.baseAddress, Int32(samples.count))
@@ -654,7 +654,7 @@ public class MyWhisperContext {
     
     public func fullParallel(samples: [Float], params: inout WhisperFullParams, nProcessors: Int) -> Bool {
         guard let ctx = ctx else { return false }
-        var cParams = params.toC()
+        let cParams = params.toC()
         let result = samples.withUnsafeBufferPointer { buffer in
             whisper_full_parallel(ctx, cParams, buffer.baseAddress, Int32(samples.count), Int32(nProcessors))
         }

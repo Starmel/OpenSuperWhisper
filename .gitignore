@@ -104,3 +104,6 @@ dmypy.json
 
 tools/
 /SourcePackages
+SourcePackages
+.build
+default.profraw

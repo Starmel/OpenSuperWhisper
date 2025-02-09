@@ -24,3 +24,24 @@ xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPat
 ```
 
 # Scratchpad
+
+## Current Task: Update Recording Management
+Goal: Modify the codebase to save recordings only after successful transcription and store them with transcription data.
+
+Steps:
+[X] 1. Create a Recording model to store recording data with transcription
+[X] 2. Update AudioRecorder to handle temporary recordings
+[X] 3. Update IndicatorWindow to handle transcription and saving
+[X] 4. Update ContentView to display transcribed recordings
+[X] 5. Add database storage for recordings
+
+Key Changes:
+- AudioRecorder: Added temporary recording storage and cleanup
+- IndicatorWindow: Now handles transcription completion and saving to permanent storage
+- ContentView: Updated to show transcribed recordings with timestamps
+- New Recording model with transcription data and JSON storage
+
+Next Steps:
+- Test the changes
+- Consider adding error handling for failed transcriptions
+- Add duration information to recordings

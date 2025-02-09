@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 
+@MainActor
 class TranscriptionService: ObservableObject {
     static let shared = TranscriptionService()
     
@@ -26,30 +27,47 @@ class TranscriptionService: ObservableObject {
     }
     
     private func loadModel() {
-        if let modelPath = UserDefaults.standard.string(forKey: "selectedModelPath") {
+        print("Loading model")
+        if let modelPath = AppPreferences.shared.selectedModelPath {
             isLoading = true
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let params = WhisperContextParams()
                 self?.context = MyWhisperContext.initFromFile(path: modelPath, params: params)
                 DispatchQueue.main.async {
                     self?.isLoading = false
+                    print("Model loaded")
                 }
             }
         }
     }
     
     func reloadModel(with path: String) {
+        print("Reloading model")
         isLoading = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let params = WhisperContextParams()
             self?.context = MyWhisperContext.initFromFile(path: path, params: params)
             DispatchQueue.main.async {
                 self?.isLoading = false
+                print("Model reloaded")
             }
         }
     }
     
     private func setupAudioEngine() {
+        // Check for audio input devices first
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external],
+            mediaType: .audio,
+            position: .unspecified
+        )
+        
+        // Don't setup if no input devices available
+        guard !discoverySession.devices.isEmpty else {
+            print("No audio input devices available")
+            return
+        }
+        
         audioEngine = AVAudioEngine()
         inputNode = audioEngine?.inputNode
         
@@ -339,7 +357,7 @@ class TranscriptionService: ObservableObject {
     }
     
     private func createContext() -> MyWhisperContext? {
-        guard let modelPath = UserDefaults.standard.string(forKey: "selectedModelPath") else {
+        guard let modelPath = AppPreferences.shared.selectedModelPath else {
             return nil
         }
         
@@ -409,4 +427,5 @@ enum TranscriptionError: Error {
     case audioConversionFailed
     case processingFailed
     case languageAllocationFailed
+    case modelNotFound
 }

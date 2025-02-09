@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 import SwiftUI
 
 class IndicatorWindowManager {
@@ -10,6 +11,9 @@ class IndicatorWindowManager {
     private init() {}
     
     func show(nearPoint point: NSPoint? = nil) -> IndicatorViewModel {
+        
+        KeyboardShortcuts.enable(.escape)
+        
         // Create new view model
         let newViewModel = IndicatorViewModel()
         newViewModel.delegate = self
@@ -71,6 +75,13 @@ class IndicatorWindowManager {
     }
     
     func stopForce() {
+        viewModel?.cancelRecording()
+        hide()
+    }
+
+    func hide() {
+        KeyboardShortcuts.disable(.escape)
+        
         Task.detached { [weak self] in
             
             guard let self = self else { return }
@@ -88,6 +99,6 @@ class IndicatorWindowManager {
 extension IndicatorWindowManager: IndicatorViewDelegate {
     
     func didFinishDecoding() {
-        stopForce()
+        hide()
     }
 }

@@ -21,6 +21,7 @@ class IndicatorViewModel: ObservableObject {
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
+    private let recordingStore = RecordingStore.shared
     
     var isRecording: Bool {
         recorder.isRecording
@@ -36,27 +37,47 @@ class IndicatorViewModel: ObservableObject {
         state = .decoding
         stopBlinking()
         
-        if let url = recorder.stopRecording() {
+        if let tempURL = recorder.stopRecording() {
             let transcription = TranscriptionService.shared
             
             Task { [weak self] in
-                
                 guard let self = self else { return }
                 
                 do {
-                    
                     print("start decoding...")
-                    let text = try await transcription.transcribeAudio(url: url, settings: .shared)
+                    let text = try await transcription.transcribeAudio(url: tempURL, settings: .shared)
+                    
+                    // Create a new Recording instance
+                    let timestamp = Date()
+                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                    let finalURL = Recording(
+                        id: UUID(),
+                        timestamp: timestamp,
+                        fileName: fileName,
+                        transcription: text,
+                        duration: 0 // TODO: Get actual duration
+                    ).url
+                    
+                    // Move the temporary recording to final location
+                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                    
+                    // Save the recording to store
+                    await recordingStore.addRecording(Recording(
+                        id: UUID(),
+                        timestamp: timestamp,
+                        fileName: fileName,
+                        transcription: text,
+                        duration: 0 // TODO: Get actual duration
+                    ))
                     
                     insertTextUsingPasteboard(text)
                     print("Transcription result: \(text)")
-
                 } catch {
                     print("Error transcribing audio: \(error)")
+                    try? FileManager.default.removeItem(at: tempURL)
                 }
                 
                 await self.delegate?.didFinishDecoding()
-                
             }
         } else {
             
@@ -69,48 +90,13 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func insertTextUsingPasteboard(_ text: String) {
-        // 1. Копируем текст в буфер обмена
-        let pasteboard = NSPasteboard.general
-        pasteboard.declareTypes([.string], owner: nil)
-        pasteboard.setString(text, forType: .string)
-        
-        // 2. Создаем источник событий
-        guard let source = CGEventSource(stateID: .combinedSessionState) else {
-            print("Не удалось создать источник событий")
-            return
-        }
-        
-        // Коды клавиш (в dec):
-        // - Command (левая) — 55
-        // - V — 9
-        let keyCodeCmd: CGKeyCode = 55
-        let keyCodeV: CGKeyCode = 9
-        
-        // Создаем события: нажатие Command, нажатие V, отпускание V, отпускание Command.
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: keyCodeCmd, keyDown: true)
-        
-        // При нажатии V нужно выставить флаг Command
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: keyCodeV, keyDown: true)
-        vDown?.flags = .maskCommand
-        
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: keyCodeV, keyDown: false)
-        vUp?.flags = .maskCommand
-        
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: keyCodeCmd, keyDown: false)
-        
-        // Определяем место отправки событий
-        let eventTapLocation = CGEventTapLocation.cghidEventTap
-        
-        // Отправляем события в систему
-        cmdDown?.post(tap: eventTapLocation)
-        vDown?.post(tap: eventTapLocation)
-        vUp?.post(tap: eventTapLocation)
-        cmdUp?.post(tap: eventTapLocation)
+        ClipboardUtil.insertTextUsingPasteboard(text)
     }
 
     func stop() {
         state = .idle
         stopBlinking()
+        recorder.cleanupTemporaryRecordings()
     }
     
     private func startBlinking() {
@@ -123,6 +109,10 @@ class IndicatorViewModel: ObservableObject {
         blinkTimer?.invalidate()
         blinkTimer = nil
         isBlinking = false
+    }
+
+    func cancelRecording() {
+        recorder.cancelRecording()
     }
 
     @MainActor
@@ -170,6 +160,9 @@ struct IndicatorWindow: View {
     }
     
     var body: some View {
+
+        let rect = RoundedRectangle(cornerRadius: 24)
+        
         VStack(spacing: 12) {
             switch viewModel.state {
             case .recording:
@@ -200,14 +193,15 @@ struct IndicatorWindow: View {
         .padding(.horizontal, 24)
         .frame(height: 36)
         .background {
-            RoundedRectangle(cornerRadius: 24)
+            rect
                 .fill(backgroundColor)
                 .background {
-                    RoundedRectangle(cornerRadius: 24)
+                    rect
                         .fill(Material.thinMaterial)
                 }
                 .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
         }
+        .clipShape(rect)
         .frame(width: 200)
         .scaleEffect(viewModel.isVisible ? 1 : 0.5)
         .offset(y: viewModel.isVisible ? 0 : 20)
@@ -222,7 +216,7 @@ struct IndicatorWindow: View {
 struct IndicatorWindowPreview: View {
     @StateObject private var recordingVM = {
         let vm = IndicatorViewModel()
-        vm.startRecording()
+//        vm.startRecording()
         return vm
     }()
     

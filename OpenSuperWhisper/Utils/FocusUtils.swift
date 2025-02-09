@@ -60,7 +60,7 @@ class FocusUtils {
                                                                      textRange,
                                                                      &caretBounds)
         
-        print("errorbounds: \(errorBounds), caretBounds \(caretBounds)")
+        print("errorbounds: \(errorBounds), caretBounds \(String(describing: caretBounds))")
         guard errorBounds == .success else {
             print("Не удалось получить границы каретки")
             return nil
@@ -117,7 +117,7 @@ class FocusUtils {
 private extension AXValue {
     func toCGRect() -> CGRect? {
         var rect = CGRect.zero
-        var type: AXValueType = AXValueGetType(self)
+        let type: AXValueType = AXValueGetType(self)
         
         guard type == .cgRect else {
             print("AXValue is not of type CGRect, but \(type)") // More informative error

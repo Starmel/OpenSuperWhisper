@@ -2,27 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.opensuperwhisper.app</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>This app needs microphone access to record audio when you activate recording using the keyboard shortcut.</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>OpenSuperWhisper</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.utilities</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>This app needs accessibility access to handle global keyboard shortcuts for recording control.</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon.icns</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenSuperWhisper needs microphone access to record audio for transcription.</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>OpenSuperWhisper needs accessibility access to provide system-wide functionality.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>OpenSuperWhisper needs accessibility access to provide system-wide functionality.</string>
 </dict>
-</plist> 
+</plist>
