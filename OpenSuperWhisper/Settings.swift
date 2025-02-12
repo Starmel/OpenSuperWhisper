@@ -102,27 +102,22 @@ class SettingsViewModel: ObservableObject {
     }
 }
 
-final class Settings: ObservableObject {
-    @Published var viewModel: SettingsViewModel
-    @Published var selectedModelPath: String?
-    @Published var selectedLanguage: String
-    @Published var translateToEnglish: Bool
-    @Published var suppressBlankAudio: Bool
-    @Published var showTimestamps: Bool
-    @Published var temperature: Double
-    @Published var noSpeechThreshold: Double
-    @Published var initialPrompt: String
-    @Published var useBeamSearch: Bool
-    @Published var beamSize: Int
-    @Published var debugMode: Bool
+struct Settings {
+    var selectedModelPath: String?
+    var selectedLanguage: String
+    var translateToEnglish: Bool
+    var suppressBlankAudio: Bool
+    var showTimestamps: Bool
+    var temperature: Double
+    var noSpeechThreshold: Double
+    var initialPrompt: String
+    var useBeamSearch: Bool
+    var beamSize: Int
+    var debugMode: Bool
     
-    static let shared = Settings()
-    
-    private init() {
-        // Get the current shortcut from ShortcutManager
-     
-        self.viewModel = SettingsViewModel()
+    init() {
         let prefs = AppPreferences.shared
+        self.selectedModelPath = prefs.selectedModelPath
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -133,68 +128,11 @@ final class Settings: ObservableObject {
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
-        self.selectedModelPath = prefs.selectedModelPath
-    }
-    
-    func setModelPath(_ url: URL) {
-        selectedModelPath = url.path
-        AppPreferences.shared.selectedModelPath = url.path
-    }
-    
-    func setLanguage(_ selectedLanguage: String) {
-        self.selectedLanguage = selectedLanguage
-        AppPreferences.shared.whisperLanguage = selectedLanguage
-    }
-    
-    func setTranslateToEnglish(_ translateToEnglish: Bool) {
-        self.translateToEnglish = translateToEnglish
-        AppPreferences.shared.translateToEnglish = translateToEnglish
-    }
-    
-    func setSuppressBlankAudio(_ suppressBlankAudio: Bool) {
-        self.suppressBlankAudio = suppressBlankAudio
-        AppPreferences.shared.suppressBlankAudio = suppressBlankAudio
-    }
-    
-    func setShowTimestamps(_ showTimestamps: Bool) {
-        self.showTimestamps = showTimestamps
-        AppPreferences.shared.showTimestamps = showTimestamps
-    }
-    
-    func setTemperature(_ temperature: Double) {
-        self.temperature = temperature
-        AppPreferences.shared.temperature = temperature
-    }
-    
-    func setNoSpeechThreshold(_ noSpeechThreshold: Double) {
-        self.noSpeechThreshold = noSpeechThreshold
-        AppPreferences.shared.noSpeechThreshold = noSpeechThreshold
-    }
-    
-    func setInitialPrompt(_ initialPrompt: String) {
-        self.initialPrompt = initialPrompt
-        AppPreferences.shared.initialPrompt = initialPrompt
-    }
-    
-    func setUseBeamSearch(_ useBeamSearch: Bool) {
-        self.useBeamSearch = useBeamSearch
-        AppPreferences.shared.useBeamSearch = useBeamSearch
-    }
-    
-    func setBeamSize(_ beamSize: Int) {
-        self.beamSize = beamSize
-        AppPreferences.shared.beamSize = beamSize
-    }
-    
-    func setDebugMode(_ debugMode: Bool) {
-        self.debugMode = debugMode
-        AppPreferences.shared.debugMode = debugMode
     }
 }
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
-    @ObservedObject var settings: Settings
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0

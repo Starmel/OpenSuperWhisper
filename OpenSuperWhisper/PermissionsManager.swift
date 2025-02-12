@@ -50,8 +50,6 @@ class PermissionsManager: ObservableObject {
     func checkMicrophonePermission() {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
 
-        // Although Timer is on the main thread, wrapping in DispatchQueue.main.async
-        // ensures safety if called from elsewhere.
         DispatchQueue.main.async { [weak self] in
             switch status {
             case .authorized:
@@ -81,7 +79,7 @@ class PermissionsManager: ObservableObject {
                 }
             }
         case .authorized:
-            break
+            self.isMicrophonePermissionGranted = true
         default:
             openSystemPreferences(for: .microphone)
         }

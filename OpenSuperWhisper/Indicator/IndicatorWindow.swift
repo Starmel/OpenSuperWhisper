@@ -45,7 +45,7 @@ class IndicatorViewModel: ObservableObject {
                 
                 do {
                     print("start decoding...")
-                    let text = try await transcription.transcribeAudio(url: tempURL, settings: .shared)
+                    let text = try await transcription.transcribeAudio(url: tempURL, settings: Settings())
                     
                     // Create a new Recording instance
                     let timestamp = Date()

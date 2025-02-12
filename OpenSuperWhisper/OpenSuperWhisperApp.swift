@@ -33,10 +33,6 @@ struct OpenSuperWhisperApp: App {
     }
 
     init() {
-//        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != nil {
-//            fatalError("LOL")
-//        }
-
         _ = ShortcutManager.shared
     }
 }

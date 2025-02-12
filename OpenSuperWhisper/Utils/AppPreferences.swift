@@ -62,4 +62,4 @@ final class AppPreferences {
     
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
-} 
+}

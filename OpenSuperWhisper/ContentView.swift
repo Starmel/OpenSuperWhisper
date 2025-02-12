@@ -16,7 +16,6 @@ class ContentViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
     @Published var transcriptionService = TranscriptionService.shared
-    @Published var settings = Settings.shared
     @Published var recordingStore = RecordingStore.shared
 
     private var blinkTimer: Timer?
@@ -41,7 +40,7 @@ class ContentViewModel: ObservableObject {
 
                 do {
                     print("start decoding...")
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: settings)
+                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
                     // Create a new Recording instance
                     let timestamp = Date()
@@ -58,7 +57,7 @@ class ContentViewModel: ObservableObject {
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
 
                     // Save the recording to store
-                    await recordingStore.addRecording(Recording(
+                    recordingStore.addRecording(Recording(
                         id: UUID(),
                         timestamp: timestamp,
                         fileName: fileName,
@@ -87,8 +86,11 @@ class ContentViewModel: ObservableObject {
 
     private func startBlinking() {
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            self?.isBlinking.toggle()
+            Task { @MainActor in
+                self?.isBlinking.toggle()
+            }
         }
+        RunLoop.current.add(blinkTimer!, forMode: .common)
     }
 
     private func stopBlinking() {
@@ -349,7 +351,7 @@ struct ContentView: View {
         }
         .fileDropHandler()
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(settings: viewModel.settings)
+            SettingsView()
         }
     }
 }
@@ -573,14 +575,19 @@ struct TranscriptionView: View {
 
 struct MainRecordButton: View {
     let isRecording: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var buttonColor: Color {
+        colorScheme == .dark ? .white : .gray
+    }
 
     var body: some View {
         Circle()
             .fill(
                 LinearGradient(
                     colors: [
-                        isRecording ? Color.red.opacity(0.8) : Color.white.opacity(0.8),
-                        isRecording ? Color.red : Color.white.opacity(0.9)
+                        isRecording ? Color.red.opacity(0.8) : buttonColor.opacity(0.8),
+                        isRecording ? Color.red : buttonColor.opacity(0.9)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -588,7 +595,7 @@ struct MainRecordButton: View {
             )
             .frame(width: 48, height: 48)
             .shadow(
-                color: isRecording ? .red.opacity(0.5) : .white.opacity(0.3),
+                color: isRecording ? .red.opacity(0.5) : buttonColor.opacity(0.3),
                 radius: 12,
                 x: 0,
                 y: 0
@@ -598,8 +605,8 @@ struct MainRecordButton: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                isRecording ? .red.opacity(0.6) : .white.opacity(0.6),
-                                isRecording ? .red.opacity(0.3) : .white.opacity(0.3)
+                                isRecording ? .red.opacity(0.6) : buttonColor.opacity(0.6),
+                                isRecording ? .red.opacity(0.3) : buttonColor.opacity(0.3)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing

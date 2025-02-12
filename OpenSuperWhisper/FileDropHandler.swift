@@ -28,7 +28,7 @@ class FileDropHandler: ObservableObject {
                 
                 print("start decoding...")
                 let text = try await transcriptionService.transcribeAudio(
-                    url: url, settings: .shared
+                    url: url, settings: Settings()
                 )
                 
                 // Create a new Recording instance

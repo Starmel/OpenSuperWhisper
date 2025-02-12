@@ -10,6 +10,8 @@
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<key>com.apple.security.device.microphone</key>
+	<true/>
 	<key>com.apple.security.temporary-exception.accessibility</key>
 	<true/>
 	<key>com.apple.security.temporary-exception.accessibility.control</key>
