@@ -16,7 +16,7 @@ Free alternative to paid services like:
 - 🎙️ Real-time audio recording and transcription
 - ⌨️ Global keyboard shortcuts for quick recording (use ```cmd + ` ```)
 - 🌍 Support for multiple languages with auto-detection (not tested, but probably works)
-- 🔄 Optional translation to English (not tested)
+- 🔄 Optional translation to English (for better translation add initial prompt with english sentences)
 - 💾 Local storage of recordings with transcriptions
 - 🎛️ Advanced transcription settings (not tested)
 
