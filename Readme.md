@@ -38,3 +38,7 @@ If you encounter any issues or have questions, please:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or create issues for bugs and feature requests.
+
+## License
+
+OpenSuperWhisper is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
