@@ -1,3 +1,14 @@
+import AVFoundation
+import Foundation
+
+@MainActor
+class TranscriptionService: ObservableObject {
+    static let shared = TranscriptionService()
+    
+    @Published private(set) var isTranscribing = false
+    @Published private(set) var transcribedText = ""
+    @Published private(set) var currentSegment = ""
+    @Published private(set) var isLoading = false
     @Published private(set) var progress: Float = 0.0
     
     private var context: MyWhisperContext?
