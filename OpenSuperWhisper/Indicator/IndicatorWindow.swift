@@ -181,7 +181,7 @@ struct IndicatorWindow: View {
                         .scaleEffect(0.7)
                         .frame(width: 24)
                     
-                    Text("Decoding...")
+                    Text("Transcribing...")
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

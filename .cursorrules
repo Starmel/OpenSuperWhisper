@@ -34,14 +34,55 @@ Steps:
 [X] 3. Update IndicatorWindow to handle transcription and saving
 [X] 4. Update ContentView to display transcribed recordings
 [X] 5. Add database storage for recordings
+[X] 6. Add progress indication for transcription process
+[X] 7. Move transcription processing off the main thread
+[X] 8. Fix actor isolation issues in background processing
+[X] 9. Show progress indicators only for recordings longer than 10 seconds
+[X] 10. Keep red record button during recording, show progress indicator only during transcription
+[X] 11. Refine UI: Show progress indicator in button during transcription, remove overlay for ContentView recordings
+[X] 12. Add check to prevent accepting new drag-and-drop files while one is already being processed
+[X] 13. Improve UI for file drop warnings and transcription background
+[X] 14. Add cancel transcription button for drag-and-drop overlay
 
 Key Changes:
 - AudioRecorder: Added temporary recording storage and cleanup
 - IndicatorWindow: Now handles transcription completion and saving to permanent storage
 - ContentView: Updated to show transcribed recordings with timestamps
 - New Recording model with transcription data and JSON storage
+- TranscriptionService: Added progress tracking and moved processing to background threads
+- UI: Added progress bars and percentage indicators during transcription
+- Fixed actor isolation issues by making appropriate methods nonisolated
+- Added duration tracking for recordings and dropped files
+- Modified UI to show progress indicators only during transcription, not during recording
+- Kept the red record button visible during recording for better user experience
+- Refined UI: Show progress indicator in button during transcription, removed overlay for ContentView recordings (overlay only shown for drag-and-drop)
+- Made progress indicators smaller and more appropriate for the UI context
+- Added prevention mechanism for multiple file drops: Shows warning in drop area and displays error message when user tries to drop a file while another is being processed
+- Improved UI for file drop warnings: Moved error message to the top of the screen for better visibility
+- Enhanced transcription background: Added blur effect and improved visual style of the transcription progress indicator
+- Added cancel button to the transcription overlay for drag-and-drop files, allowing users to cancel long-running transcriptions
 
 Next Steps:
 - Test the changes
 - Consider adding error handling for failed transcriptions
-- Add duration information to recordings
+
+## Lessons
+- When performing CPU-intensive tasks like audio transcription, always move the processing off the main thread using Task.detached
+- For better user experience, provide progress indication for long-running operations
+- Use AVAsset to get audio duration for accurate progress calculation
+- Update UI elements on the main thread using MainActor or DispatchQueue.main
+- When using @MainActor classes with background tasks:
+  - Mark methods that don't access actor-isolated state as nonisolated
+  - Get any actor-isolated state before detaching to background tasks
+  - Use DispatchQueue.main or MainActor.run to update UI properties from background contexts
+  - Return data from nonisolated methods rather than directly updating actor-isolated properties
+- Show progress indicators conditionally based on task duration to avoid UI clutter for quick operations
+- Use different UI elements for different states to provide better visual feedback to users
+- Be careful about where to show progress overlays - full-screen overlays should only be used for specific contexts (like drag-and-drop) and not for regular in-app operations
+- Maintain consistent UI elements for specific states - keep the record button visible during recording for better user recognition
+- For cancellable operations like whisper transcription:
+  - Use a combination of Swift's Task cancellation and whisper's abort callback
+  - Properly manage memory for abort flags using UnsafeMutablePointer
+  - Set the abort flag to true when cancellation is requested
+  - Clean up resources in deinit to prevent memory leaks
+  - Add Task.checkCancellation() at strategic points in the processing flow

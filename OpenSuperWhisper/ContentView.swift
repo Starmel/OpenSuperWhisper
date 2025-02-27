@@ -17,22 +17,40 @@ class ContentViewModel: ObservableObject {
     @Published var recorder: AudioRecorder = .shared
     @Published var transcriptionService = TranscriptionService.shared
     @Published var recordingStore = RecordingStore.shared
+    @Published var recordingDuration: TimeInterval = 0
 
     private var blinkTimer: Timer?
+    private var recordingStartTime: Date?
+    private var durationTimer: Timer?
 
     var isRecording: Bool {
         recorder.isRecording
+    }
+    
+    var isLongRecording: Bool {
+        recordingDuration > 10.0
     }
 
     func startRecording() {
         state = .recording
         startBlinking()
+        recordingStartTime = Date()
+        recordingDuration = 0
+        
+        // Start timer to track recording duration
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self, let startTime = self.recordingStartTime else { return }
+            self.recordingDuration = Date().timeIntervalSince(startTime)
+        }
+        RunLoop.current.add(durationTimer!, forMode: .common)
+        
         recorder.startRecording()
     }
 
     func startDecoding() {
         state = .decoding
         stopBlinking()
+        stopDurationTimer()
 
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
@@ -50,7 +68,7 @@ class ContentViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: 0 // TODO: Get actual duration
+                        duration: recordingDuration // Use tracked duration
                     ).url
 
                     // Move the temporary recording to final location
@@ -62,7 +80,7 @@ class ContentViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: 0 // TODO: Get actual duration
+                        duration: recordingDuration // Use tracked duration
                     ))
 
                     print("Transcription result: \(text)")
@@ -73,6 +91,7 @@ class ContentViewModel: ObservableObject {
 
                 await MainActor.run {
                     self.state = .idle
+                    self.recordingDuration = 0
                 }
             }
         }
@@ -81,7 +100,15 @@ class ContentViewModel: ObservableObject {
     func stop() {
         state = .idle
         stopBlinking()
+        stopDurationTimer()
+        recordingDuration = 0
         recorder.cleanupTemporaryRecordings()
+    }
+    
+    private func stopDurationTimer() {
+        durationTimer?.invalidate()
+        durationTimer = nil
+        recordingStartTime = nil
     }
 
     private func startBlinking() {
@@ -255,12 +282,23 @@ struct ContentView: View {
                                 viewModel.startRecording()
                             }
                         }) {
-                            MainRecordButton(isRecording: viewModel.isRecording)
+                            if viewModel.state == .decoding {
+                                // Show progress indicator ONLY when transcribing
+                                ProgressView()
+                                    .scaleEffect(1.0) // Smaller size
+                                    .frame(width: 48, height: 48)
+                                    .contentTransition(.symbolEffect(.replace))
+                            } else {
+                                // Show regular record button for idle state AND recording
+                                MainRecordButton(isRecording: viewModel.isRecording)
+                            }
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.transcriptionService.isLoading)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
 
                         // Нижняя панель с подсказкой и кнопками управления
                         HStack {

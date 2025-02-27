@@ -620,30 +620,29 @@ public class MyWhisperContext {
         return params
     }
     
-    public func full(samples: [Float], params: inout WhisperFullParams) -> Bool {
+    public func full(samples: [Float], params: inout whisper_full_params) -> Bool {
         guard let ctx = ctx else { return false }
         let result = samples.withUnsafeBufferPointer { buffer in
-            let cParams = params.toC() // Convert to C struct here.
             let result: Int32
             if let state = state {
-                result = whisper_full_with_state(ctx, state, cParams, buffer.baseAddress, Int32(samples.count))
+                result = whisper_full_with_state(ctx, state, params, buffer.baseAddress, Int32(samples.count))
             } else {
-                result = whisper_full(ctx, cParams, buffer.baseAddress, Int32(samples.count))
+                result = whisper_full(ctx, params, buffer.baseAddress, Int32(samples.count))
             }
             
             // Free c-allocated strings
-            if let suppressRegex = cParams.suppress_regex {
+            if let suppressRegex = params.suppress_regex {
                 free(UnsafeMutablePointer(mutating: suppressRegex))
             }
-            if let initialPrompt = cParams.initial_prompt {
+            if let initialPrompt = params.initial_prompt {
                 free(UnsafeMutablePointer(mutating: initialPrompt))
             }
-            if let language = cParams.language {
+            if let language = params.language {
                 free(UnsafeMutablePointer(mutating: language))
             }
             
             // Free the allocated memory for grammar_rules
-            if let baseAddress = cParams.grammar_rules {
+            if let baseAddress = params.grammar_rules {
                 free(UnsafeMutableRawPointer(mutating: baseAddress))
             }
             return result
