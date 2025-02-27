@@ -20,44 +20,39 @@ class ShortcutManager {
         var activeVm: IndicatorViewModel?
 
         KeyboardShortcuts.onKeyUp(for: .toggleRecord) {
-            
-            if activeVm != nil {
-            
-                IndicatorWindowManager.shared.stopRecording()
-                activeVm = nil
-            } else {
-                let cursorPosition = FocusUtils.getCurrentCursorPosition()
-
-                let indicatorPoint: NSPoint?
-
-                if let carretPosition = FocusUtils.getCaretRect(), let screen = FocusUtils.getFocusedWindowScreen() {
-                    
-                    let screenHeight = screen.frame.height
-                    indicatorPoint = NSPoint(x: carretPosition.origin.x, y: screenHeight - carretPosition.origin.y)
+            // Run on the main actor to safely interact with actor-isolated methods
+            Task { @MainActor in
+                if activeVm != nil {
+                    IndicatorWindowManager.shared.stopRecording()
+                    activeVm = nil
                 } else {
-                    indicatorPoint = cursorPosition
-                }
+                    let cursorPosition = FocusUtils.getCurrentCursorPosition()
 
-                let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
-                vm.startRecording()
-                    
-                activeVm = vm
+                    let indicatorPoint: NSPoint?
+
+                    if let carretPosition = FocusUtils.getCaretRect(), let screen = FocusUtils.getFocusedWindowScreen() {
+                        
+                        let screenHeight = screen.frame.height
+                        indicatorPoint = NSPoint(x: carretPosition.origin.x, y: screenHeight - carretPosition.origin.y)
+                    } else {
+                        indicatorPoint = cursorPosition
+                    }
+
+                    let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
+                    vm.startRecording()
+                        
+                    activeVm = vm
+                }
             }
         }
 
         KeyboardShortcuts.onKeyUp(for: .escape) {
-            
-            if activeVm != nil {
-                
-//                if vm.isRecording {
-                IndicatorWindowManager.shared.stopForce()
-                activeVm = nil
-
-//                } else {
-//                    IndicatorWindowManager.shared.stopRecording()
-//                    activeVm = nil
-//
-//                }
+            // Run on the main actor to safely interact with actor-isolated methods
+            Task { @MainActor in
+                if activeVm != nil {
+                    IndicatorWindowManager.shared.stopForce()
+                    activeVm = nil
+                }
             }
         }
         KeyboardShortcuts.disable(.escape)

@@ -2,7 +2,8 @@ import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
-class IndicatorWindowManager {
+@MainActor
+class IndicatorWindowManager: IndicatorViewDelegate {
     static let shared = IndicatorWindowManager()
     
     var window: NSWindow?
@@ -82,21 +83,15 @@ class IndicatorWindowManager {
     func hide() {
         KeyboardShortcuts.disable(.escape)
         
-        Task.detached { [weak self] in
+        Task {
+            guard let viewModel = self.viewModel else { return }
             
-            guard let self = self else { return }
-
-            await self.viewModel?.hideWithAnimation()
+            await viewModel.hideWithAnimation()
             
-            await MainActor.run {
-                self.window?.orderOut(nil)
-                self.viewModel = nil
-            }
+            self.window?.orderOut(nil)
+            self.viewModel = nil
         }
     }
-}
-
-extension IndicatorWindowManager: IndicatorViewDelegate {
     
     func didFinishDecoding() {
         hide()

@@ -35,8 +35,17 @@ class ContentViewModel: ObservableObject {
         
         // Start timer to track recording duration
         durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self, let startTime = self.recordingStartTime else { return }
-            self.recordingDuration = Date().timeIntervalSince(startTime)
+            guard let self = self else { return }
+            
+            // Capture the start time in a local variable to avoid actor isolation issues
+            let startTime = Date()
+            
+            // Update duration on the main thread
+            Task { @MainActor in
+                if let recordingStartTime = self.recordingStartTime {
+                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
+                }
+            }
         }
         RunLoop.current.add(durationTimer!, forMode: .common)
         
@@ -56,6 +65,9 @@ class ContentViewModel: ObservableObject {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
+                    // Capture the current recording duration
+                    let duration = await MainActor.run { self.recordingDuration }
+                    
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -64,20 +76,22 @@ class ContentViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: recordingDuration // Use tracked duration
+                        duration: duration // Use tracked duration
                     ).url
 
                     // Move the temporary recording to final location
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
 
                     // Save the recording to store
-                    recordingStore.addRecording(Recording(
-                        id: UUID(),
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: recordingDuration // Use tracked duration
-                    ))
+                    await MainActor.run {
+                        self.recordingStore.addRecording(Recording(
+                            id: UUID(),
+                            timestamp: timestamp,
+                            fileName: fileName,
+                            transcription: text,
+                            duration: self.recordingDuration // Use tracked duration
+                        ))
+                    }
 
                     print("Transcription result: \(text)")
                 } catch {

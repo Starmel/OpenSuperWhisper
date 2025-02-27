@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AVFoundation
 
+@MainActor
 class FileDropHandler: ObservableObject {
     static let shared = FileDropHandler()
     
@@ -11,11 +12,17 @@ class FileDropHandler: ObservableObject {
     @Published var fileDuration: TimeInterval = 0
     @Published var errorMessage: String? = nil
     
-    private let transcriptionService = TranscriptionService.shared
-    private let recordingStore = RecordingStore.shared
+    // Store references to services at initialization time
+    private let transcriptionService: TranscriptionService
+    private let recordingStore: RecordingStore
     
     var isLongFile: Bool {
         fileDuration > 10.0
+    }
+    
+    private init() {
+        self.transcriptionService = TranscriptionService.shared
+        self.recordingStore = RecordingStore.shared
     }
     
     func showProcessingError() {
@@ -28,9 +35,7 @@ class FileDropHandler: ObservableObject {
     }
     
     func cancelTranscription() {
-        Task { @MainActor in
-            transcriptionService.cancelTranscription()
-        }
+        transcriptionService.cancelTranscription()
         
         // Reset state
         isTranscribing = false
@@ -42,34 +47,37 @@ class FileDropHandler: ObservableObject {
         
         // Double-check we're not already processing
         if isTranscribing {
-            await MainActor.run {
-                showProcessingError()
-            }
+            showProcessingError()
             return
         }
         
         if provider.hasItemConformingToTypeIdentifier(UTType.audio.identifier) {
             do {
-                // Get the file URL from the provider
-                let url = try await provider.loadItem(
-                    forTypeIdentifier: UTType.audio.identifier) as? URL
-                
-                print("url: \(String(describing: url))")
+                // Create a continuation to handle the non-Sendable NSItemProvider
+                let url = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL?, Error>) in
+                    provider.loadItem(forTypeIdentifier: UTType.audio.identifier) { item, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                            return
+                        }
+                        continuation.resume(returning: item as? URL)
+                    }
+                }
                 
                 guard let url = url else {
-                    print("Error loading item")
+                    print("Error loading item: not a URL")
                     return
                 }
+                
+                print("url: \(url)")
                 
                 // Get audio duration
                 let asset = AVAsset(url: url)
                 let duration = try await asset.load(.duration)
                 let durationInSeconds = CMTimeGetSeconds(duration)
                 
-                await MainActor.run {
-                    self.fileDuration = durationInSeconds
-                    self.isTranscribing = true
-                }
+                self.fileDuration = durationInSeconds
+                self.isTranscribing = true
                 
                 print("start decoding...")
                 let text = try await transcriptionService.transcribeAudio(
@@ -91,31 +99,34 @@ class FileDropHandler: ObservableObject {
                 try FileManager.default.copyItem(at: url, to: finalURL)
                 
                 // Save the recording to store
-                await recordingStore.addRecording(
+                self.recordingStore.addRecording(
                     Recording(
                         id: UUID(),
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: fileDuration
+                        duration: self.fileDuration
                     ))
                 
             } catch {
                 print("Error processing dropped audio file: \(error)")
             }
             
-            await MainActor.run {
-                self.isTranscribing = false
-                self.fileDuration = 0
-            }
+            self.isTranscribing = false
+            self.fileDuration = 0
         }
     }
 }
 
-// View modifier для добавления функционала drag-and-drop
+// View modifier for adding drag-and-drop functionality
 struct FileDropOverlay: ViewModifier {
-    @ObservedObject private var handler = FileDropHandler.shared
-    @ObservedObject private var transcriptionService = TranscriptionService.shared
+    @ObservedObject private var handler: FileDropHandler
+    @ObservedObject private var transcriptionService: TranscriptionService
+    
+    init() {
+        self.handler = FileDropHandler.shared
+        self.transcriptionService = TranscriptionService.shared
+    }
     
     func body(content: Content) -> some View {
         content
@@ -218,7 +229,7 @@ struct FileDropOverlay: ViewModifier {
             .onDrop(of: [.audio], isTargeted: $handler.isDragging) { providers in
                 // Only process the drop if we're not already transcribing
                 if !handler.isTranscribing {
-                    Task { @MainActor in
+                    Task {
                         await handler.handleDrop(of: providers)
                     }
                     return true

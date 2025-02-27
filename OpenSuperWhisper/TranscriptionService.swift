@@ -48,11 +48,19 @@ class TranscriptionService: ObservableObject {
         print("Loading model")
         if let modelPath = AppPreferences.shared.selectedModelPath {
             isLoading = true
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            
+            // Capture the weak self reference before the task
+            weak var weakSelf = self
+            
+            Task.detached(priority: .userInitiated) {
                 let params = WhisperContextParams()
-                self?.context = MyWhisperContext.initFromFile(path: modelPath, params: params)
-                DispatchQueue.main.async {
-                    self?.isLoading = false
+                let newContext = MyWhisperContext.initFromFile(path: modelPath, params: params)
+                
+                await MainActor.run {
+                    // Use the weak self reference inside MainActor.run
+                    guard let self = weakSelf else { return }
+                    self.context = newContext
+                    self.isLoading = false
                     print("Model loaded")
                 }
             }
@@ -62,11 +70,19 @@ class TranscriptionService: ObservableObject {
     func reloadModel(with path: String) {
         print("Reloading model")
         isLoading = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        
+        // Capture the weak self reference before the task
+        weak var weakSelf = self
+        
+        Task.detached(priority: .userInitiated) {
             let params = WhisperContextParams()
-            self?.context = MyWhisperContext.initFromFile(path: path, params: params)
-            DispatchQueue.main.async {
-                self?.isLoading = false
+            let newContext = MyWhisperContext.initFromFile(path: path, params: params)
+            
+            await MainActor.run {
+                // Use the weak self reference inside MainActor.run
+                guard let self = weakSelf else { return }
+                self.context = newContext
+                self.isLoading = false
                 print("Model reloaded")
             }
         }
@@ -108,8 +124,8 @@ class TranscriptionService: ObservableObject {
         }
         
         // Get the context and abort flag before detaching to a background task
-        let contextForTask = await context ?? createContext()
-        let abortFlagForTask = await abortFlag
+        let contextForTask = context
+        let abortFlagForTask = abortFlag
         
         // Create and store the task
         let task = Task.detached(priority: .userInitiated) { [self] in
@@ -184,7 +200,7 @@ class TranscriptionService: ObservableObject {
                 let segmentInfo = service.processNewSegment(context: ctx, state: state, nNew: Int(n_new))
                 
                 // Update UI on the main thread
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     // Check if cancelled
                     if service.isCancelled { return }
                     
@@ -278,7 +294,7 @@ class TranscriptionService: ObservableObject {
     }
     
     // Make this method nonisolated to be callable from any context
-    private nonisolated func processNewSegment(context: OpaquePointer, state: OpaquePointer?, nNew: Int) -> (text: String, timestamp: Float) {
+    nonisolated func processNewSegment(context: OpaquePointer, state: OpaquePointer?, nNew: Int) -> (text: String, timestamp: Float) {
         let nSegments = Int(whisper_full_n_segments(context))
         let startIdx = max(0, nSegments - nNew)
         
@@ -299,7 +315,7 @@ class TranscriptionService: ObservableObject {
     }
     
     // Make this method nonisolated to be callable from any context
-    private nonisolated func createContext() -> MyWhisperContext? {
+    nonisolated func createContext() -> MyWhisperContext? {
         guard let modelPath = AppPreferences.shared.selectedModelPath else {
             return nil
         }
@@ -308,7 +324,7 @@ class TranscriptionService: ObservableObject {
         return MyWhisperContext.initFromFile(path: modelPath, params: params)
     }
     
-    private func convertAudioToPCM(fileURL: URL) async throws -> [Float]? {
+    nonisolated func convertAudioToPCM(fileURL: URL) async throws -> [Float]? {
         return try await Task.detached(priority: .userInitiated) {
             let audioFile = try AVAudioFile(forReading: fileURL)
             let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
