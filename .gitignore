@@ -119,4 +119,4 @@ fastlane/build
 default.profraw
 *.profraw
 *.dmg
-./.cursorrules
+.cursorrules
