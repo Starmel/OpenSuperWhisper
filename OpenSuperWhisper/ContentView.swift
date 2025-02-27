@@ -27,10 +27,6 @@ class ContentViewModel: ObservableObject {
         recorder.isRecording
     }
     
-    var isLongRecording: Bool {
-        recordingDuration > 10.0
-    }
-
     func startRecording() {
         state = .recording
         startBlinking()
@@ -97,14 +93,6 @@ class ContentViewModel: ObservableObject {
         }
     }
 
-    func stop() {
-        state = .idle
-        stopBlinking()
-        stopDurationTimer()
-        recordingDuration = 0
-        recorder.cleanupTemporaryRecordings()
-    }
-    
     private func stopDurationTimer() {
         durationTimer?.invalidate()
         durationTimer = nil
@@ -561,11 +549,7 @@ struct RecordingRow: View {
 struct TranscriptionView: View {
     let transcribedText: String
     @Binding var isExpanded: Bool
-
-    private var lines: [String] {
-        transcribedText.components(separatedBy: .newlines)
-    }
-
+    
     private var hasMoreLines: Bool {
         !transcribedText.isEmpty && transcribedText.count > 150
     }

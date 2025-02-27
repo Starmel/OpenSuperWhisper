@@ -13,7 +13,6 @@ class TranscriptionService: ObservableObject {
     
     private var context: MyWhisperContext?
     private var totalDuration: Float = 0.0
-    private var currentPosition: Float = 0.0
     private var transcriptionTask: Task<String, Error>? = nil
     private var isCancelled = false
     private var abortFlag: UnsafeMutablePointer<Bool>? = nil
@@ -106,7 +105,6 @@ class TranscriptionService: ObservableObject {
         
         await MainActor.run {
             self.totalDuration = durationInSeconds
-            self.currentPosition = 0.0
         }
         
         // Get the context and abort flag before detaching to a background task
@@ -196,7 +194,6 @@ class TranscriptionService: ObservableObject {
                     }
                     
                     if service.totalDuration > 0 && segmentInfo.timestamp > 0 {
-                        service.currentPosition = segmentInfo.timestamp
                         let newProgress = min(segmentInfo.timestamp / service.totalDuration, 1.0)
                         service.progress = newProgress
                     }
@@ -301,22 +298,6 @@ class TranscriptionService: ObservableObject {
         return (cleanedText, latestTimestamp)
     }
     
-    // This method is no longer used directly, but kept for reference
-    private func handleNewSegment(context: OpaquePointer, state: OpaquePointer?, nNew: Int) {
-        let segmentInfo = processNewSegment(context: context, state: state, nNew: nNew)
-        
-        if !segmentInfo.text.isEmpty {
-            currentSegment = segmentInfo.text
-            transcribedText += segmentInfo.text + "\n"
-        }
-        
-        if totalDuration > 0 && segmentInfo.timestamp > 0 {
-            currentPosition = segmentInfo.timestamp
-            let newProgress = min(segmentInfo.timestamp / totalDuration, 1.0)
-            progress = newProgress
-        }
-    }
-    
     // Make this method nonisolated to be callable from any context
     private nonisolated func createContext() -> MyWhisperContext? {
         guard let modelPath = AppPreferences.shared.selectedModelPath else {
@@ -386,6 +367,4 @@ enum TranscriptionError: Error {
     case contextInitializationFailed
     case audioConversionFailed
     case processingFailed
-    case languageAllocationFailed
-    case modelNotFound
 }

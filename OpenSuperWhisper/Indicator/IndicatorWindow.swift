@@ -23,9 +23,6 @@ class IndicatorViewModel: ObservableObject {
     private var blinkTimer: Timer?
     private let recordingStore = RecordingStore.shared
     
-    var isRecording: Bool {
-        recorder.isRecording
-    }
     
     func startRecording() {
         state = .recording
@@ -91,12 +88,6 @@ class IndicatorViewModel: ObservableObject {
     
     func insertTextUsingPasteboard(_ text: String) {
         ClipboardUtil.insertTextUsingPasteboard(text)
-    }
-
-    func stop() {
-        state = .idle
-        stopBlinking()
-        recorder.cleanupTemporaryRecordings()
     }
     
     private func startBlinking() {
