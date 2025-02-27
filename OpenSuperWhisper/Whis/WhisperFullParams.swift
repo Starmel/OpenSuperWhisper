@@ -51,7 +51,7 @@ public struct WhisperFullParams {
     public var progressCallbackUserData: UnsafeMutableRawPointer?
     public var encoderBeginCallback: (@convention(c) (OpaquePointer?, OpaquePointer?, UnsafeMutableRawPointer?) -> Bool)?
     public var encoderBeginCallbackUserData: UnsafeMutableRawPointer?
-    public var abortCallback: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
+    public var abortCallback: (@convention(c) (UnsafeMutableRawPointer?) -> Bool)?
     public var abortCallbackUserData: UnsafeMutableRawPointer?
     public var logitsFilterCallback: (@convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<whisper_token_data>?, Int32, UnsafeMutablePointer<Float>?, UnsafeMutableRawPointer?) -> Void)?
     public var logitsFilterCallbackUserData: UnsafeMutableRawPointer?
@@ -136,6 +136,11 @@ public struct WhisperFullParams {
         if let callback = encoderBeginCallback {
             cParams.encoder_begin_callback = callback
             cParams.encoder_begin_callback_user_data = encoderBeginCallbackUserData
+        }
+        
+        if let callback = abortCallback {
+            cParams.abort_callback = callback
+            cParams.abort_callback_user_data = abortCallbackUserData
         }
 
         if let callback = logitsFilterCallback {

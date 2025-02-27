@@ -182,17 +182,6 @@ class AudioRecorder: NSObject, ObservableObject {
         isPlaying = false
         currentlyPlayingURL = nil
     }
-    
-    func cleanupTemporaryRecordings() {
-        do {
-            let files = try FileManager.default.contentsOfDirectory(at: temporaryDirectory, includingPropertiesForKeys: nil)
-            for file in files {
-                try? FileManager.default.removeItem(at: file)
-            }
-        } catch {
-            print("Failed to cleanup temporary recordings: \(error)")
-        }
-    }
 }
 
 extension AudioRecorder: AVAudioRecorderDelegate {

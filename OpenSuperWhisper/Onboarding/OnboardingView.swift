@@ -89,7 +89,6 @@ class OnboardingViewModel: ObservableObject {
 struct OnboardingView: View {
     @StateObject private var viewModel = OnboardingViewModel()
     @EnvironmentObject private var appState: AppState
-    @State private var isDownloading = false
     @State private var showError = false
     @State private var errorMessage = ""
 
@@ -183,7 +182,6 @@ struct DownloadableModel: Identifiable {
     var speedRate: Int
     var accuracyRate: Int
     var downloadProgress: Double = 0.0 // 0 to 1
-    var isSelected: Bool = false
 
     var sizeString: String {
         let formatter = ByteCountFormatter()
@@ -201,11 +199,6 @@ struct DownloadableModel: Identifiable {
         self.size = size
         self.speedRate = speedRate
         self.accuracyRate = accuracyRate
-    }
-
-    // Example mutator to simulate download progress (you'd replace this with real logic)
-    mutating func updateDownloadProgress(progress: Double) {
-        downloadProgress = progress
     }
 }
 

@@ -85,17 +85,6 @@ class PermissionsManager: ObservableObject {
         }
     }
 
-    private func requestAccessibilityPermission() {
-        checkAccessibilityPermission()
-        if !isAccessibilityPermissionGranted {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-            let trusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
-            DispatchQueue.main.async { [weak self] in
-                self?.isAccessibilityPermissionGranted = trusted
-            }
-        }
-    }
-
     @objc private func accessibilityPermissionChanged() {
         checkAccessibilityPermission()
     }
