@@ -10,6 +10,9 @@ KEYCHAIN_PROFILE="Slava"
 CODE_SIGN_IDENTITY="${1}"
 DEVELOPMENT_TEAM="8LLDD7HWZK"
 
+rm -rf libwhisper/build
+cmake -G Xcode -B libwhisper/build -S libwhisper
+
 rm -rf build
 
 xcodebuild \
