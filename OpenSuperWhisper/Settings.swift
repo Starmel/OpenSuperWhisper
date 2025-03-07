@@ -103,7 +103,6 @@ class SettingsViewModel: ObservableObject {
 }
 
 struct Settings {
-    var selectedModelPath: String?
     var selectedLanguage: String
     var translateToEnglish: Bool
     var suppressBlankAudio: Bool
@@ -113,11 +112,9 @@ struct Settings {
     var initialPrompt: String
     var useBeamSearch: Bool
     var beamSize: Int
-    var debugMode: Bool
     
     init() {
         let prefs = AppPreferences.shared
-        self.selectedModelPath = prefs.selectedModelPath
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -127,7 +124,6 @@ struct Settings {
         self.initialPrompt = prefs.initialPrompt
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
-        self.debugMode = prefs.debugMode
     }
 }
 

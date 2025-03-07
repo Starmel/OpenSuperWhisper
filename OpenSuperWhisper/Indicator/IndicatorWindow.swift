@@ -13,6 +13,7 @@ protocol IndicatorViewDelegate: AnyObject {
     func didFinishDecoding()
 }
 
+@MainActor
 class IndicatorViewModel: ObservableObject {
     @Published var state: RecordingState = .idle
     @Published var isBlinking = false
@@ -21,10 +22,12 @@ class IndicatorViewModel: ObservableObject {
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
-    private let recordingStore = RecordingStore.shared
     
-    var isRecording: Bool {
-        recorder.isRecording
+    // Get a reference to the RecordingStore at initialization time
+    private let recordingStore: RecordingStore
+    
+    init() {
+        self.recordingStore = RecordingStore.shared
     }
     
     func startRecording() {
@@ -38,6 +41,7 @@ class IndicatorViewModel: ObservableObject {
         stopBlinking()
         
         if let tempURL = recorder.stopRecording() {
+            // Get a reference to the transcription service
             let transcription = TranscriptionService.shared
             
             Task { [weak self] in
@@ -62,13 +66,15 @@ class IndicatorViewModel: ObservableObject {
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
                     
                     // Save the recording to store
-                    await recordingStore.addRecording(Recording(
-                        id: UUID(),
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: 0 // TODO: Get actual duration
-                    ))
+                    await MainActor.run {
+                        self.recordingStore.addRecording(Recording(
+                            id: UUID(),
+                            timestamp: timestamp,
+                            fileName: fileName,
+                            transcription: text,
+                            duration: 0 // TODO: Get actual duration
+                        ))
+                    }
                     
                     insertTextUsingPasteboard(text)
                     print("Transcription result: \(text)")
@@ -77,14 +83,18 @@ class IndicatorViewModel: ObservableObject {
                     try? FileManager.default.removeItem(at: tempURL)
                 }
                 
-                await self.delegate?.didFinishDecoding()
+                await MainActor.run {
+                    self.delegate?.didFinishDecoding()
+                }
             }
         } else {
             
             print("!!! Not found record url !!!")
             
             Task {
-                await self.delegate?.didFinishDecoding()
+                await MainActor.run {
+                    self.delegate?.didFinishDecoding()
+                }
             }
         }
     }
@@ -92,16 +102,14 @@ class IndicatorViewModel: ObservableObject {
     func insertTextUsingPasteboard(_ text: String) {
         ClipboardUtil.insertTextUsingPasteboard(text)
     }
-
-    func stop() {
-        state = .idle
-        stopBlinking()
-        recorder.cleanupTemporaryRecordings()
-    }
     
     private func startBlinking() {
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            self?.isBlinking.toggle()
+            // Update UI on the main thread
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.isBlinking.toggle()
+            }
         }
     }
     
@@ -181,7 +189,7 @@ struct IndicatorWindow: View {
                         .scaleEffect(0.7)
                         .frame(width: 24)
                     
-                    Text("Decoding...")
+                    Text("Transcribing...")
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

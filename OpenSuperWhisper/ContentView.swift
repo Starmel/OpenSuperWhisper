@@ -17,22 +17,45 @@ class ContentViewModel: ObservableObject {
     @Published var recorder: AudioRecorder = .shared
     @Published var transcriptionService = TranscriptionService.shared
     @Published var recordingStore = RecordingStore.shared
+    @Published var recordingDuration: TimeInterval = 0
 
     private var blinkTimer: Timer?
+    private var recordingStartTime: Date?
+    private var durationTimer: Timer?
 
     var isRecording: Bool {
         recorder.isRecording
     }
-
+    
     func startRecording() {
         state = .recording
         startBlinking()
+        recordingStartTime = Date()
+        recordingDuration = 0
+        
+        // Start timer to track recording duration
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            // Capture the start time in a local variable to avoid actor isolation issues
+            let startTime = Date()
+            
+            // Update duration on the main thread
+            Task { @MainActor in
+                if let recordingStartTime = self.recordingStartTime {
+                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
+                }
+            }
+        }
+        RunLoop.current.add(durationTimer!, forMode: .common)
+        
         recorder.startRecording()
     }
 
     func startDecoding() {
         state = .decoding
         stopBlinking()
+        stopDurationTimer()
 
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
@@ -42,6 +65,9 @@ class ContentViewModel: ObservableObject {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
+                    // Capture the current recording duration
+                    let duration = await MainActor.run { self.recordingDuration }
+                    
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -50,20 +76,22 @@ class ContentViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: 0 // TODO: Get actual duration
+                        duration: duration // Use tracked duration
                     ).url
 
                     // Move the temporary recording to final location
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
 
                     // Save the recording to store
-                    recordingStore.addRecording(Recording(
-                        id: UUID(),
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: 0 // TODO: Get actual duration
-                    ))
+                    await MainActor.run {
+                        self.recordingStore.addRecording(Recording(
+                            id: UUID(),
+                            timestamp: timestamp,
+                            fileName: fileName,
+                            transcription: text,
+                            duration: self.recordingDuration // Use tracked duration
+                        ))
+                    }
 
                     print("Transcription result: \(text)")
                 } catch {
@@ -73,15 +101,16 @@ class ContentViewModel: ObservableObject {
 
                 await MainActor.run {
                     self.state = .idle
+                    self.recordingDuration = 0
                 }
             }
         }
     }
 
-    func stop() {
-        state = .idle
-        stopBlinking()
-        recorder.cleanupTemporaryRecordings()
+    private func stopDurationTimer() {
+        durationTimer?.invalidate()
+        durationTimer = nil
+        recordingStartTime = nil
     }
 
     private func startBlinking() {
@@ -255,12 +284,23 @@ struct ContentView: View {
                                 viewModel.startRecording()
                             }
                         }) {
-                            MainRecordButton(isRecording: viewModel.isRecording)
+                            if viewModel.state == .decoding {
+                                // Show progress indicator ONLY when transcribing
+                                ProgressView()
+                                    .scaleEffect(1.0) // Smaller size
+                                    .frame(width: 48, height: 48)
+                                    .contentTransition(.symbolEffect(.replace))
+                            } else {
+                                // Show regular record button for idle state AND recording
+                                MainRecordButton(isRecording: viewModel.isRecording)
+                            }
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.transcriptionService.isLoading)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
 
                         // Нижняя панель с подсказкой и кнопками управления
                         HStack {
@@ -523,11 +563,7 @@ struct RecordingRow: View {
 struct TranscriptionView: View {
     let transcribedText: String
     @Binding var isExpanded: Bool
-
-    private var lines: [String] {
-        transcribedText.components(separatedBy: .newlines)
-    }
-
+    
     private var hasMoreLines: Bool {
         !transcribedText.isEmpty && transcribedText.count > 150
     }
