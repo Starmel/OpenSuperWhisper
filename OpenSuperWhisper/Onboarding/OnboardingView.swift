@@ -28,7 +28,7 @@ class OnboardingViewModel: ObservableObject {
         self.models = []
         initializeModels()
 
-        if let defaultModel = models.first(where: { $0.name == "Turbro V3 large" }) {
+        if let defaultModel = models.first(where: { $0.name == "Turbo V3 large" }) {
             self.selectedModel = defaultModel
         }
     }
@@ -205,7 +205,7 @@ struct DownloadableModel: Identifiable {
 let availableModels = [
 
     DownloadableModel(
-        name: "Turbro V3 large",
+        name: "Turbo V3 large",
         isDownloaded: false,
         url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
         size: 1624,
@@ -213,7 +213,7 @@ let availableModels = [
         accuracyRate: 100
     ),
     DownloadableModel(
-        name: "Turbro V3 medium",
+        name: "Turbo V3 medium",
         isDownloaded: false,
         url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!,
         size: 874,
@@ -221,7 +221,7 @@ let availableModels = [
         accuracyRate: 70
     ),
     DownloadableModel(
-        name: "Turbro V3 small",
+        name: "Turbo V3 small",
         isDownloaded: false,
         url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
         size: 574,
@@ -264,7 +264,7 @@ struct DownloadableItemView: View {
                         .font(.subheadline)
                         .foregroundColor(.gray)
 
-                    if model.name == "Turbro V3 large" {
+                    if model.name == "Turbo V3 large" {
                         Text("Recommended!")
                             .font(.caption)
                             .foregroundColor(.green)
