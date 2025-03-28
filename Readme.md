@@ -26,7 +26,7 @@ Free alternative to paid services like:
 
 ## Installation
 
-From github releases page download the latest version.
+From [github releases page](https://github.com/Starmel/OpenSuperWhisper/releases) download the latest version.
 
 ## Support
 
