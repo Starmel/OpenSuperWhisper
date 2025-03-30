@@ -1,5 +1,7 @@
 import AVFoundation
 import Foundation
+import SwiftUI
+import AppKit
 
 class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -9,6 +11,7 @@ class AudioRecorder: NSObject, ObservableObject {
     
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
+    private var notificationSound: NSSound?
     private let temporaryDirectory: URL
     private var currentRecordingURL: URL?
     private var notificationObserver: Any?
@@ -77,6 +80,30 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
+    private func playNotificationSound() {
+        // Try to play using NSSound first
+        guard let soundURL = Bundle.main.url(forResource: "notification", withExtension: "mp3") else {
+            print("Failed to find notification sound file")
+            // Fall back to system sound if notification.mp3 is not found
+            NSSound.beep()
+            return
+        }
+        
+        print("Found notification sound at: \(soundURL)")
+        
+        if let sound = NSSound(contentsOf: soundURL, byReference: false) {
+            // Set maximum volume to ensure it's audible
+            sound.volume = 0.3
+            sound.play()
+            notificationSound = sound
+            print("Notification sound playing with NSSound...")
+        } else {
+            print("Failed to create NSSound from URL, falling back to system beep")
+            // Fall back to system beep if NSSound creation fails
+            NSSound.beep()
+        }
+    }
+    
     func startRecording() {
         guard canRecord else {
             print("Cannot start recording - no audio input available")
@@ -87,6 +114,10 @@ class AudioRecorder: NSObject, ObservableObject {
             print("stop recording while recording")
             _ = stopRecording()
             // return
+        }
+        
+        if AppPreferences.shared.playSoundOnRecordStart {
+            playNotificationSound()
         }
         
         let timestamp = Int(Date().timeIntervalSince1970)

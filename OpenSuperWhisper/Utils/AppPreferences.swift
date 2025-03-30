@@ -60,6 +60,9 @@ final class AppPreferences {
     @UserDefault(key: "debugMode", defaultValue: false)
     var debugMode: Bool
     
+    @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
+    var playSoundOnRecordStart: Bool
+    
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
 }
