@@ -71,7 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         
         if let button = statusItem?.button {
-            if let iconImage = NSImage(contentsOfFile: "/Users/user/dev/OpenSuperWhisper/OpenSuperWhisper/tray_icon.pdf") {
+            if let iconImage = NSImage(named: "tray_icon") {
                 iconImage.size = NSSize(width: 48, height: 48)
                 iconImage.isTemplate = true
                 button.image = iconImage
