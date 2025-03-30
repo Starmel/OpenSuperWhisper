@@ -172,7 +172,8 @@ struct SettingsView: View {
                 .tag(3)
             }
         .padding()
-        .frame(width: 500, height: 400)
+        .frame(width: 550)
+        .background(Color(.windowBackgroundColor))
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Done") {
@@ -184,6 +185,8 @@ struct SettingsView: View {
                     }
                     dismiss()
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
             }
         }
         .onAppear {
@@ -193,146 +196,328 @@ struct SettingsView: View {
     
     private var modelSettings: some View {
         Form {
-            Section(header: Text("Whisper Model").bold()) {
-                Picker("Model", selection: $viewModel.selectedModelURL) {
-                    ForEach(viewModel.availableModels, id: \.self) { url in
-                        Text(url.lastPathComponent)
-                            .tag(url as URL?)
-                    }
-                }
-                .pickerStyle(.menu)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Models Directory:")
-                            .font(.caption)
-                        Button(action: {
-                            NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
-                        }) {
-                            Image(systemName: "folder")
-                                .font(.caption)
+            Section {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Whisper Model")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Picker("Model", selection: $viewModel.selectedModelURL) {
+                        ForEach(viewModel.availableModels, id: \.self) { url in
+                            Text(url.lastPathComponent)
+                                .tag(url as URL?)
                         }
-                        .buttonStyle(.borderless)
-                        .help("Open models directory")
                     }
-                    Text(WhisperModelManager.shared.modelsDirectory.path)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
+                    .pickerStyle(.menu)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.controlBackgroundColor))
+                    .cornerRadius(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Models Directory:")
+                                .font(.subheadline)
+                            Spacer()
+                            Button(action: {
+                                NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
+                            }) {
+                                Label("Open Folder", systemImage: "folder")
+                                    .font(.subheadline)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Open models directory")
+                        }
+                        Text(WhisperModelManager.shared.modelsDirectory.path)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                            .padding(8)
+                            .background(Color(.textBackgroundColor).opacity(0.5))
+                            .cornerRadius(6)
+                    }
+                    .padding(.top, 8)
                 }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .padding()
     }
     
     private var transcriptionSettings: some View {
         Form {
-            Section(header: Text("Language Settings").bold()) {
-                Picker("Language", selection: $viewModel.selectedLanguage) {
-                    ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
-                        Text(LanguageUtil.languageNames[code] ?? code)
-                            .tag(code)
+            VStack(spacing: 20) {
+                // Language Settings
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Language Settings")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Transcription Language")
+                            .font(.subheadline)
+                        
+                        Picker("Language", selection: $viewModel.selectedLanguage) {
+                            ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                                Text(LanguageUtil.languageNames[code] ?? code)
+                                    .tag(code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Toggle(isOn: $viewModel.translateToEnglish) {
+                            Text("Translate to English")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .padding(.top, 4)
                     }
                 }
-                .pickerStyle(.menu)
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
-                Toggle("Translate to English", isOn: $viewModel.translateToEnglish)
+                // Output Options
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Output Options")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $viewModel.showTimestamps) {
+                            Text("Show Timestamps")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        
+                        Toggle(isOn: $viewModel.suppressBlankAudio) {
+                            Text("Suppress Blank Audio")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Initial Prompt
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Initial Prompt")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextEditor(text: $viewModel.initialPrompt)
+                            .frame(height: 60)
+                            .padding(6)
+                            .background(Color(.textBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        Text("Optional text to guide the model's transcription")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            
-            Section(header: Text("Output Options").bold()) {
-                Toggle("Show Timestamps", isOn: $viewModel.showTimestamps)
-                Toggle("Suppress Blank Audio", isOn: $viewModel.suppressBlankAudio)
-            }
-            
-            Section(header: Text("Initial Prompt").bold()) {
-                TextEditor(text: $viewModel.initialPrompt)
-                    .frame(height: 60)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                Text("Optional text to guide the model's transcription")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            .padding()
         }
     }
     
     private var advancedSettings: some View {
         Form {
-            Section(header: Text("Decoding Strategy").bold()) {
-                Toggle("Use Beam Search", isOn: $viewModel.useBeamSearch)
-                    .help("Beam search can provide better results but is slower")
-                    .padding(.horizontal, 16)
-                
-                if viewModel.useBeamSearch {
-                    HStack {
-                        Text("Beam Size:")
-                            .padding(.leading, 16)
-                        Stepper("\(viewModel.beamSize)", value: $viewModel.beamSize, in: 1...10)
-                            .help("Number of beams to use in beam search")
-                            .padding(.trailing, 16)
+            VStack(spacing: 20) {
+                // Decoding Strategy
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Decoding Strategy")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $viewModel.useBeamSearch) {
+                            Text("Use Beam Search")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .help("Beam search can provide better results but is slower")
+                        
+                        if viewModel.useBeamSearch {
+                            HStack {
+                                Text("Beam Size:")
+                                    .font(.subheadline)
+                                Spacer()
+                                Stepper("\(viewModel.beamSize)", value: $viewModel.beamSize, in: 1...10)
+                                    .help("Number of beams to use in beam search")
+                                    .frame(width: 120)
+                            }
+                            .padding(.leading, 24)
+                        }
                     }
                 }
-            }
-            
-            Section(header: Text("Model Parameters").bold()) {
-                VStack(alignment: .leading) {
-                    Text("Temperature: \(String(format: "%.2f", viewModel.temperature))")
-                        .padding(.horizontal, 16)
-                    Slider(value: $viewModel.temperature, in: 0.0...1.0, step: 0.1)
-                        .help("Higher values make the output more random")
-                        .padding(.horizontal, 16)
-                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
-                VStack(alignment: .leading) {
-                    Text("No Speech Threshold: \(String(format: "%.2f", viewModel.noSpeechThreshold))")
-                        .padding(.horizontal, 16)
-                    Slider(value: $viewModel.noSpeechThreshold, in: 0.0...1.0, step: 0.1)
-                        .help("Threshold for detecting speech vs. silence")
-                        .padding(.horizontal, 16)
+                // Model Parameters
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Model Parameters")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Temperature:")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text(String(format: "%.2f", viewModel.temperature))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Slider(value: $viewModel.temperature, in: 0.0...1.0, step: 0.1)
+                                .help("Higher values make the output more random")
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("No Speech Threshold:")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text(String(format: "%.2f", viewModel.noSpeechThreshold))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Slider(value: $viewModel.noSpeechThreshold, in: 0.0...1.0, step: 0.1)
+                                .help("Threshold for detecting speech vs. silence")
+                        }
+                    }
                 }
-            }
-            
-            Section(header: Text("Debug Options").bold()) {
-                Toggle("Debug Mode", isOn: $viewModel.debugMode)
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Debug Options
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Debug Options")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Toggle(isOn: $viewModel.debugMode) {
+                        Text("Debug Mode")
+                            .font(.subheadline)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                     .help("Enable additional logging and debugging information")
-                    .padding(.horizontal, 16)
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding()
         }
     }
     
     private var shortcutSettings: some View {
         Form {
-            Section(header: Text("Recording Shortcut").bold()) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        KeyboardShortcuts.Recorder("Toggle record:", name: .toggleRecord)
-                    }
+            VStack(spacing: 20) {
+                // Recording Shortcut
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Recording Shortcut")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                     
-                    if isRecordingNewShortcut {
-                        Text("Press your new shortcut combination...")
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Toggle record:")
+                                .font(.subheadline)
+                            Spacer()
+                            KeyboardShortcuts.Recorder("", name: .toggleRecord)
+                                .frame(width: 120)
+                        }
+                        
+                        if isRecordingNewShortcut {
+                            Text("Press your new shortcut combination...")
+                                .foregroundColor(.secondary)
+                                .font(.subheadline)
+                                .padding(.vertical, 4)
+                        }
+                        
+                        Toggle(isOn: $viewModel.playSoundOnRecordStart) {
+                            Text("Play sound when recording starts")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .help("Play a notification sound when recording begins")
+                        .padding(.top, 4)
                     }
                 }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
-                Toggle("Play sound when recording starts", isOn: $viewModel.playSoundOnRecordStart)
-                    .help("Play a notification sound when recording begins")
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                // Instructions
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Instructions")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "1.circle.fill")
+                                .foregroundColor(.accentColor)
+                            Text("Press any key combination to set as the recording shortcut")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "2.circle.fill")
+                                .foregroundColor(.accentColor)
+                            Text("The shortcut will work even when the app is in the background")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "3.circle.fill")
+                                .foregroundColor(.accentColor)
+                            Text("Recommended to use Command (⌘) or Option (⌥) key combinations")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            
-            Section(header: Text("Instructions").bold()) {
-                Text("• Press any key combination to set as the recording shortcut")
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 16)
-                Text("• The shortcut will work even when the app is in the background")
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 16)
-                Text("• Recommended to use Command (⌘) or Option (⌥) key combinations")
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 16)
-            }
+            .padding()
         }
     }
 }
