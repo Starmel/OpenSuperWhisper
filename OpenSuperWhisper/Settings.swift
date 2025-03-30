@@ -73,7 +73,13 @@ class SettingsViewModel: ObservableObject {
         didSet {
             AppPreferences.shared.debugMode = debugMode
         }
-    }    
+    }
+    
+    @Published var playSoundOnRecordStart: Bool {
+        didSet {
+            AppPreferences.shared.playSoundOnRecordStart = playSoundOnRecordStart
+        }
+    }
     
     init() {
         let prefs = AppPreferences.shared
@@ -87,6 +93,7 @@ class SettingsViewModel: ObservableObject {
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
+        self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -308,6 +315,11 @@ struct SettingsView: View {
                             .padding(.horizontal, 16)
                     }
                 }
+                
+                Toggle("Play sound when recording starts", isOn: $viewModel.playSoundOnRecordStart)
+                    .help("Play a notification sound when recording begins")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
             }
             
             Section(header: Text("Instructions").bold()) {
