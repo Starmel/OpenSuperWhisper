@@ -238,6 +238,17 @@ struct SettingsView: View {
                             .cornerRadius(6)
                     }
                     .padding(.top, 8)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("To display other models in the list, you need to download a ggml bin file and place it in the models folder. Then restart the application.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        Link("Download models here", destination: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/tree/main")!)
+                            .font(.caption)
+                    }
+                    .padding(.top, 8)
                 }
                 .padding()
                 .background(Color(.controlBackgroundColor).opacity(0.3))
