@@ -246,7 +246,7 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         
                         Link("Download models here", destination: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/tree/main")!)
-                            .font(.caption)
+                        .font(.caption)
                     }
                     .padding(.top, 8)
                 }
