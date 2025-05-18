@@ -11,6 +11,15 @@ Free alternative to paid services like:
 * https://goodsnooze.gumroad.com/l/macwhisper
 * and etc..
 
+## Installation
+
+```shell
+brew update # Optional
+brew install opensuperwhisper
+```
+
+Or from [github releases page](https://github.com/Starmel/OpenSuperWhisper/releases).
+
 ## Features
 
 - 🎙️ Real-time audio recording and transcription
@@ -23,10 +32,6 @@ Free alternative to paid services like:
 ## Requirements
 
 - macOS (Apple Silicon/ARM64)
-
-## Installation
-
-From [github releases page](https://github.com/Starmel/OpenSuperWhisper/releases) download the latest version.
 
 ## Support
 
