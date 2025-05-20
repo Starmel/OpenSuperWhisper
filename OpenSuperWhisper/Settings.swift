@@ -39,6 +39,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var liveTextInsertion: Bool {
+        didSet {
+            AppPreferences.shared.liveTextInsertion = liveTextInsertion
+        }
+    }
+    
     @Published var temperature: Double {
         didSet {
             AppPreferences.shared.temperature = temperature
@@ -94,6 +100,7 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
+        self.liveTextInsertion = prefs.liveTextInsertion
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -313,6 +320,12 @@ struct SettingsView: View {
                         
                         Toggle(isOn: $viewModel.suppressBlankAudio) {
                             Text("Suppress Blank Audio")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        
+                        Toggle(isOn: $viewModel.liveTextInsertion) {
+                            Text("Live Text Insertion")
                                 .font(.subheadline)
                         }
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))

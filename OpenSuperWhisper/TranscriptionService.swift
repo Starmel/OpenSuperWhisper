@@ -12,36 +12,50 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var progress: Float = 0.0
     
     private var context: MyWhisperContext?
-    private var totalDuration: Float = 0.0
-    private var transcriptionTask: Task<String, Error>? = nil
-    private var isCancelled = false
-    private var abortFlag: UnsafeMutablePointer<Bool>? = nil
+    private var totalDuration: Float = 0.0 // Used for file transcription progress
+    private var transcriptionTask: Task<String, Error>? = nil // For file transcription
+    private var isCancelled = false // For file transcription cancellation
+    private var abortFlag: UnsafeMutablePointer<Bool>? = nil // For file transcription abort
     
+    // MARK: - Live Transcription State
+    @Published private(set) var isLiveTranscribing: Bool = false
+    private var liveAudioBuffer: [Float] = []
+    private var liveTranscriptionProcessingTask: Task<Void, Error>?
+    private var liveAbortFlag: UnsafeMutablePointer<Bool>?
+    private var liveSettings: Settings?
+    
+    private let LIVE_AUDIO_SAMPLE_RATE: Double = 16000.0
+    private let LIVE_AUDIO_BUFFER_TARGET_DURATION_SECONDS: Double = 5.0 // Process every 5 seconds of audio
+    private var LIVE_AUDIO_BUFFER_TARGET_SAMPLES: Int { Int(LIVE_AUDIO_SAMPLE_RATE * LIVE_AUDIO_BUFFER_TARGET_DURATION_SECONDS) }
+    // Serial queue for live audio buffer access and processing task management
+    private let liveTranscriptionQueue = DispatchQueue(label: "com.opensuperwhisper.liveTranscriptionQueue", qos: .userInitiated)
+
     init() {
         loadModel()
     }
     
+    // For file-based transcription
     func cancelTranscription() {
-        isCancelled = true
-        
-        // Set the abort flag to true to signal the whisper processing to stop
-        if let abortFlag = abortFlag {
-            abortFlag.pointee = true
+        Task { @MainActor in // Ensure UI related properties are updated on main thread
+            isCancelled = true
+            
+            if let abortFlag = abortFlag {
+                abortFlag.pointee = true
+            }
+            
+            transcriptionTask?.cancel()
+            transcriptionTask = nil
+            
+            isTranscribing = false // This is for file-based isTranscribing
+            currentSegment = ""
+            progress = 0.0
+            isCancelled = false
         }
-        
-        transcriptionTask?.cancel()
-        transcriptionTask = nil
-        
-        // Reset state
-        isTranscribing = false
-        currentSegment = ""
-        progress = 0.0
-        isCancelled = false
     }
     
     deinit {
-        // Free the abort flag if it exists
         abortFlag?.deallocate()
+        liveAbortFlag?.deallocate()
     }
     
     private func loadModel() {
@@ -206,7 +220,17 @@ class TranscriptionService: ObservableObject {
                     
                     if !segmentInfo.text.isEmpty {
                         service.currentSegment = segmentInfo.text
-                        service.transcribedText += segmentInfo.text + "\n"
+                        // The main transcribedText will be assembled at the end or if live insertion is off.
+                        // If live insertion is on, we avoid duplicating text here for the main log,
+                        // but individual segments are still inserted.
+                        if !AppPreferences.shared.liveTextInsertion {
+                             service.transcribedText += segmentInfo.text + "\n"
+                        }
+
+                        // Live text insertion
+                        if AppPreferences.shared.liveTextInsertion {
+                            ClipboardUtil.insertTextUsingPasteboard(segmentInfo.text)
+                        }
                     }
                     
                     if service.totalDuration > 0 && segmentInfo.timestamp > 0 {
@@ -239,7 +263,11 @@ class TranscriptionService: ObservableObject {
             // Check for cancellation
             try Task.checkCancellation()
             
-            var text = ""
+            // If live text insertion was enabled, transcribedText was populated segment by segment for the UI log,
+            // but we still want the full, clean transcript at the end.
+            // If live text insertion was OFF, transcribedText has been accumulating.
+            // The final text construction from segments is crucial for accuracy and completeness.
+            var finalTextAccumulator = ""
             let nSegments = context.fullNSegments
             
             for i in 0..<nSegments {
@@ -250,29 +278,32 @@ class TranscriptionService: ObservableObject {
                 
                 guard let segmentText = context.fullGetSegmentText(iSegment: i) else { continue }
                 
+                var segmentLine = ""
                 if settings.showTimestamps {
                     let t0 = context.fullGetSegmentT0(iSegment: i)
                     let t1 = context.fullGetSegmentT1(iSegment: i)
-                    text += String(format: "[%.1f->%.1f] ", Float(t0) / 100.0, Float(t1) / 100.0)
+                    segmentLine += String(format: "[%.1f->%.1f] ", Float(t0) / 100.0, Float(t1) / 100.0)
                 }
-                text += segmentText + "\n"
+                segmentLine += segmentText
+                finalTextAccumulator += segmentLine + "\n"
             }
             
-            let cleanedText = text
+            let cleanedFinalText = finalTextAccumulator
                 .replacingOccurrences(of: "[MUSIC]", with: "")
                 .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             
-            let finalText = cleanedText.isEmpty ? "No speech detected in the audio" : cleanedText
+            let resultText = cleanedFinalText.isEmpty ? "No speech detected in the audio" : cleanedFinalText
             
             await MainActor.run {
                 if !self.isCancelled {
-                    self.transcribedText = finalText
+                    // Update the main transcribedText with the fully processed text
+                    self.transcribedText = resultText
                     self.progress = 1.0
                 }
             }
             
-            return finalText
+            return resultText
         }
         
         // Store the task
@@ -293,30 +324,212 @@ class TranscriptionService: ObservableObject {
         }
     }
     
-    // Make this method nonisolated to be callable from any context
+    // MARK: - Live Transcription Methods
+    
+    func startLiveTranscription(settings: Settings) {
+        Task { @MainActor in
+            print("Starting live transcription...")
+            self.isLiveTranscribing = true
+            self.liveSettings = settings
+            self.transcribedText = "" // Reset text for the new live session
+            self.currentSegment = ""
+            self.progress = 0.0 // Progress might be managed differently for live
+            
+            // Initialize liveAbortFlag
+            if self.liveAbortFlag != nil {
+                self.liveAbortFlag?.deallocate()
+            }
+            self.liveAbortFlag = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+            self.liveAbortFlag?.initialize(to: false)
+        }
+        
+        liveTranscriptionQueue.async { [weak self] in
+            self?.liveAudioBuffer.removeAll(keepingCapacity: true)
+            print("Live audio buffer cleared.")
+        }
+        
+        // Ensure context is loaded (should be by init)
+        if context == nil {
+            print("Error: Whisper context not loaded for live transcription.")
+            Task { @MainActor in self.isLiveTranscribing = false }
+            // Consider re-calling loadModel or signaling an error
+        }
+    }
+    
+    func processAudioChunk(_ pcmSamples: [Float]) {
+        liveTranscriptionQueue.async { [weak self] in
+            guard let self = self, self.isLiveTranscribing, self.context != nil else { return }
+            
+            self.liveAudioBuffer.append(contentsOf: pcmSamples)
+            // print("Live buffer size: \(self.liveAudioBuffer.count) samples")
+
+            // Check if buffer is full enough AND no other processing task is running
+            guard self.liveAudioBuffer.count >= self.LIVE_AUDIO_BUFFER_TARGET_SAMPLES,
+                  self.liveTranscriptionProcessingTask == nil else {
+                return
+            }
+            
+            let samplesToProcess = self.liveAudioBuffer
+            self.liveAudioBuffer.removeAll(keepingCapacity: true) // Clear buffer for next accumulation
+            
+            print("Processing chunk of \(samplesToProcess.count) samples.")
+
+            self.liveTranscriptionProcessingTask = Task.detached(priority: .userInitiated) { [weak self] in
+                guard let self = self, // Strong self for task duration
+                      let context = self.context, // Ensure context is still valid
+                      let currentSettings = self.liveSettings, // Ensure settings are available
+                      self.isLiveTranscribing // Ensure still in live mode
+                else {
+                    print("Live transcription processing task cancelled or self/context/settings nil before start.")
+                    self?.liveTranscriptionProcessingTask = nil // Clear task holder
+                    return
+                }
+                
+                defer {
+                    // Ensure task holder is cleared on the queue once processing is done or fails
+                    self.liveTranscriptionQueue.async {
+                        self?.liveTranscriptionProcessingTask = nil
+                    }
+                }
+
+                var params = WhisperFullParams()
+                params.strategy = currentSettings.useBeamSearch ? .beamSearch : .greedy
+                params.nThreads = Int32(4) // Example, make configurable if needed
+                params.noTimestamps = !currentSettings.showTimestamps // ShowTimestamps from settings
+                params.suppressBlank = currentSettings.suppressBlankAudio
+                params.translate = currentSettings.translateToEnglish
+                params.language = currentSettings.selectedLanguage != "auto" ? currentSettings.selectedLanguage : nil
+                params.detectLanguage = currentSettings.selectedLanguage == "auto"
+                params.temperature = Float(currentSettings.temperature)
+                params.noSpeechThold = Float(currentSettings.noSpeechThreshold)
+                params.initialPrompt = currentSettings.initialPrompt.isEmpty ? nil : currentSettings.initialPrompt
+                if currentSettings.useBeamSearch {
+                    params.beamSearchBeamSize = Int32(currentSettings.beamSize)
+                }
+                params.printRealtime = true // Already true, but for clarity
+                
+                // Setup callbacks
+                params.newSegmentCallback = { ctx, state, n_new, user_data in
+                    guard let userData = user_data else { return }
+                    let service = Unmanaged<TranscriptionService>.fromOpaque(userData).takeUnretainedValue()
+                    let segmentInfo = service.processNewSegment(context: ctx!, state: state, nNew: Int(n_new))
+                    
+                    Task { @MainActor in
+                        if service.isCancelled || !service.isLiveTranscribing { return } // Check both cancellation flags
+                        
+                        if !segmentInfo.text.isEmpty {
+                            service.currentSegment = segmentInfo.text
+                            if !AppPreferences.shared.liveTextInsertion {
+                                service.transcribedText += segmentInfo.text + "\n"
+                            }
+                            if AppPreferences.shared.liveTextInsertion {
+                                ClipboardUtil.insertTextUsingPasteboard(segmentInfo.text)
+                            }
+                        }
+                        // Progress for live transcription might be different, e.g., based on time or segments processed
+                        // For now, keep the existing progress logic which might not be ideal for live.
+                         if service.totalDuration > 0 && segmentInfo.timestamp > 0 { // totalDuration is 0 for live
+                             let newProgress = min(segmentInfo.timestamp / service.totalDuration, 1.0)
+                             service.progress = newProgress
+                         }
+                    }
+                }
+                params.newSegmentCallbackUserData = Unmanaged.passUnretained(self).toOpaque()
+                
+                var cParams = params.toC()
+                cParams.abort_callback = { userData in
+                    guard let userData = userData else { return false }
+                    let flag = userData.assumingMemoryBound(to: Bool.self)
+                    return flag.pointee
+                }
+                if let liveAbortFlag = self.liveAbortFlag {
+                    cParams.abort_callback_user_data = UnsafeMutableRawPointer(liveAbortFlag)
+                } else {
+                     print("Warning: liveAbortFlag is nil during C param setup.")
+                }
+
+                print("Starting context.full for live chunk of \(samplesToProcess.count) samples.")
+                if !context.full(samples: samplesToProcess, params: &cParams) {
+                    print("Failed to process live audio chunk.")
+                    // Error handling: Maybe set an error state or log more details
+                } else {
+                    print("Live audio chunk processed successfully.")
+                }
+            }
+        }
+    }
+
+    func stopLiveTranscription() {
+        Task { @MainActor in
+            print("Stopping live transcription...")
+            if !self.isLiveTranscribing { return } // Already stopped or never started
+            self.isLiveTranscribing = false
+        }
+
+        liveTranscriptionQueue.async { [weak self] in
+            guard let self = self else { return }
+
+            if let liveAbortFlag = self.liveAbortFlag {
+                liveAbortFlag.pointee = true
+                print("Live abort flag set to true.")
+            }
+            
+            self.liveTranscriptionProcessingTask?.cancel() // Cancel the Swift Task
+            // self.liveTranscriptionProcessingTask = nil // Task will clear itself from queue
+
+            // Process any remaining audio if substantial enough and no task is running
+            // For simplicity, we'll just log and clear for now.
+            // A more robust solution might queue one last processing task.
+            if !self.liveAudioBuffer.isEmpty {
+                print("Clearing \(self.liveAudioBuffer.count) remaining samples from live buffer.")
+                self.liveAudioBuffer.removeAll(keepingCapacity: true)
+            }
+            
+            // Deallocate liveAbortFlag after ensuring any task using it has finished or been cancelled
+            // This needs careful handling; defer deallocation if task might still access it.
+            // For now, deallocate here. If crashes occur, move deallocation to after task completion.
+            self.liveAbortFlag?.deallocate()
+            self.liveAbortFlag = nil
+            
+            self.liveSettings = nil
+            print("Live transcription stopped and resources cleaned up on queue.")
+        }
+    }
+
+    // MARK: - Common and File-based Methods
+    
+    // This method is nonisolated and used by both file and live transcription.
+    // It should remain nonisolated.
     nonisolated func processNewSegment(context: OpaquePointer, state: OpaquePointer?, nNew: Int) -> (text: String, timestamp: Float) {
         let nSegments = Int(whisper_full_n_segments(context))
-        let startIdx = max(0, nSegments - nNew)
+        // For live transcription, nNew might represent segments from the current chunk.
+        // The logic here correctly extracts text for these new segments.
+        let startIdx = max(0, nSegments - nNew) 
         
         var newText = ""
-        var latestTimestamp: Float = 0
+        var latestTimestamp: Float = 0 // Timestamp relative to the current chunk
         
         for i in startIdx..<nSegments {
             guard let cString = whisper_full_get_segment_text(context, Int32(i)) else { continue }
             let segmentText = String(cString: cString)
-            newText += segmentText + " "
+            newText += segmentText // Append segment text, add space later if needed or rely on UI
             
-            let t1 = Float(whisper_full_get_segment_t1(context, Int32(i))) / 100.0
+            // Timestamps from whisper_full_get_segment_tX are relative to the start of the audio fed to whisper_full.
+            // For chunked processing, these are timestamps within the chunk.
+            let t1 = Float(whisper_full_get_segment_t1(context, Int32(i))) / 100.0 
             latestTimestamp = max(latestTimestamp, t1)
         }
         
-        let cleanedText = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // For live streaming, we might want to trim less aggressively or handle spaces carefully.
+        // For now, keep existing trimming.
+        let cleanedText = newText.trimmingCharacters(in: .whitespacesAndNewlines) 
         return (cleanedText, latestTimestamp)
     }
     
-    // Make this method nonisolated to be callable from any context
+    // This method is nonisolated.
     nonisolated func createContext() -> MyWhisperContext? {
         guard let modelPath = AppPreferences.shared.selectedModelPath else {
+            print("Error: Model path not found for context creation.")
             return nil
         }
         

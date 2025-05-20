@@ -59,6 +59,9 @@ final class AppPreferences {
     
     @UserDefault(key: "debugMode", defaultValue: false)
     var debugMode: Bool
+
+    @UserDefault(key: "liveTextInsertion", defaultValue: false)
+    var liveTextInsertion: Bool
     
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
