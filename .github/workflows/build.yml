@@ -1,0 +1,24 @@
+name: Build Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Ruby (for xcpretty)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+      - name: Install xcpretty
+        run: gem install xcpretty
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v2
+      - name: Make run.sh executable
+        run: chmod +x ./run.sh
+      - name: Build with run.sh
+        run: ./run.sh build 
