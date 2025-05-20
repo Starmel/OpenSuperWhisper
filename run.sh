@@ -8,6 +8,10 @@ fi
 # Configure libwhisper
 echo "Configuring libwhisper..."
 cmake -G Xcode -B libwhisper/build -S libwhisper
+if [[ $? -ne 0 ]]; then
+    echo "CMake configuration failed!"
+    exit 1
+fi
 
 # Build the app
 echo "Building OpenSuperWhisper..."
