@@ -1,8 +1,17 @@
 #!/bin/zsh
 
+JUST_BUILD=false
+if [[ "$1" == "build" ]]; then
+    JUST_BUILD=true
+fi
+
 # Configure libwhisper
 echo "Configuring libwhisper..."
 cmake -G Xcode -B libwhisper/build -S libwhisper
+if [[ $? -ne 0 ]]; then
+    echo "CMake configuration failed!"
+    exit 1
+fi
 
 # Build the app
 echo "Building OpenSuperWhisper..."
@@ -18,11 +27,13 @@ fi
 
 # Check if build output contains BUILD FAILED or if the command failed
 if [[ $? -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
-    echo "Building successful! Starting the app..."
-    
+    echo "Building successful!"
+    if $JUST_BUILD; then
+        exit 0
+    fi
+    echo "Starting the app..."
     # Remove quarantine attribute if exists
     xattr -d com.apple.quarantine ./Build/Build/Products/Debug/OpenSuperWhisper.app 2>/dev/null || true
-    
     # Run the app and show logs
     ./Build/Build/Products/Debug/OpenSuperWhisper.app/Contents/MacOS/OpenSuperWhisper
 else
