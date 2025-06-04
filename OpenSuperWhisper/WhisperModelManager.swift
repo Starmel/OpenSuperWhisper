@@ -66,10 +66,12 @@ class WhisperModelManager {
     private func copyDefaultModelIfNeeded() {
         let defaultModelName = "ggml-tiny.en.bin"
         let destinationURL = modelsDirectory.appendingPathComponent(defaultModelName)
+        
         // Check if model already exists
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             return
         }
+        
         // Look for the model in the bundle
         if let bundleURL = Bundle.main.url(forResource: "ggml-tiny.en", withExtension: "bin") {
             do {
