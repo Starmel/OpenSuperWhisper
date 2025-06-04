@@ -82,6 +82,15 @@ class WhisperModelManager {
             }
         }
     }
+
+    // Call this on every startup to ensure at least one model is present
+    public func ensureDefaultModelPresent() {
+        let defaultModelName = "ggml-tiny.en.bin"
+        let destinationURL = modelsDirectory.appendingPathComponent(defaultModelName)
+        if !FileManager.default.fileExists(atPath: destinationURL.path) {
+            copyDefaultModelIfNeeded()
+        }
+    }
     
     func getAvailableModels() -> [URL] {
         do {
