@@ -72,8 +72,7 @@ class WhisperModelManager {
             return
         }
 
-        // Try to copy from app bundle (macOS), else from workspace root (Linux/dev)
-        #if os(macOS)
+        // Look for the model in the bundle
         if let bundleURL = Bundle.main.url(forResource: "ggml-tiny.en", withExtension: "bin") {
             do {
                 try FileManager.default.copyItem(at: bundleURL, to: destinationURL)
