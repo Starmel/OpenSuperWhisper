@@ -47,3 +47,17 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 ## License
 
 OpenSuperWhisper is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Whisper Models
+
+You can download Whisper model files (`.bin`) from the [Whisper.cpp Hugging Face repository](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Place the downloaded `.bin` files in the app's models directory. On first launch, the app will attempt to copy a default model automatically, but you can add more models manually.
+
+## How to Verify Model Auto-Repair
+
+To check that the auto-repair feature is working:
+
+1. Delete all `.bin` model files from the models directory. You can open this folder from the app's Settings ("Open Folder" button next to "Models Directory").
+2. Restart the app.
+3. The default model (`ggml-tiny.en.bin`) should be restored automatically, and the model selector will no longer be empty.
+
+If you want to add more models, simply download them from the link above and place them in the models directory.

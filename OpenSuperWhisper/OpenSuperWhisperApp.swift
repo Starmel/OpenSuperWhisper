@@ -37,6 +37,7 @@ struct OpenSuperWhisperApp: App {
 
     init() {
         _ = ShortcutManager.shared
+        WhisperModelManager.shared.ensureDefaultModelPresent()
     }
 }
 

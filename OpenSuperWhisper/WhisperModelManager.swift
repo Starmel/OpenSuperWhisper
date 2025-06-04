@@ -66,13 +66,14 @@ class WhisperModelManager {
     private func copyDefaultModelIfNeeded() {
         let defaultModelName = "ggml-tiny.en.bin"
         let destinationURL = modelsDirectory.appendingPathComponent(defaultModelName)
-        
+
         // Check if model already exists
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             return
         }
-        
-        // Look for the model in the bundle
+
+        // Try to copy from app bundle (macOS), else from workspace root (Linux/dev)
+        #if os(macOS)
         if let bundleURL = Bundle.main.url(forResource: "ggml-tiny.en", withExtension: "bin") {
             do {
                 try FileManager.default.copyItem(at: bundleURL, to: destinationURL)
@@ -80,6 +81,28 @@ class WhisperModelManager {
             } catch {
                 print("Failed to copy default model: \(error)")
             }
+        }
+        #else
+        // Fallback: copy from workspace root if available
+        let rootPath = FileManager.default.currentDirectoryPath
+        let rootModelPath = (rootPath as NSString).appendingPathComponent(defaultModelName)
+        if FileManager.default.fileExists(atPath: rootModelPath) {
+            do {
+                try FileManager.default.copyItem(atPath: rootModelPath, toPath: destinationURL.path)
+                print("Copied default model from workspace root to: \(destinationURL.path)")
+            } catch {
+                print("Failed to copy default model from workspace root: \(error)")
+            }
+        }
+        #endif
+    }
+
+    // Call this on every startup to ensure at least one model is present
+    public func ensureDefaultModelPresent() {
+        let defaultModelName = "ggml-tiny.en.bin"
+        let destinationURL = modelsDirectory.appendingPathComponent(defaultModelName)
+        if !FileManager.default.fileExists(atPath: destinationURL.path) {
+            copyDefaultModelIfNeeded()
         }
     }
     
