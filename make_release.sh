@@ -40,6 +40,7 @@ echo "🧹 Cleaning previous builds..."
 rm -rf build
 rm -f OpenSuperWhisper.dmg
 rm -f OpenSuperWhisper.dmg.sha256
+rm -f OpenSuperWhisper.app.dSYM.zip
 
 # Use the existing notarize_app.sh script to build, sign, and notarize
 echo "🔨 Building, signing and notarizing with notarize_app.sh..."
@@ -64,6 +65,22 @@ DMG_PATH="./OpenSuperWhisper.dmg"
 if [[ ! -f "$DMG_PATH" ]]; then
     echo "❌ DMG not found at $DMG_PATH"
     exit 1
+fi
+
+# Find and prepare dSYM
+DSYM_PATH="./build/Build/Products/Release/OpenSuperWhisper.app.dSYM"
+DSYM_ZIP_PATH="./OpenSuperWhisper.app.dSYM.zip"
+
+if [[ -d "$DSYM_PATH" ]]; then
+    echo "📦 Creating dSYM zip..."
+    cd $(dirname "$DSYM_PATH")
+    zip -r "$(basename "$DSYM_ZIP_PATH")" "$(basename "$DSYM_PATH")" > /dev/null
+    mv "$(basename "$DSYM_ZIP_PATH")" "$DSYM_ZIP_PATH"
+    cd - > /dev/null
+    echo "✅ dSYM zip created: $DSYM_ZIP_PATH"
+else
+    echo "⚠️ dSYM not found at $DSYM_PATH - skipping dSYM upload"
+    DSYM_ZIP_PATH=""
 fi
 
 # # Generate SHA256
@@ -146,6 +163,32 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
         echo "Response: $UPLOAD_RESPONSE"
     fi
     
+    # Upload dSYM if available
+    if [[ -n "$DSYM_ZIP_PATH" && -f "$DSYM_ZIP_PATH" ]]; then
+        echo "📤 Uploading dSYM..."
+        
+        DSYM_UPLOAD_RESPONSE=$(curl -s -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/zip" \
+            "https://uploads.github.com/repos/Starmel/OpenSuperWhisper/releases/${RELEASE_ID}/assets?name=OpenSuperWhisper.app.dSYM.zip" \
+            --data-binary @"${DSYM_ZIP_PATH}")
+        
+        # Check dSYM upload
+        if [[ $(echo "$DSYM_UPLOAD_RESPONSE" | grep -c '"state":"uploaded"') -gt 0 ]] || [[ $(echo "$DSYM_UPLOAD_RESPONSE" | grep -c '"state": "uploaded"') -gt 0 ]]; then
+            echo "✅ dSYM uploaded successfully!"
+            # Extract download URL
+            DSYM_DOWNLOAD_URL=$(echo "$DSYM_UPLOAD_RESPONSE" | grep -o '"browser_download_url":"[^"]*' | cut -d'"' -f4)
+            echo "📥 dSYM Download URL: $DSYM_DOWNLOAD_URL"
+        elif [[ $(echo "$DSYM_UPLOAD_RESPONSE" | grep -c '"message"') -gt 0 ]]; then
+            echo "⚠️ Failed to upload dSYM (non-critical)"
+            echo "Error: $(echo "$DSYM_UPLOAD_RESPONSE" | grep -o '"message":"[^"]*' | cut -d'"' -f4)"
+        else
+            echo "⚠️ dSYM upload response unclear"
+        fi
+    fi
+    
     echo "✅ DMG uploaded successfully!"
     echo "🎉 GitHub release is complete!"
     echo "🔗 Release URL: https://github.com/Starmel/OpenSuperWhisper/releases/tag/${NEW_VERSION}"
@@ -163,6 +206,9 @@ echo ""
 echo "📁 Files created:"
 echo "   - OpenSuperWhisper.dmg"
 echo "   - OpenSuperWhisper.dmg.sha256"
+if [[ -f "$DSYM_ZIP_PATH" ]]; then
+    echo "   - OpenSuperWhisper.app.dSYM.zip"
+fi
 echo ""
 echo "🍺 Homebrew cask update:"
 echo "-----"
