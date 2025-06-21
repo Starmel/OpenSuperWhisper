@@ -349,6 +349,41 @@ struct SettingsView: View {
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Transcriptions Directory
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Transcriptions Directory")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Directory:")
+                                .font(.subheadline)
+                            Spacer()
+                            Button(action: {
+                                NSWorkspace.shared.open(Recording.recordingsDirectory)
+                            }) {
+                                Label("Open Folder", systemImage: "folder")
+                                    .font(.subheadline)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Open transcriptions directory")
+                        }
+                        
+                        Text(Recording.recordingsDirectory.path)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                            .padding(8)
+                            .background(Color(.textBackgroundColor).opacity(0.5))
+                            .cornerRadius(6)
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }
