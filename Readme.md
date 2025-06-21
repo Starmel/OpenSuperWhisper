@@ -46,6 +46,7 @@ To build locally, you'll need:
 
     git clone git@github.com:Starmel/OpenSuperWhisper.git
     cd OpenSuperWhisper
+    git submodule update --init --recursive
     brew install cmake
     ./run.sh build
 
