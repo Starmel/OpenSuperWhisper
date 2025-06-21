@@ -12,13 +12,18 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         return lhs.id == rhs.id
     }
 
-    var url: URL {
+    /// Directory where recording files are stored.
+    static var recordingsDirectory: URL {
         let applicationSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!
         let appDirectory = applicationSupport.appendingPathComponent(Bundle.main.bundleIdentifier!)
-        let recordingsDirectory = appDirectory.appendingPathComponent("recordings")
-        return recordingsDirectory.appendingPathComponent(fileName)
+        return appDirectory.appendingPathComponent("recordings")
+    }
+
+    /// File URL for this recording.
+    var url: URL {
+        Self.recordingsDirectory.appendingPathComponent(fileName)
     }
 
     // MARK: - Database Table Definition
