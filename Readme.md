@@ -40,6 +40,18 @@ If you encounter any issues or have questions, please:
 2. Create a new issue with detailed information about your problem
 3. Include system information and logs when reporting bugs
 
+# Building locally
+
+To build locally, you'll need:
+
+    git clone git@github.com:Starmel/OpenSuperWhisper.git
+    cd OpenSuperWhisper
+    brew install cmake
+    ./run.sh build
+
+In case of problems, consult `.github/workflows/build.yml` which is our CI workflow
+where the app gets built automatically on GitHub's CI.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or create issues for bugs and feature requests.
