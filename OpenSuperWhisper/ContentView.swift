@@ -68,29 +68,33 @@ class ContentViewModel: ObservableObject {
                     // Capture the current recording duration
                     let duration = await MainActor.run { self.recordingDuration }
                     
-                    // Create a new Recording instance
+                    // Create a new Recording and save audio + metadata
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                    let finalURL = Recording(
+                    let recording = Recording(
                         id: UUID(),
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
                         duration: duration // Use tracked duration
-                    ).url
-
+                    )
+                    // Ensure recordings folder exists
+                    try FileManager.default.createDirectory(
+                        at: Recording.recordingsDirectory,
+                        withIntermediateDirectories: true
+                    )
                     // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-
+                    let audioURL = recording.url
+                    try recorder.moveTemporaryRecording(from: tempURL, to: audioURL)
+                    // Write metadata JSON alongside audio
+                    let metadataURL = audioURL.deletingPathExtension().appendingPathExtension("json")
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    let metadataData = try encoder.encode(recording)
+                    try metadataData.write(to: metadataURL)
                     // Save the recording to store
                     await MainActor.run {
-                        self.recordingStore.addRecording(Recording(
-                            id: UUID(),
-                            timestamp: timestamp,
-                            fileName: fileName,
-                            transcription: text,
-                            duration: self.recordingDuration // Use tracked duration
-                        ))
+                        self.recordingStore.addRecording(recording)
                     }
 
                     print("Transcription result: \(text)")

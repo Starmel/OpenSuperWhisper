@@ -84,29 +84,32 @@ class FileDropHandler: ObservableObject {
                     url: url, settings: Settings()
                 )
                 
-                // Create a new Recording instance
+                // Create a new Recording and save audio + metadata
                 let timestamp = Date()
                 let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                let finalURL = Recording(
+                let recording = Recording(
                     id: UUID(),
                     timestamp: timestamp,
                     fileName: fileName,
                     transcription: text,
                     duration: fileDuration
-                ).url
-                
-                // Copy the file for playback
-                try FileManager.default.copyItem(at: url, to: finalURL)
-                
-                // Save the recording to store
-                self.recordingStore.addRecording(
-                    Recording(
-                        id: UUID(),
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: self.fileDuration
-                    ))
+                )
+                // Ensure recordings folder exists
+                try FileManager.default.createDirectory(
+                    at: Recording.recordingsDirectory,
+                    withIntermediateDirectories: true
+                )
+                // Copy audio file
+                let audioURL = recording.url
+                try FileManager.default.copyItem(at: url, to: audioURL)
+                // Write metadata JSON alongside audio
+                let metadataURL = audioURL.deletingPathExtension().appendingPathExtension("json")
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let metadataData = try encoder.encode(recording)
+                try metadataData.write(to: metadataURL)
+                // Save the recording to the store
+                self.recordingStore.addRecording(recording)
                 
             } catch {
                 print("Error processing dropped audio file: \(error)")
