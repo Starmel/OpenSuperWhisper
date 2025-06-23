@@ -57,6 +57,15 @@ where the app gets built automatically on GitHub's CI.
 
 Contributions are welcome! Please feel free to submit pull requests or create issues for bugs and feature requests.
 
+### Contribution TODO list
+
+- [ ] Streaming transcription ([#22](https://github.com/Starmel/OpenSuperWhisper/issues/22))
+- [ ] Custom dictionary ([#20](https://github.com/Starmel/OpenSuperWhisper/issues/35))
+- [ ] Intel macOS compatibility ([#16](https://github.com/Starmel/OpenSuperWhisper/issues/16))
+- [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
+- [x] Background app ([#9](https://github.com/Starmel/OpenSuperWhisper/issues/9))
+- [x] Support long-press single key audio recording ([#19](https://github.com/Starmel/OpenSuperWhisper/issues/19))
+
 ## License
 
 OpenSuperWhisper is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
