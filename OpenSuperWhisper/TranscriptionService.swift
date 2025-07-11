@@ -167,7 +167,7 @@ class TranscriptionService: ObservableObject {
             params.suppressBlank = settings.suppressBlankAudio
             params.translate = settings.translateToEnglish
             params.language = settings.selectedLanguage != "auto" ? settings.selectedLanguage : nil
-            params.detectLanguage = settings.selectedLanguage == "auto"
+            params.detectLanguage = false // should be false, whisper handles language detection by language property.
             
             params.temperature = Float(settings.temperature)
             params.noSpeechThold = Float(settings.noSpeechThreshold)

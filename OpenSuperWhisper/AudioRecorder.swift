@@ -96,7 +96,6 @@ class AudioRecorder: NSObject, ObservableObject {
             sound.volume = 0.3
             sound.play()
             notificationSound = sound
-            print("Notification sound playing with NSSound...")
         } else {
             print("Failed to create NSSound from URL, falling back to system beep")
             // Fall back to system beep if NSSound creation fails
