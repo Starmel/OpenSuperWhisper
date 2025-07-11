@@ -87,6 +87,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let menu = NSMenu()
         
         menu.addItem(NSMenuItem(title: "OpenSuperWhisper", action: #selector(openApp), keyEquivalent: "o"))
+
+        let transcriptionLanguageItem = NSMenuItem(title: "Transcription Language", action: nil, keyEquivalent: "")
+        let languageSubmenu = NSMenu()
+
+        // Add language options
+        for languageCode in LanguageUtil.availableLanguages {
+            let languageName = LanguageUtil.languageNames[languageCode] ?? languageCode
+            let languageItem = NSMenuItem(title: languageName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            languageItem.target = self
+            languageItem.representedObject = languageCode
+            languageItem.state = (AppPreferences.shared.whisperLanguage == languageCode) ? .on : .off
+            languageSubmenu.addItem(languageItem)
+        }
+
+        transcriptionLanguageItem.submenu = languageSubmenu
+        menu.addItem(transcriptionLanguageItem)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
         
@@ -103,6 +120,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let languageCode = sender.representedObject as? String else { return }
+
+        // Update preferences
+        AppPreferences.shared.whisperLanguage = languageCode
+
+        // Update menu item states
+        if let submenu = sender.menu {
+            for item in submenu.items {
+                item.state = .off
+            }
+            sender.state = .on
+        }
     }
     
     func showMainWindow() {
