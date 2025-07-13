@@ -80,6 +80,26 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.playSoundOnRecordStart = playSoundOnRecordStart
         }
     }
+
+    // Cleanup settings
+    @Published var cleanupInterval: CleanupTimeInterval {
+        didSet {
+            AppPreferences.shared.cleanupInterval = cleanupInterval
+            Task {
+                await storageUsageService.calculateStorageUsage()
+            }
+        }
+    }
+
+    @Published var cleanupEnabled: Bool {
+        didSet {
+            AppPreferences.shared.cleanupEnabled = cleanupEnabled
+        }
+    }
+
+    // Storage usage service
+    @Published var storageUsageService: StorageUsageService
+    @Published var cleanupService: RecordingCleanupService
     
     init() {
         let prefs = AppPreferences.shared
@@ -94,6 +114,10 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
+        self.cleanupInterval = prefs.cleanupInterval
+        self.cleanupEnabled = prefs.cleanupEnabled
+        self.storageUsageService = StorageUsageService.shared
+        self.cleanupService = RecordingCleanupService.shared
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -140,6 +164,7 @@ struct SettingsView: View {
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
+    @State private var showCleanupConfirmation = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -170,6 +195,13 @@ struct SettingsView: View {
                     Label("Advanced", systemImage: "gear")
                 }
                 .tag(3)
+
+            // Storage Settings
+            storageSettings
+                .tabItem {
+                    Label("Storage", systemImage: "externaldrive")
+                }
+                .tag(4)
             }
         .padding()
         .frame(width: 550)
@@ -564,6 +596,182 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
+        }
+    }
+
+    private var storageSettings: some View {
+        Form {
+            VStack(spacing: 20) {
+                // Storage Usage Overview
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Storage Usage")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Total recordings:")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(viewModel.storageUsageService.recordingCount)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        HStack {
+                            Text("Storage used:")
+                                .font(.subheadline)
+                            Spacer()
+                            Text(viewModel.storageUsageService.formatBytes(viewModel.storageUsageService.totalStorageUsed))
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        if viewModel.storageUsageService.estimatedCleanupSavings > 0 {
+                            HStack {
+                                Text("Can be cleaned:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.orange)
+                                Spacer()
+                                Text(viewModel.storageUsageService.formatBytes(viewModel.storageUsageService.estimatedCleanupSavings))
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Automatic Cleanup Settings
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Automatic Cleanup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $viewModel.cleanupEnabled) {
+                            Text("Enable automatic cleanup")
+                                .font(.subheadline)
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+
+                        if viewModel.cleanupEnabled {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Delete recordings older than:")
+                                    .font(.subheadline)
+
+                                Picker("Cleanup Interval", selection: $viewModel.cleanupInterval) {
+                                    ForEach(CleanupTimeInterval.allCases, id: \.self) { interval in
+                                        Text(interval.displayName).tag(interval)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(.controlBackgroundColor))
+                                .cornerRadius(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Text(viewModel.cleanupInterval.cleanupDescription)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 4)
+                            }
+                            .padding(.leading, 24)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Manual Cleanup Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Manual Cleanup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        if viewModel.cleanupService.isCleaningUp {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Cleaning up recordings...")
+                                    .font(.subheadline)
+
+                                ProgressView(value: viewModel.cleanupService.cleanupProgress)
+                                    .progressViewStyle(LinearProgressViewStyle())
+
+                                Button("Cancel") {
+                                    viewModel.cleanupService.cancelCleanup()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        } else {
+                            HStack {
+                                Button("Clean Now") {
+                                    showCleanupConfirmation = true
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(viewModel.cleanupInterval == .never || viewModel.storageUsageService.recordingCount == 0)
+                                .confirmationDialog(
+                                    "Clean Up Recordings",
+                                    isPresented: $showCleanupConfirmation,
+                                    titleVisibility: .visible
+                                ) {
+                                    Button("Clean Now", role: .destructive) {
+                                        Task {
+                                            _ = await viewModel.cleanupService.performCleanup(forced: true)
+                                            await viewModel.storageUsageService.calculateStorageUsage()
+                                        }
+                                    }
+                                    Button("Cancel", role: .cancel) {}
+                                } message: {
+                                    if viewModel.storageUsageService.estimatedCleanupSavings > 0 {
+                                        Text("This will delete recordings older than \(viewModel.cleanupInterval.displayName.lowercased()) and free up \(viewModel.storageUsageService.formatBytes(viewModel.storageUsageService.estimatedCleanupSavings)). This action cannot be undone.")
+                                    } else {
+                                        Text("No recordings match the current cleanup criteria.")
+                                    }
+                                }
+
+                                Spacer()
+
+                                if let lastResult = viewModel.cleanupService.lastCleanupResult {
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("Last cleanup:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+
+                                        if lastResult.deletedCount > 0 {
+                                            Text("\(lastResult.deletedCount) files deleted")
+                                                .font(.caption)
+                                                .foregroundColor(.green)
+                                        } else {
+                                            Text("No files to clean")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+
+                            if viewModel.cleanupInterval != .never && viewModel.storageUsageService.estimatedCleanupSavings > 0 {
+                                Text("This will delete \(viewModel.storageUsageService.formatBytes(viewModel.storageUsageService.estimatedCleanupSavings)) of recordings")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                    .padding(.top, 4)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 }
