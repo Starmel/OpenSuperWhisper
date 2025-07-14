@@ -11,6 +11,8 @@ class AudioRecorder: NSObject, ObservableObject {
     
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
+    private var audioEngine: AVAudioEngine?
+    private var audioFile: AVAudioFile?
     private var notificationSound: NSSound?
     private let temporaryDirectory: URL
     private var currentRecordingURL: URL?
@@ -26,32 +28,12 @@ class AudioRecorder: NSObject, ObservableObject {
         
         super.init()
         createTemporaryDirectoryIfNeeded()
-        setupAudioSession()
         setup()
     }
     
     deinit {
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
-        }
-    }
-    
-    private func setupAudioSession() {
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            
-            // Configure the audio session to allow mixing with other audio
-            // This prevents interrupting music, podcasts, or other audio playback
-            try audioSession.setCategory(.playAndRecord, 
-                                       mode: .default, 
-                                       options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth])
-            
-            // Activate the audio session
-            try audioSession.setActive(true)
-            
-            print("Audio session configured for mixing with other audio")
-        } catch {
-            print("Failed to configure audio session: \(error)")
         }
     }
     
@@ -135,14 +117,6 @@ class AudioRecorder: NSObject, ObservableObject {
             // return
         }
         
-        // Re-activate audio session with mixing options before recording
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setActive(true)
-        } catch {
-            print("Failed to activate audio session: \(error)")
-        }
-        
         if AppPreferences.shared.playSoundOnRecordStart {
             playNotificationSound()
         }
@@ -154,6 +128,89 @@ class AudioRecorder: NSObject, ObservableObject {
         
         print("start record file to \(fileURL)")
         
+        // Try using AVAudioEngine for non-interrupting recording
+        if let engine = setupAudioEngine(outputURL: fileURL) {
+            audioEngine = engine
+            do {
+                try engine.start()
+                isRecording = true
+                print("Started recording with AVAudioEngine (non-interrupting)")
+            } catch {
+                print("Failed to start audio engine: \(error)")
+                // Fall back to standard AVAudioRecorder
+                fallbackToAVAudioRecorder(fileURL: fileURL)
+            }
+        } else {
+            // Fall back to standard AVAudioRecorder
+            fallbackToAVAudioRecorder(fileURL: fileURL)
+        }
+    }
+    
+    private func setupAudioEngine(outputURL: URL) -> AVAudioEngine? {
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        
+        // Create the desired output format (16kHz, mono, 16-bit PCM)
+        let outputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                                       sampleRate: 16000,
+                                       channels: 1,
+                                       interleaved: false)
+        
+        guard let format = outputFormat else {
+            print("Failed to create output format")
+            return nil
+        }
+        
+        do {
+            // Create audio file for writing
+            audioFile = try AVAudioFile(forWriting: outputURL,
+                                      settings: format.settings,
+                                      commonFormat: format.commonFormat,
+                                      interleaved: format.isInterleaved)
+            
+            // Install a tap on the input node to capture audio without interrupting playback
+            // Use the input node's format for the tap, then convert if needed
+            let inputFormat = inputNode.outputFormat(forBus: 0)
+            
+            inputNode.installTap(onBus: 0,
+                               bufferSize: 1024,
+                               format: inputFormat) { [weak self] buffer, _ in
+                // Convert buffer to output format if needed
+                if inputFormat != format {
+                    // Create converter
+                    guard let converter = AVAudioConverter(from: inputFormat, to: format) else {
+                        return
+                    }
+                    
+                    let convertedBuffer = AVAudioPCMBuffer(pcmFormat: format,
+                                                         frameCapacity: buffer.frameCapacity)
+                    
+                    guard let outputBuffer = convertedBuffer else { return }
+                    
+                    do {
+                        try converter.convert(to: outputBuffer, from: buffer)
+                        try self?.audioFile?.write(from: outputBuffer)
+                    } catch {
+                        print("Conversion/write error: \(error)")
+                    }
+                } else {
+                    // Direct write if formats match
+                    do {
+                        try self?.audioFile?.write(from: buffer)
+                    } catch {
+                        print("Write error: \(error)")
+                    }
+                }
+            }
+            
+            return engine
+        } catch {
+            print("Failed to setup audio engine: \(error)")
+            return nil
+        }
+    }
+    
+    private func fallbackToAVAudioRecorder(fileURL: URL) {
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
@@ -168,6 +225,7 @@ class AudioRecorder: NSObject, ObservableObject {
             audioRecorder?.delegate = self
             audioRecorder?.record()
             isRecording = true
+            print("Started recording with AVAudioRecorder (may interrupt audio)")
         } catch {
             print("Failed to start recording: \(error)")
             currentRecordingURL = nil
@@ -175,6 +233,15 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     func stopRecording() -> URL? {
+        // Stop audio engine if it's being used
+        if let engine = audioEngine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            audioEngine = nil
+            audioFile = nil
+        }
+        
+        // Stop audio recorder if it's being used
         audioRecorder?.stop()
         isRecording = false
         
@@ -188,10 +255,6 @@ class AudioRecorder: NSObject, ObservableObject {
             currentRecordingURL = nil
             return nil
         }
-        
-        // Optionally deactivate audio session to free resources
-        // We keep it active to maintain the mixing configuration
-        // try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         
         let url = currentRecordingURL
         currentRecordingURL = nil
