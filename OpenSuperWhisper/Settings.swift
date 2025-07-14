@@ -18,6 +18,7 @@ class SettingsViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
+            NotificationCenter.default.post(name: NSNotification.Name("AppPreferencesLanguageChanged"), object: nil)
         }
     }
 
