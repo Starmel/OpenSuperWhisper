@@ -58,14 +58,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var mainWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        
+
         setupStatusBarItem()
-        
+
+        // Delayed cleanup check to avoid blocking startup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            Task {
+                _ = await RecordingCleanupService.shared.performCleanup()
+            }
+        }
+
         if let window = NSApplication.shared.windows.first {
             self.mainWindow = window
-            
+
             window.delegate = self
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Quick cleanup check on termination (with timeout)
+        let semaphore = DispatchSemaphore(value: 0)
+
+        Task {
+            _ = await RecordingCleanupService.shared.performCleanup()
+            semaphore.signal()
+        }
+
+        // Wait up to 2 seconds for cleanup to complete
+        _ = semaphore.wait(timeout: .now() + 2.0)
     }
     
     private func setupStatusBarItem() {

@@ -103,6 +103,7 @@ class RecordingStore: ObservableObject {
             do {
                 try await insertRecording(recording)
                 await loadRecordings()
+                notifyRecordingsChanged()
             } catch {
                 print("Failed to add recording: \(error)")
             }
@@ -121,6 +122,7 @@ class RecordingStore: ObservableObject {
                 try await deleteRecordingFromDB(recording)
                 try FileManager.default.removeItem(at: recording.url)
                 await loadRecordings()
+                notifyRecordingsChanged()
             } catch {
                 print("Failed to delete recording: \(error)")
                 await loadRecordings()
@@ -145,6 +147,7 @@ class RecordingStore: ObservableObject {
                 // Then clear the database
                 try await deleteAllRecordingsFromDB()
                 await loadRecordings()
+                notifyRecordingsChanged()
             } catch {
                 print("Failed to delete all recordings: \(error)")
             }
@@ -155,6 +158,11 @@ class RecordingStore: ObservableObject {
         try await dbQueue.write { db in
             _ = try Recording.deleteAll(db)
         }
+    }
+
+    /// Notify observers that recordings have changed
+    private func notifyRecordingsChanged() {
+        NotificationCenter.default.post(name: NSNotification.Name("RecordingsChanged"), object: nil)
     }
 
     func searchRecordings(query: String) -> [Recording] {

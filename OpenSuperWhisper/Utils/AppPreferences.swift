@@ -65,4 +65,19 @@ final class AppPreferences {
     
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
+
+    // Recording cleanup settings
+    @UserDefault(key: "cleanupInterval", defaultValue: "never")
+    private var cleanupIntervalRaw: String
+
+    var cleanupInterval: CleanupTimeInterval {
+        get { CleanupTimeInterval(rawValue: cleanupIntervalRaw) ?? .never }
+        set { cleanupIntervalRaw = newValue.rawValue }
+    }
+
+    @OptionalUserDefault(key: "lastCleanupDate")
+    var lastCleanupDate: Date?
+
+    @UserDefault(key: "cleanupEnabled", defaultValue: true)
+    var cleanupEnabled: Bool
 }
