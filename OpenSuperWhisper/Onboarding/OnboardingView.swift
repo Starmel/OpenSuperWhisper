@@ -18,8 +18,14 @@ class OnboardingViewModel: ObservableObject {
     @Published var selectedModel: DownloadableModel?
     @Published var models: [DownloadableModel]
     @Published var isDownloadingAny: Bool = false
+    
+    // Keychain permission handling
+    @Published var keychainAccessState: KeychainAccessState = .unknown
+    @Published var showKeychainPermission: Bool = false
+    @Published var currentStep: OnboardingStep = .welcome
 
     private let modelManager = WhisperModelManager.shared
+    private let keychainManager = KeychainPermissionManager.shared
 
     init() {
         let systemLanguage = LanguageUtil.getSystemLanguage()
@@ -31,6 +37,14 @@ class OnboardingViewModel: ObservableObject {
         if let defaultModel = models.first(where: { $0.name == "Turbo V3 large" }) {
             self.selectedModel = defaultModel
         }
+        
+        // Determine if keychain permission should be requested
+        showKeychainPermission = keychainManager.shouldRequestKeychainPermission()
+        print("DEBUG: Show keychain permission: \(showKeychainPermission)")
+        
+        // Set initial step based on whether keychain permission is needed
+        currentStep = showKeychainPermission ? .keychainPermission : .languageSelection
+        print("DEBUG: Initial onboarding step: \(currentStep)")
     }
 
     private func initializeModels() {
@@ -70,13 +84,13 @@ class OnboardingViewModel: ObservableObject {
                         // Update the model path after successful download
                         if let modelPath = self?.modelManager.modelsDirectory.appendingPathComponent(filename).path {
                             AppPreferences.shared.selectedModelPath = modelPath
-                            print("Model path after download: \(modelPath)")
+                            // Model path updated after download
                         }
                     }
                 }
             }
         } catch {
-            print("Failed to download model: \(error)")
+            // Download failed
             if let modelIndex = models.firstIndex(where: { $0.name == model.name }) {
                 models[modelIndex].downloadProgress = 0
             }
@@ -84,6 +98,38 @@ class OnboardingViewModel: ObservableObject {
             throw error
         }
     }
+    
+    // MARK: - Navigation Methods
+    
+    func nextStep() {
+        switch currentStep {
+        case .welcome:
+            currentStep = showKeychainPermission ? .keychainPermission : .languageSelection
+        case .keychainPermission:
+            currentStep = .languageSelection
+        case .languageSelection:
+            currentStep = .modelSelection
+        case .modelSelection:
+            // Final step - handled by handleNextButtonTap
+            break
+        }
+    }
+    
+    func skipKeychainPermission() {
+        keychainAccessState = .denied
+        currentStep = .languageSelection
+    }
+    
+    func keychainPermissionGranted() {
+        currentStep = .languageSelection
+    }
+}
+
+enum OnboardingStep {
+    case welcome
+    case keychainPermission
+    case languageSelection
+    case modelSelection
 }
 
 struct OnboardingView: View {
@@ -94,57 +140,134 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            VStack(alignment: .leading) {
-                Text("Welcome to OpenSuperWhisper!")
-                    .font(.title)
-                    .padding()
-
-                // Language selection
-                VStack(alignment: .leading) {
-                    Text("Choose speech language")
-                        .font(.headline)
-                    Picker("", selection: $viewModel.selectedLanguage) {
-                        ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
-                            Text(LanguageUtil.languageNames[code] ?? code)
-                                .tag(code)
-                        }
-                    }
-                    .frame(width: 200)
-                }
-                .padding()
-
-                VStack(alignment: .leading) {
-                    Text("Choose Model")
-                        .font(.headline)
-
-                    Text("The model is designed to transcribe audio into text. It is a powerful tool that can be used to transcribe audio into text.")
-                        .font(.subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 8)
-                }
-                .padding()
-
-                ModelListView(viewModel: viewModel)
-
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        handleNextButtonTap()
-                    }) {
-                        Text("Next")
-                    }
-                    .padding()
-                    .disabled(viewModel.selectedModel == nil || viewModel.isDownloadingAny)
-                }
-            }
-            .padding()
-            .frame(width: 450, height: 650)
-            .alert("Download Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
+            switch viewModel.currentStep {
+            case .welcome:
+                welcomeView
+            case .keychainPermission:
+                keychainPermissionView
+            case .languageSelection:
+                languageSelectionView
+            case .modelSelection:
+                modelSelectionView
             }
         }
+        .frame(width: 450, height: 650)
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+    
+    private var welcomeView: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("Welcome to OpenSuperWhisper!")
+                .font(.title)
+                .fontWeight(.medium)
+            
+            Text("Let's get you set up with powerful speech-to-text transcription.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                Button("Get Started") {
+                    viewModel.nextStep()
+                }
+                .buttonStyle(.borderedProminent)
+                .padding()
+            }
+        }
+        .padding()
+    }
+    
+    private var keychainPermissionView: some View {
+        KeychainPermissionView(
+            keychainAccessState: $viewModel.keychainAccessState,
+            onPermissionGranted: {
+                viewModel.keychainPermissionGranted()
+            },
+            onSkip: {
+                viewModel.skipKeychainPermission()
+            }
+        )
+    }
+    
+    private var languageSelectionView: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("Choose Speech Language")
+                .font(.title2)
+                .fontWeight(.medium)
+
+            Text("Select the primary language for your transcriptions.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Language")
+                    .font(.headline)
+                    
+                Picker("", selection: $viewModel.selectedLanguage) {
+                    ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                        Text(LanguageUtil.languageNames[code] ?? code)
+                            .tag(code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
+            .background(Color(.controlBackgroundColor).opacity(0.3))
+            .cornerRadius(12)
+
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button("Next") {
+                    viewModel.nextStep()
+                }
+                .buttonStyle(.borderedProminent)
+                .padding()
+            }
+        }
+        .padding()
+    }
+    
+    private var modelSelectionView: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Choose AI Model")
+                .font(.title2)
+                .fontWeight(.medium)
+
+            Text("The model is designed to transcribe audio into text. Larger models provide better accuracy but require more processing power.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ModelListView(viewModel: viewModel)
+
+            HStack {
+                Spacer()
+                Button(action: {
+                    handleNextButtonTap()
+                }) {
+                    Text("Finish Setup")
+                }
+                .buttonStyle(.borderedProminent)
+                .padding()
+                .disabled(viewModel.selectedModel == nil || viewModel.isDownloadingAny)
+            }
+        }
+        .padding()
     }
 
     private func handleNextButtonTap() {

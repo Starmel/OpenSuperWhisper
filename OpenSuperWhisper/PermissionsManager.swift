@@ -62,6 +62,18 @@ class PermissionsManager: ObservableObject {
 
     func checkAccessibilityPermission() {
         let granted = AXIsProcessTrusted()
+        
+        // Debug logging for accessibility permission
+        if AppPreferences.shared.debugMode {
+            print("🔐 [Accessibility] Permission check: \(granted ? "GRANTED" : "DENIED")")
+            
+            // Additional debugging info
+            let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
+            let options = [promptKey: false] as CFDictionary
+            let trustedWithPrompt = AXIsProcessTrustedWithOptions(options)
+            print("🔐 [Accessibility] Trusted with options: \(trustedWithPrompt)")
+        }
+        
         DispatchQueue.main.async { [weak self] in
             self?.isAccessibilityPermissionGranted = granted
         }
@@ -87,6 +99,37 @@ class PermissionsManager: ObservableObject {
 
     @objc private func accessibilityPermissionChanged() {
         checkAccessibilityPermission()
+    }
+    
+    func requestAccessibilityPermissionOrOpenSystemPreferences() {
+        let currentlyGranted = AXIsProcessTrusted()
+        
+        if AppPreferences.shared.debugMode {
+            print("🔐 [Accessibility] Current status: \(currentlyGranted ? "GRANTED" : "DENIED")")
+        }
+        
+        if !currentlyGranted {
+            // First, try to prompt for permission
+            let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
+            let options = [promptKey: true] as CFDictionary
+            let trustedWithPrompt = AXIsProcessTrustedWithOptions(options)
+            
+            if AppPreferences.shared.debugMode {
+                print("🔐 [Accessibility] Requested permission with prompt: \(trustedWithPrompt)")
+            }
+            
+            // If still not granted after prompt attempt, open System Preferences
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                if !AXIsProcessTrusted() {
+                    self?.openSystemPreferences(for: .accessibility)
+                }
+            }
+        }
+        
+        // Update our state
+        DispatchQueue.main.async { [weak self] in
+            self?.isAccessibilityPermissionGranted = currentlyGranted
+        }
     }
 
     func openSystemPreferences(for permission: Permission) {

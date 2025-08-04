@@ -73,3 +73,4 @@ OpenSuperWhisper is licensed under the MIT License. See the [LICENSE](LICENSE) f
 ## Whisper Models
 
 You can download Whisper model files (`.bin`) from the [Whisper.cpp Hugging Face repository](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Place the downloaded `.bin` files in the app's models directory. On first launch, the app will attempt to copy a default model automatically, but you can add more models manually.
+# STT

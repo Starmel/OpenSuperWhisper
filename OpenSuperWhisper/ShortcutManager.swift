@@ -21,7 +21,7 @@ class ShortcutManager {
     private var holdMode = false
 
     private init() {
-        print("ShortcutManager init")
+        // Initialize shortcut manager
 
         // Handle key down for recording shortcut: start or toggle and detect hold
         KeyboardShortcuts.onKeyDown(for: .toggleRecord) {
