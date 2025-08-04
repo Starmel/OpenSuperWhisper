@@ -7,18 +7,21 @@ class TranscriptionService: ObservableObject {
     
     @Published private(set) var isTranscribing = false
     @Published private(set) var transcribedText = ""
+    @Published private(set) var improvedText = ""
     @Published private(set) var currentSegment = ""
     @Published private(set) var isLoading = false
     @Published private(set) var progress: Float = 0.0
+    @Published private(set) var isImprovingText = false
     
     private var context: MyWhisperContext?
     private var totalDuration: Float = 0.0
     private var transcriptionTask: Task<String, Error>? = nil
     private var isCancelled = false
     private var abortFlag: UnsafeMutablePointer<Bool>? = nil
+    private var modelLoadingTask: Task<Void, Error>? = nil
     
     init() {
-        loadModel()
+        // Model will be loaded lazily when needed for local transcription
     }
     
     func cancelTranscription() {
@@ -45,7 +48,6 @@ class TranscriptionService: ObservableObject {
     }
     
     private func loadModel() {
-        print("Loading model")
         if let modelPath = AppPreferences.shared.selectedModelPath {
             isLoading = true
             
@@ -61,14 +63,64 @@ class TranscriptionService: ObservableObject {
                     guard let self = weakSelf else { return }
                     self.context = newContext
                     self.isLoading = false
-                    print("Model loaded")
                 }
             }
         }
     }
     
+    /// Ensure model is loaded with proper synchronization to prevent race conditions
+    private func ensureModelLoaded() async throws {
+        // If model is already loaded, return immediately
+        guard context == nil else { return }
+        
+        // If loading is already in progress, wait for it to complete
+        if let existingTask = modelLoadingTask {
+            try await existingTask.value
+            return
+        }
+        
+        // Start model loading task
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            
+            await MainActor.run {
+                self.isLoading = true
+            }
+            
+            guard let modelPath = AppPreferences.shared.selectedModelPath else {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+                throw LegacyTranscriptionError.contextInitializationFailed
+            }
+            
+            let params = WhisperContextParams()
+            let newContext = MyWhisperContext.initFromFile(path: modelPath, params: params)
+            
+            await MainActor.run {
+                self.context = newContext
+                self.isLoading = false
+            }
+        }
+        
+        modelLoadingTask = task
+        
+        do {
+            try await task.value
+            modelLoadingTask = nil
+        } catch {
+            modelLoadingTask = nil
+            throw error
+        }
+    }
+    
     func reloadModel(with path: String) {
-        print("Reloading model")
+        // Cancel any ongoing model loading
+        modelLoadingTask?.cancel()
+        modelLoadingTask = nil
+        
+        // Reset context and reload
+        context = nil
         isLoading = true
         
         // Capture the weak self reference before the task
@@ -83,12 +135,41 @@ class TranscriptionService: ObservableObject {
                 guard let self = weakSelf else { return }
                 self.context = newContext
                 self.isLoading = false
-                print("Model reloaded")
             }
         }
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        // Check if we should use the enhanced service with multiple providers
+        let prefs = AppPreferences.shared
+        if prefs.primarySTTProvider != "whisper_local" || prefs.enableSTTFallback {
+            // Use the enhanced service for cloud providers or fallback
+            let enhancedService = EnhancedTranscriptionService.shared
+            let transcriptionSettings = TranscriptionSettings(
+                whisperLanguage: prefs.whisperLanguage,
+                showTimestamps: prefs.showTimestamps,  
+                translateToEnglish: prefs.translateToEnglish,
+                initialPrompt: prefs.initialPrompt,
+                primarySTTProvider: prefs.primarySTTProvider,
+                enableSTTFallback: prefs.enableSTTFallback,
+                temperature: prefs.temperature,
+                noSpeechThreshold: prefs.noSpeechThreshold,
+                useBeamSearch: prefs.useBeamSearch,
+                beamSize: prefs.beamSize,
+                suppressBlankAudio: prefs.suppressBlankAudio
+            )
+            return try await enhancedService.transcribeAudio(url: url, settings: transcriptionSettings)
+        }
+        
+        // Continue with local Whisper processing
+        return try await transcribeAudioDirectly(url: url, settings: settings)
+    }
+    
+    /// Direct local transcription method to avoid circular dependency with WhisperLocalProvider
+    func transcribeAudioDirectly(url: URL, settings: Settings) async throws -> String {
+        // Ensure model is loaded for local transcription with proper synchronization
+        try await ensureModelLoaded()
+        
         await MainActor.run {
             self.progress = 0.0
             self.isTranscribing = true
@@ -133,11 +214,11 @@ class TranscriptionService: ObservableObject {
             try Task.checkCancellation()
             
             guard let context = contextForTask else {
-                throw TranscriptionError.contextInitializationFailed
+                throw LegacyTranscriptionError.contextInitializationFailed
             }
             
             guard let samples = try await self.convertAudioToPCM(fileURL: url) else {
-                throw TranscriptionError.audioConversionFailed
+                throw LegacyTranscriptionError.audioConversionFailed
             }
             
             // Check for cancellation
@@ -146,14 +227,14 @@ class TranscriptionService: ObservableObject {
             let nThreads = 4
             
             guard context.pcmToMel(samples: samples, nSamples: samples.count, nThreads: nThreads) else {
-                throw TranscriptionError.processingFailed
+                throw LegacyTranscriptionError.processingFailed
             }
             
             // Check for cancellation
             try Task.checkCancellation()
             
             guard context.encode(offset: 0, nThreads: nThreads) else {
-                throw TranscriptionError.processingFailed
+                throw LegacyTranscriptionError.processingFailed
             }
             
             // Check for cancellation
@@ -233,7 +314,7 @@ class TranscriptionService: ObservableObject {
             try Task.checkCancellation()
             
             guard context.full(samples: samples, params: &cParams) else {
-                throw TranscriptionError.processingFailed
+                throw LegacyTranscriptionError.processingFailed
             }
             
             // Check for cancellation
@@ -272,7 +353,10 @@ class TranscriptionService: ObservableObject {
                 }
             }
             
-            return finalText
+            // Attempt text improvement if enabled
+            let improvedFinalText = await self.improveTextIfEnabled(finalText)
+            
+            return improvedFinalText
         }
         
         // Store the task
@@ -289,7 +373,7 @@ class TranscriptionService: ObservableObject {
                 // Make sure the abort flag is set to true
                 self.abortFlag?.pointee = true
             }
-            throw TranscriptionError.processingFailed
+            throw LegacyTranscriptionError.processingFailed
         }
     }
     
@@ -368,7 +452,6 @@ class TranscriptionService: ObservableObject {
                               withInputFrom: inputBlock)
             
             if let error = error {
-                print("Conversion error: \(error)")
                 return nil
             }
             
@@ -377,9 +460,52 @@ class TranscriptionService: ObservableObject {
                                              count: Int(buffer.frameLength)))
         }.value
     }
+    
+    // MARK: - Text Improvement Integration
+    
+    private func improveTextIfEnabled(_ text: String) async -> String {
+        // Check if text improvement is enabled
+        guard TextImprovementService.shared.isEnabled else {
+            return text
+        }
+        
+        // Skip improvement for very short text or "no speech" messages
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty,
+              trimmedText != "No speech detected in the audio",
+              trimmedText.count > 10 else {
+            return text
+        }
+        
+        await MainActor.run {
+            self.isImprovingText = true
+        }
+        
+        defer {
+            Task { @MainActor in
+                self.isImprovingText = false
+            }
+        }
+        
+        do {
+            let improvedText = try await TextImprovementService.shared.improveText(text)
+            
+            await MainActor.run {
+                self.improvedText = improvedText
+            }
+            
+            // Return improved text if it's not empty, otherwise return original
+            return improvedText.isEmpty ? text : improvedText
+            
+        } catch {
+            // If improvement fails, return original text
+            print("Text improvement failed: \(error.localizedDescription)")
+            return text
+        }
+    }
 }
 
-enum TranscriptionError: Error {
+enum LegacyTranscriptionError: Error {
     case contextInitializationFailed
     case audioConversionFailed
     case processingFailed
