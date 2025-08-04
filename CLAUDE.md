@@ -49,6 +49,18 @@ xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests
 xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperUITests
 ```
 
+**Run Specific Test Files**:
+```bash
+# STT-related tests
+xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests/STTProviderFactoryTests
+xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests/MistralVoxtralProviderTests
+xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests/EnhancedTranscriptionServiceTests
+
+# Text improvement tests
+xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests/TextImprovementServiceTests
+xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperTests/TextImprovementConfigurationTests
+```
+
 ### Release Build
 
 **Signed Release Build**:
@@ -77,11 +89,13 @@ xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperUITests
 - Dynamic audio device monitoring
 - Temporary file management with automatic cleanup
 
-**Transcription Engine**: `TranscriptionService.swift`
+**Transcription Engine**: `TranscriptionService.swift` & `EnhancedTranscriptionService.swift`
 - MainActor isolation for UI updates
 - Asynchronous processing with cancellation support
 - Audio conversion pipeline (44.1kHz → 16kHz mono float32)
 - Real-time progress tracking via segment callbacks
+- Multi-provider STT support (Local Whisper, Mistral Voxtral cloud API)
+- Provider factory pattern for extensible STT backends
 
 **Model Management**: `WhisperModelManager.swift`
 - Application Support directory for model storage
@@ -93,6 +107,19 @@ xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperUITests
 - Context and state management for thread safety
 - Real-time callback integration
 - OpenVINO hardware acceleration support
+
+**STT Provider System**: `STT/` directory
+- `STTProvider.swift`: Core protocol for all STT implementations
+- `MistralVoxtralProvider.swift`: Cloud-based transcription via Mistral AI API
+- `STTProviderFactory.swift`: Factory pattern for provider instantiation
+- `SecureStorage.swift`: Keychain management for API credentials
+- `STTConfigurations.swift`: Provider-specific configuration management
+
+**Text Improvement Service**: `TextImprovementService.swift`
+- LLM-powered text enhancement via cloud APIs
+- Configurable provider support (OpenAI, Anthropic, etc.)
+- Real-time progress tracking and error handling
+- Secure credential management via Keychain
 
 ### Key Architectural Patterns
 
@@ -108,13 +135,22 @@ xcodebuild test -scheme OpenSuperWhisper -only-testing:OpenSuperWhisperUITests
 OpenSuperWhisper/
 ├── OpenSuperWhisperApp.swift     # Main app entry point
 ├── AudioRecorder.swift           # Audio recording pipeline
-├── TranscriptionService.swift    # Speech-to-text processing
+├── TranscriptionService.swift    # Legacy transcription service
+├── EnhancedTranscriptionService.swift # New unified transcription service
 ├── WhisperModelManager.swift     # ML model lifecycle
 ├── Settings.swift                # Configuration management
 ├── ShortcutManager.swift         # Global keyboard shortcuts
+├── TextImprovementService.swift  # LLM text enhancement
+├── TextImprovementConfiguration.swift # Text improvement settings
 ├── Whis/                         # Swift wrapper for Whisper C library
 │   ├── Whis.swift               # Main wrapper implementation
 │   └── Whisper*.swift           # Supporting structures
+├── STT/                          # Speech-to-Text provider system
+│   ├── STTProvider.swift        # Core STT protocol
+│   ├── MistralVoxtralProvider.swift # Mistral AI cloud provider
+│   ├── STTProviderFactory.swift # Provider factory
+│   ├── SecureStorage.swift      # Keychain credential management
+│   └── STTConfigurations.swift  # Provider configurations
 ├── Models/                       # Data models
 ├── Onboarding/                   # First-run experience
 ├── Indicator/                    # Status indicator UI
@@ -151,6 +187,8 @@ OpenSuperWhisper/
 - **OpenSuperWhisperTests**: Basic unit tests
 - **OpenSuperWhisperUITests**: UI automation with launch performance
 - **WhisperCppBindingTests**: Native binding validation
+- **STT-specific tests**: Provider factory, Mistral integration, enhanced transcription
+- **Text improvement tests**: Configuration and service functionality
 
 ### CI/CD
 
@@ -175,6 +213,20 @@ GitHub Actions workflow (`.github/workflows/build.yml`):
 - Model storage: User's Application Support directory
 - Formats supported: `.bin` files from whisper.cpp
 
+### Cloud Provider Configuration
+
+**Mistral Voxtral STT Integration**:
+- Provider: Mistral AI cloud API
+- Configuration: API key stored securely in Keychain
+- Supported features: Real-time transcription, multiple languages
+- Network-dependent service with fallback to local Whisper
+
+**Text Improvement (LLM Enhancement)**:
+- Supported providers: OpenAI, Anthropic, custom endpoints
+- Configuration: API keys and endpoints in secure storage
+- Features: Grammar correction, style improvement, translation
+- Async processing with progress tracking and cancellation support
+
 ## Important Implementation Details
 
 ### Audio Processing
@@ -188,12 +240,17 @@ GitHub Actions workflow (`.github/workflows/build.yml`):
 - Automatic cleanup in `deinit` methods
 - Temporary file management with isolated directories
 - Context separation for thread safety
+- Secure credential storage via Keychain Services
+- Network request cancellation and resource cleanup
 
 ### Performance Considerations
 - Background processing for CPU-intensive transcription
 - Real-time progress updates via MainActor
-- GPU acceleration via Metal (when available)
+- GPU acceleration via Metal (when available) 
 - Efficient audio format conversion pipeline
+- Provider-based architecture for optimal STT backend selection
+- Async/await patterns for network operations and UI responsiveness
+- Smart fallback from cloud to local processing when network unavailable
 
 ### Global Shortcuts
 - Default: `cmd + `\` for quick recording
