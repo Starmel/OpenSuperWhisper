@@ -21,21 +21,22 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         viewModel = newViewModel
         
         if window == nil {
-            // Create window if it doesn't exist
-            let window = NSWindow(
+            // Create window if it doesn't exist - using NSPanel for full-screen compatibility
+            let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 200, height: 60),
-                styleMask: [.borderless],
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
             
-            window.level = .floating
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.hasShadow = false
-            window.ignoresMouseEvents = true
+            panel.isFloatingPanel = true
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false
+            panel.ignoresMouseEvents = true
+            panel.hidesOnDeactivate = false
             
-            self.window = window
+            self.window = panel
         }
         
         // Position window
