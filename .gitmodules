@@ -1,3 +1,6 @@
 [submodule "libwhisper/whisper.cpp"]
 	path = libwhisper/whisper.cpp
 	url = https://github.com/ggerganov/whisper.cpp
+[submodule "libstt/stt"]
+	path = libstt/stt
+	url = https://github.com/Starmel/OpenSuperWhisper
