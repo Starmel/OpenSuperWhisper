@@ -120,4 +120,5 @@ default.profraw
 *.profraw
 *.dmg
 .cursorrules
-OpenSuperWhisper.dmg.sha256
+OpenSuperWhisper.dmg.sha256.gemini-clipboard/
+.crush/

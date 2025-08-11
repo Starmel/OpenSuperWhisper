@@ -54,7 +54,7 @@ enum NavigationDirection {
 struct ModernSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
-    @State private var selectedCategory: SettingsCategory? = .quickSetup
+    @State private var selectedCategory: SettingsCategory = .quickSetup
     @State private var previousModelURL: URL?
     @State private var searchText = ""
     
@@ -69,6 +69,9 @@ struct ModernSettingsView: View {
         .toolbar { toolbarContent }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
+        }
+        .navigationDestination(for: SettingsCategory.self) { category in
+            detailContent(for: category)
         }
     }
     
@@ -107,13 +110,19 @@ struct ModernSettingsView: View {
             .padding(.vertical, 12)
             
             // Categories List
-            List(selection: $selectedCategory) {
+            List(
+                selection: Binding<SettingsCategory?>(
+                    get: { Optional(selectedCategory) },
+                    set: { selectedCategory = $0 ?? .quickSetup }
+                )
+            ) {
                 ForEach(SettingsCategory.allCases, id: \.id) { category in
-                    SidebarRow(
-                        category: category,
-                        isSelected: selectedCategory == category
-                    )
-                    .tag(category)
+                    NavigationLink(value: category) {
+                        SidebarRow(
+                            category: category,
+                            isSelected: selectedCategory == category
+                        )
+                    }
                 }
             }
             .listStyle(.sidebar)
@@ -146,9 +155,15 @@ struct ModernSettingsView: View {
     // MARK: - Detail View
     
     private var detailView: some View {
+        detailContent(for: selectedCategory)
+            .animation(nil, value: selectedCategory)
+    }
+
+    @ViewBuilder
+    private func detailContent(for category: SettingsCategory) -> some View {
         ScrollView {
-            LazyVStack(spacing: 24) {
-                switch selectedCategory ?? .quickSetup {
+            VStack(spacing: 24) {
+                switch category {
                 case .quickSetup:
                     quickSetupContent
                 case .recording:
@@ -165,8 +180,9 @@ struct ModernSettingsView: View {
             }
             .padding(24)
         }
+        .id(category)
         .background(.regularMaterial)
-        .navigationTitle((selectedCategory ?? .quickSetup).rawValue)
+        .navigationTitle(category.rawValue)
     }
     
     // MARK: - Content Views
@@ -811,7 +827,7 @@ struct SidebarRow: View {
         HStack(spacing: 12) {
             Image(systemName: category.iconName)
                 .font(.body)
-                .foregroundStyle(.blue)
+                .foregroundStyle(isSelected ? .white : .blue)
                 .frame(width: 20, height: 20)
             
             VStack(alignment: .leading, spacing: 2) {
