@@ -6,4 +6,4 @@
 //
 
 #include "whisper.h"
-#include "autocorrect_swift.h"
+#include "asian-autocorrect/autocorrect-swift/autocorrect_swift.h"

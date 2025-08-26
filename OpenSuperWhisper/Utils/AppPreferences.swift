@@ -66,6 +66,6 @@ final class AppPreferences {
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
     
-    @UserDefault(key: "useChineseAutocorrect", defaultValue: true)
-    var useChineseAutocorrect: Bool
+    @UserDefault(key: "useAsianAutocorrect", defaultValue: true)
+    var useAsianAutocorrect: Bool
 }

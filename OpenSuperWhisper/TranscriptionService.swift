@@ -263,9 +263,9 @@ class TranscriptionService: ObservableObject {
                 .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // Apply Chinese autocorrect if enabled and language is Chinese
+            // Apply Asian autocorrect if enabled and language is Chinese, Japanese, or Korean
             var processedText = cleanedText
-            if settings.selectedLanguage == "zh" && settings.useChineseAutocorrect && !cleanedText.isEmpty {
+            if ["zh", "ja", "ko"].contains(settings.selectedLanguage) && settings.useAsianAutocorrect && !cleanedText.isEmpty {
                 processedText = AutocorrectWrapper.format(cleanedText)
             }
             

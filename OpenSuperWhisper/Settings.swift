@@ -81,9 +81,9 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    @Published var useChineseAutocorrect: Bool {
+    @Published var useAsianAutocorrect: Bool {
         didSet {
-            AppPreferences.shared.useChineseAutocorrect = useChineseAutocorrect
+            AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
         }
     }
     
@@ -100,7 +100,7 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
-        self.useChineseAutocorrect = prefs.useChineseAutocorrect
+        self.useAsianAutocorrect = prefs.useAsianAutocorrect
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -126,7 +126,7 @@ struct Settings {
     var initialPrompt: String
     var useBeamSearch: Bool
     var beamSize: Int
-    var useChineseAutocorrect: Bool
+    var useAsianAutocorrect: Bool
     
     init() {
         let prefs = AppPreferences.shared
@@ -139,7 +139,7 @@ struct Settings {
         self.initialPrompt = prefs.initialPrompt
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
-        self.useChineseAutocorrect = prefs.useChineseAutocorrect
+        self.useAsianAutocorrect = prefs.useAsianAutocorrect
     }
 }
 
@@ -301,9 +301,9 @@ struct SettingsView: View {
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         .padding(.top, 4)
                         
-                        if viewModel.selectedLanguage == "zh" {
-                            Toggle(isOn: $viewModel.useChineseAutocorrect) {
-                                Text("Use Chinese Autocorrect")
+                        if ["zh", "ja", "ko"].contains(viewModel.selectedLanguage) {
+                            Toggle(isOn: $viewModel.useAsianAutocorrect) {
+                                Text("Use Asian Autocorrect")
                                     .font(.subheadline)
                             }
                             .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
