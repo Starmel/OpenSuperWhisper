@@ -14,6 +14,11 @@ rm -rf libwhisper/build
 cmake -G Xcode -B libwhisper/build -S libwhisper
 
 rm -rf build
+mkdir -p build
+
+echo "Building autocorrect-swift..."
+cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml
+mv ./asian-autocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib ./build/libautocorrect_swift.dylib
 
 xcodebuild \
   -scheme "OpenSuperWhisper" \

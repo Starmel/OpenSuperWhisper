@@ -14,6 +14,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 echo "Building autocorrect-swift..."
+mkdir -p build
 cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml
 mv ./asian-autocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib ./build/libautocorrect_swift.dylib
 if [[ $? -ne 0 ]]; then
