@@ -28,6 +28,7 @@ Or from [github releases page](https://github.com/Starmel/OpenSuperWhisper/relea
 - 🔄 Optional translation to English (for better translation add initial prompt with english sentences)
 - 💾 Local storage of recordings with transcriptions
 - 🎛️ Advanced transcription settings (not tested)
+- 🇯🇵🇨🇳🇰🇷 Support for Asian languages with [auto-correct](https://github.com/huacnlee/autocorrect)
 
 ## Requirements
 
