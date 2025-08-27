@@ -263,7 +263,13 @@ class TranscriptionService: ObservableObject {
                 .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             
-            let finalText = cleanedText.isEmpty ? "No speech detected in the audio" : cleanedText
+            // Apply Asian autocorrect if enabled and language is Chinese, Japanese, or Korean
+            var processedText = cleanedText
+            if ["zh", "ja", "ko"].contains(settings.selectedLanguage) && settings.useAsianAutocorrect && !cleanedText.isEmpty {
+                processedText = AutocorrectWrapper.format(cleanedText)
+            }
+            
+            let finalText = processedText.isEmpty ? "No speech detected in the audio" : processedText
             
             await MainActor.run {
                 if !self.isCancelled {

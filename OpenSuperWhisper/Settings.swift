@@ -81,6 +81,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var useAsianAutocorrect: Bool {
+        didSet {
+            AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
+        }
+    }
+    
     init() {
         let prefs = AppPreferences.shared
         self.selectedLanguage = prefs.whisperLanguage
@@ -94,6 +100,7 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
+        self.useAsianAutocorrect = prefs.useAsianAutocorrect
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -119,6 +126,7 @@ struct Settings {
     var initialPrompt: String
     var useBeamSearch: Bool
     var beamSize: Int
+    var useAsianAutocorrect: Bool
     
     init() {
         let prefs = AppPreferences.shared
@@ -131,6 +139,7 @@ struct Settings {
         self.initialPrompt = prefs.initialPrompt
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
+        self.useAsianAutocorrect = prefs.useAsianAutocorrect
     }
 }
 
@@ -291,6 +300,15 @@ struct SettingsView: View {
                         }
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         .padding(.top, 4)
+                        
+                        if ["zh", "ja", "ko"].contains(viewModel.selectedLanguage) {
+                            Toggle(isOn: $viewModel.useAsianAutocorrect) {
+                                Text("Use Asian Autocorrect")
+                                    .font(.subheadline)
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .padding(.top, 4)
+                        }
                     }
                 }
                 .padding()
