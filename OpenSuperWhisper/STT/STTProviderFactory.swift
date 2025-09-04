@@ -31,6 +31,10 @@ actor STTProviderFactory {
         case .mistralVoxtral:
             let config = AppPreferences.shared.mistralVoxtralConfig
             return await MistralVoxtralProvider(configuration: config)
+            
+        case .groq:
+            let config = AppPreferences.shared.groqConfig
+            return await GroqProvider(configuration: config)
         }
     }
     

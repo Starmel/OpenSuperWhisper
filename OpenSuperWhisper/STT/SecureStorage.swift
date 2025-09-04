@@ -101,6 +101,9 @@ class SecureStorageManager {
         case .mistralVoxtral:
             @SecureStorage("mistral_api_key") var apiKey: String?
             return apiKey != nil && !apiKey!.isEmpty
+        case .groq:
+            @SecureStorage("groq_api_key") var apiKey: String?
+            return apiKey != nil && !apiKey!.isEmpty
         case .whisperLocal:
             return true // Local provider doesn't need API key
         }
@@ -112,6 +115,9 @@ class SecureStorageManager {
         case .mistralVoxtral:
             @SecureStorage("mistral_api_key") var apiKey: String?
             return apiKey
+        case .groq:
+            @SecureStorage("groq_api_key") var apiKey: String?
+            return apiKey
         case .whisperLocal:
             return nil // Local provider doesn't need API key
         }
@@ -122,6 +128,9 @@ class SecureStorageManager {
         switch provider {
         case .mistralVoxtral:
             @SecureStorage("mistral_api_key") var apiKey: String?
+            apiKey = key
+        case .groq:
+            @SecureStorage("groq_api_key") var apiKey: String?
             apiKey = key
         case .whisperLocal:
             break // Local provider doesn't need API key

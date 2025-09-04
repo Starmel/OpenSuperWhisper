@@ -88,6 +88,9 @@ final class AppPreferences {
     @UserDefault(key: "mistralVoxtralConfig", defaultValue: "")
     private var mistralVoxtralConfigJSON: String
     
+    @UserDefault(key: "groqConfig", defaultValue: "")
+    private var groqConfigJSON: String
+    
     @UserDefault(key: "textImprovementConfig", defaultValue: "")
     private var textImprovementConfigJSON: String
     
@@ -130,6 +133,24 @@ final class AppPreferences {
         }
     }
     
+    /// Groq configuration with automatic persistence
+    var groqConfig: GroqConfiguration {
+        get {
+            guard !groqConfigJSON.isEmpty,
+                  let data = groqConfigJSON.data(using: .utf8),
+                  let config = try? JSONDecoder().decode(GroqConfiguration.self, from: data) else {
+                return GroqConfiguration()
+            }
+            return config
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                groqConfigJSON = json
+            }
+        }
+    }
+    
     /// Get configuration for a specific provider
     func getConfiguration(for provider: STTProviderType) -> STTProviderConfiguration {
         switch provider {
@@ -137,6 +158,8 @@ final class AppPreferences {
             return whisperLocalConfig
         case .mistralVoxtral:
             return mistralVoxtralConfig
+        case .groq:
+            return groqConfig
         }
     }
     
@@ -150,6 +173,10 @@ final class AppPreferences {
         case .mistralVoxtral:
             if let mistralConfig = config as? MistralVoxtralConfiguration {
                 mistralVoxtralConfig = mistralConfig
+            }
+        case .groq:
+            if let groqConfig = config as? GroqConfiguration {
+                self.groqConfig = groqConfig
             }
         }
     }

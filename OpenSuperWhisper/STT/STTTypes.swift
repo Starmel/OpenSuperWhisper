@@ -6,6 +6,7 @@ import Foundation
 public enum STTProviderType: String, CaseIterable, Identifiable {
     case whisperLocal = "whisper_local"
     case mistralVoxtral = "mistral_voxtral"
+    case groq = "groq"
     
     public var id: String { rawValue }
     
@@ -13,6 +14,7 @@ public enum STTProviderType: String, CaseIterable, Identifiable {
         switch self {
         case .whisperLocal: return "Whisper (Local)"
         case .mistralVoxtral: return "Mistral Voxtral"
+        case .groq: return "Groq Whisper"
         }
     }
     
@@ -20,6 +22,7 @@ public enum STTProviderType: String, CaseIterable, Identifiable {
         switch self {
         case .whisperLocal: return false
         case .mistralVoxtral: return true
+        case .groq: return true
         }
     }
 }
@@ -81,6 +84,53 @@ public struct MistralVoxtralConfiguration: STTProviderConfiguration {
         self.model = model
         self.maxRetries = maxRetries
         self.timeoutInterval = timeoutInterval
+    }
+}
+
+/// Configuration for Groq cloud provider
+public struct GroqConfiguration: STTProviderConfiguration {
+    public var isEnabled: Bool = false
+    public var priority: Int = 3
+    public var endpoint: String = "https://api.groq.com/openai/v1/audio/transcriptions"
+    public var maxRetries: Int = 3
+    public var timeoutInterval: TimeInterval = 60.0
+    public var model: String = "whisper-large-v3-turbo" // Default to faster, cheaper model  
+    public var maxFileSizeMB: Int = 25 // Free tier: 25MB, Dev tier: 100MB
+    
+    // Model Options:
+    // - whisper-large-v3-turbo: $0.04/hour, 12% WER, 216x real-time speed, transcription only
+    // - whisper-large-v3: $0.111/hour, 10.3% WER, 189x real-time speed, transcription + translation
+    public static let availableModels = [
+        "whisper-large-v3-turbo", // Faster, cheaper, transcription only
+        "whisper-large-v3"        // More accurate, supports translation  
+    ]
+    
+    // API key is stored securely via SecureStorage
+    public var apiKey: String? {
+        get {
+            return SecureStorageManager.shared.getAPIKey(for: .groq)
+        }
+        set {
+            SecureStorageManager.shared.setAPIKey(newValue, for: .groq)
+        }
+    }
+    
+    public var hasValidAPIKey: Bool {
+        return SecureStorageManager.shared.hasValidAPIKey(for: .groq)
+    }
+    
+    public init() {}
+    
+    public init(endpoint: String = "https://api.groq.com/openai/v1/audio/transcriptions",
+         model: String = "whisper-large-v3-turbo",
+         maxRetries: Int = 3,
+         timeoutInterval: TimeInterval = 60.0,
+         maxFileSizeMB: Int = 25) {
+        self.endpoint = endpoint
+        self.model = model
+        self.maxRetries = maxRetries
+        self.timeoutInterval = timeoutInterval
+        self.maxFileSizeMB = maxFileSizeMB
     }
 }
 
