@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
 class TranscriptionService: ObservableObject {
@@ -16,6 +17,8 @@ class TranscriptionService: ObservableObject {
     private var transcriptionTask: Task<String, Error>? = nil
     private var isCancelled = false
     private var abortFlag: UnsafeMutablePointer<Bool>? = nil
+    private let openAIClient = OpenAITranscriptionClient()
+    private let apiKeyStore = OpenAIAPIKeyStore.shared
     
     init() {
         loadModel()
@@ -95,15 +98,13 @@ class TranscriptionService: ObservableObject {
             self.transcribedText = ""
             self.currentSegment = ""
             self.isCancelled = false
-            
-            // Initialize a new abort flag and set it to false
-            if self.abortFlag != nil {
-                self.abortFlag?.deallocate()
+
+            if let abortFlag = self.abortFlag {
+                abortFlag.deallocate()
+                self.abortFlag = nil
             }
-            self.abortFlag = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
-            self.abortFlag?.initialize(to: false)
         }
-        
+
         defer {
             Task { @MainActor in
                 self.isTranscribing = false
@@ -112,144 +113,147 @@ class TranscriptionService: ObservableObject {
                     self.progress = 1.0
                 }
                 self.transcriptionTask = nil
+                if let abortFlag = self.abortFlag {
+                    abortFlag.deallocate()
+                    self.abortFlag = nil
+                }
             }
         }
-        
-        let asset = AVAsset(url: url)
-        let duration = try await asset.load(.duration)
-        let durationInSeconds = Float(CMTimeGetSeconds(duration))
-        
+
+        switch settings.transcriptionBackend {
+        case .local:
+            let asset = AVAsset(url: url)
+            let duration = try await asset.load(.duration)
+            let durationInSeconds = Float(CMTimeGetSeconds(duration))
+            await MainActor.run {
+                self.totalDuration = durationInSeconds
+            }
+            return try await transcribeWithLocal(url: url, settings: settings)
+        case .openAI:
+            await MainActor.run {
+                self.totalDuration = 0.0
+            }
+            return try await transcribeWithOpenAI(url: url, settings: settings)
+        }
+    }
+
+    private func transcribeWithLocal(url: URL, settings: Settings) async throws -> String {
+        let abortPointer = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+        abortPointer.initialize(to: false)
+
+        guard let contextForTask = context else {
+            abortPointer.deallocate()
+            throw TranscriptionError.contextInitializationFailed
+        }
+
         await MainActor.run {
-            self.totalDuration = durationInSeconds
+            self.abortFlag = abortPointer
         }
-        
-        // Get the context and abort flag before detaching to a background task
-        let contextForTask = context
-        let abortFlagForTask = abortFlag
-        
-        // Create and store the task
+
+        let abortFlagForTask = abortPointer
+
         let task = Task.detached(priority: .userInitiated) { [self] in
-            // Check for cancellation
             try Task.checkCancellation()
-            
-            guard let context = contextForTask else {
-                throw TranscriptionError.contextInitializationFailed
-            }
-            
+            let context = contextForTask
+
             guard let samples = try await self.convertAudioToPCM(fileURL: url) else {
                 throw TranscriptionError.audioConversionFailed
             }
-            
-            // Check for cancellation
+
             try Task.checkCancellation()
-            
+
             let nThreads = 4
-            
+
             guard context.pcmToMel(samples: samples, nSamples: samples.count, nThreads: nThreads) else {
                 throw TranscriptionError.processingFailed
             }
-            
-            // Check for cancellation
+
             try Task.checkCancellation()
-            
+
             guard context.encode(offset: 0, nThreads: nThreads) else {
                 throw TranscriptionError.processingFailed
             }
-            
-            // Check for cancellation
+
             try Task.checkCancellation()
-            
+
             var params = WhisperFullParams()
-            
+
             params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
             params.nThreads = Int32(nThreads)
             params.noTimestamps = !settings.showTimestamps
             params.suppressBlank = settings.suppressBlankAudio
             params.translate = settings.translateToEnglish
             params.language = settings.selectedLanguage != "auto" ? settings.selectedLanguage : nil
-            params.detectLanguage = false // should be false, whisper handles language detection by language property.
-            
+            params.detectLanguage = false
+
             params.temperature = Float(settings.temperature)
             params.noSpeechThold = Float(settings.noSpeechThreshold)
             params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
-            
-            // Set up the abort callback
+
             typealias GGMLAbortCallback = @convention(c) (UnsafeMutableRawPointer?) -> Bool
-            
+
             let abortCallback: GGMLAbortCallback = { userData in
                 guard let userData = userData else { return false }
                 let flag = userData.assumingMemoryBound(to: Bool.self)
                 return flag.pointee
             }
-            
+
             if settings.useBeamSearch {
                 params.beamSearchBeamSize = Int32(settings.beamSize)
             }
-            
+
             params.printRealtime = true
             params.print_realtime = true
-            
-            // Set up the segment callback
+
             let segmentCallback: @convention(c) (OpaquePointer?, OpaquePointer?, Int32, UnsafeMutableRawPointer?) -> Void = { ctx, state, n_new, user_data in
                 guard let ctx = ctx,
                       let userData = user_data,
                       let service = Unmanaged<TranscriptionService>.fromOpaque(userData).takeUnretainedValue() as TranscriptionService?
                 else { return }
-                
-                // Process the segment in a non-isolated context
+
                 let segmentInfo = service.processNewSegment(context: ctx, state: state, nNew: Int(n_new))
-                
-                // Update UI on the main thread
+
                 Task { @MainActor in
-                    // Check if cancelled
                     if service.isCancelled { return }
-                    
+
                     if !segmentInfo.text.isEmpty {
                         service.currentSegment = segmentInfo.text
                         service.transcribedText += segmentInfo.text + "\n"
                     }
-                    
+
                     if service.totalDuration > 0 && segmentInfo.timestamp > 0 {
                         let newProgress = min(segmentInfo.timestamp / service.totalDuration, 1.0)
                         service.progress = newProgress
                     }
                 }
             }
-            
-            // Set the callbacks in the params
+
             params.newSegmentCallback = segmentCallback
             params.newSegmentCallbackUserData = Unmanaged.passUnretained(self).toOpaque()
-            
-            // Convert to C params and set the abort callback
+
             var cParams = params.toC()
             cParams.abort_callback = abortCallback
-            
-            // Set the abort flag user data
-            if let abortFlag = abortFlagForTask {
-                cParams.abort_callback_user_data = UnsafeMutableRawPointer(abortFlag)
-            }
-            
-            // Check for cancellation
+
+            cParams.abort_callback_user_data = UnsafeMutableRawPointer(abortFlagForTask)
+
             try Task.checkCancellation()
-            
+
             guard context.full(samples: samples, params: &cParams) else {
                 throw TranscriptionError.processingFailed
             }
-            
-            // Check for cancellation
+
             try Task.checkCancellation()
-            
+
             var text = ""
             let nSegments = context.fullNSegments
-            
+
             for i in 0..<nSegments {
-                // Check for cancellation periodically
                 if i % 5 == 0 {
                     try Task.checkCancellation()
                 }
-                
+
                 guard let segmentText = context.fullGetSegmentText(iSegment: i) else { continue }
-                
+
                 if settings.showTimestamps {
                     let t0 = context.fullGetSegmentT0(iSegment: i)
                     let t1 = context.fullGetSegmentT1(iSegment: i)
@@ -257,48 +261,110 @@ class TranscriptionService: ObservableObject {
                 }
                 text += segmentText + "\n"
             }
-            
+
             let cleanedText = text
                 .replacingOccurrences(of: "[MUSIC]", with: "")
                 .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Apply Asian autocorrect if enabled and language is Chinese, Japanese, or Korean
+
             var processedText = cleanedText
             if ["zh", "ja", "ko"].contains(settings.selectedLanguage) && settings.useAsianAutocorrect && !cleanedText.isEmpty {
                 processedText = AutocorrectWrapper.format(cleanedText)
             }
-            
+
             let finalText = processedText.isEmpty ? "No speech detected in the audio" : processedText
-            
+
             await MainActor.run {
                 if !self.isCancelled {
                     self.transcribedText = finalText
                     self.progress = 1.0
                 }
             }
-            
+
             return finalText
         }
-        
-        // Store the task
+
         await MainActor.run {
             self.transcriptionTask = task
         }
-        
+
         do {
             return try await task.value
         } catch is CancellationError {
-            // Handle cancellation
             await MainActor.run {
                 self.isCancelled = true
-                // Make sure the abort flag is set to true
                 self.abortFlag?.pointee = true
             }
             throw TranscriptionError.processingFailed
         }
     }
-    
+
+    private func transcribeWithOpenAI(url: URL, settings: Settings) async throws -> String {
+        let apiKey: String
+        do {
+            apiKey = (try apiKeyStore.loadKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            throw TranscriptionError.openAIError("Unable to read API key from Keychain: \(error.localizedDescription)")
+        }
+
+        guard !apiKey.isEmpty else {
+            throw TranscriptionError.missingAPIKey
+        }
+
+        let task = Task.detached(priority: .userInitiated) { [self] in
+            try Task.checkCancellation()
+
+            await MainActor.run {
+                self.currentSegment = "Contacting OpenAI..."
+                self.progress = 0.1
+            }
+
+            do {
+                let transcript = try await openAIClient.transcribeAudio(at: url, settings: settings, apiKey: apiKey)
+
+                try Task.checkCancellation()
+
+                let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                var processedText = cleaned
+                if ["zh", "ja", "ko"].contains(settings.selectedLanguage) && settings.useAsianAutocorrect && !cleaned.isEmpty {
+                    processedText = AutocorrectWrapper.format(cleaned)
+                }
+                let finalText = processedText.isEmpty ? "No speech detected in the audio" : processedText
+
+                await MainActor.run {
+                    if !self.isCancelled {
+                        self.transcribedText = finalText
+                        self.currentSegment = finalText
+                        self.progress = 1.0
+                    }
+                }
+
+                return finalText
+            } catch let error as OpenAITranscriptionClientError {
+                throw TranscriptionError.openAIError(error.localizedDescription)
+            } catch {
+                throw TranscriptionError.openAIError(error.localizedDescription)
+            }
+        }
+
+        await MainActor.run {
+            self.transcriptionTask = task
+        }
+
+        do {
+            return try await task.value
+        } catch is CancellationError {
+            await MainActor.run {
+                self.isCancelled = true
+            }
+            throw TranscriptionError.processingFailed
+        } catch let error as TranscriptionError {
+            throw error
+        } catch {
+            throw TranscriptionError.openAIError(error.localizedDescription)
+        }
+    }
+
     // Make this method nonisolated to be callable from any context
     nonisolated func processNewSegment(context: OpaquePointer, state: OpaquePointer?, nNew: Int) -> (text: String, timestamp: Float) {
         let nSegments = Int(whisper_full_n_segments(context))
@@ -389,4 +455,148 @@ enum TranscriptionError: Error {
     case contextInitializationFailed
     case audioConversionFailed
     case processingFailed
+    case missingAPIKey
+    case openAIError(String)
+}
+
+struct OpenAITranscriptionResponse: Decodable {
+    let text: String
+}
+
+struct OpenAIAPIErrorResponse: Decodable {
+    struct APIError: Decodable {
+        let message: String?
+        let type: String?
+    }
+
+    let error: APIError
+}
+
+enum OpenAITranscriptionClientError: LocalizedError {
+    case invalidURL
+    case httpError(status: Int, message: String?)
+    case decodingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "OpenAI endpoint URL is invalid."
+        case let .httpError(status, message):
+            if let message = message, !message.isEmpty {
+                return "OpenAI API error (status \(status)): \(message)"
+            } else {
+                return "OpenAI API request failed with status \(status)."
+            }
+        case .decodingFailed:
+            return "Unable to decode OpenAI response."
+        }
+    }
+}
+
+final class OpenAITranscriptionClient {
+    private let session: URLSession
+    private let endpoint = "https://api.openai.com/v1/audio/transcriptions"
+    private let model = "whisper-1"
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func transcribeAudio(at fileURL: URL, settings: Settings, apiKey: String) async throws -> String {
+        guard let requestURL = URL(string: endpoint) else {
+            throw OpenAITranscriptionClientError.invalidURL
+        }
+
+        let boundary = UUID().uuidString
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let body = try buildMultipartBody(
+            fileURL: fileURL,
+            boundary: boundary,
+            settings: settings
+        )
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAITranscriptionClientError.decodingFailed
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let message: String?
+            if let errorResponse = try? JSONDecoder().decode(OpenAIAPIErrorResponse.self, from: data) {
+                message = errorResponse.error.message
+            } else {
+                message = String(data: data, encoding: .utf8)
+            }
+            throw OpenAITranscriptionClientError.httpError(status: httpResponse.statusCode, message: message)
+        }
+
+        if let textResponse = try? JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data) {
+            return textResponse.text
+        }
+
+        if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+            return text
+        }
+
+        throw OpenAITranscriptionClientError.decodingFailed
+    }
+
+    private func buildMultipartBody(fileURL: URL, boundary: String, settings: Settings) throws -> Data {
+        var body = Data()
+
+        func appendField(name: String, value: String) {
+            guard let fieldData = "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8) else { return }
+            body.append(fieldData)
+        }
+
+        func appendFileField(name: String, fileURL: URL) throws {
+            let fileData = try Data(contentsOf: fileURL)
+            let filename = fileURL.lastPathComponent
+            let mimeType = mimeTypeForFile(url: fileURL)
+
+            guard let headerData = "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\nContent-Type: \(mimeType)\r\n\r\n".data(using: .utf8) else { return }
+            body.append(headerData)
+            body.append(fileData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+
+        appendField(name: "model", value: model)
+
+        if settings.translateToEnglish {
+            appendField(name: "translate", value: "true")
+        }
+
+        if !settings.initialPrompt.isEmpty {
+            appendField(name: "prompt", value: settings.initialPrompt)
+        }
+
+        appendField(name: "temperature", value: String(settings.temperature))
+
+        if settings.selectedLanguage != "auto" {
+            appendField(name: "language", value: settings.selectedLanguage)
+        }
+
+        appendField(name: "response_format", value: "json")
+
+        try appendFileField(name: "file", fileURL: fileURL)
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        return body
+    }
+
+    private func mimeTypeForFile(url: URL) -> String {
+        if let utType = UTType(filenameExtension: url.pathExtension),
+           let mime = utType.preferredMIMEType {
+            return mime
+        }
+        return "audio/wav"
+    }
 }

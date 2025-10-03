@@ -18,6 +18,8 @@ class ContentViewModel: ObservableObject {
     @Published var transcriptionService = TranscriptionService.shared
     @Published var recordingStore = RecordingStore.shared
     @Published var recordingDuration: TimeInterval = 0
+    @Published var errorMessage: String?
+    @Published var isShowingError: Bool = false
 
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
@@ -94,8 +96,15 @@ class ContentViewModel: ObservableObject {
                     }
 
                     print("Transcription result: \(text)")
+                } catch let error as TranscriptionError {
+                    await MainActor.run {
+                        self.presentError(self.message(for: error))
+                    }
+                    try? FileManager.default.removeItem(at: tempURL)
                 } catch {
-                    print("Error transcribing audio: \(error)")
+                    await MainActor.run {
+                        self.presentError("Transcription failed: \(error.localizedDescription)")
+                    }
                     try? FileManager.default.removeItem(at: tempURL)
                 }
 
@@ -104,6 +113,30 @@ class ContentViewModel: ObservableObject {
                     self.recordingDuration = 0
                 }
             }
+        }
+    }
+
+    private func presentError(_ message: String) {
+        errorMessage = message
+        isShowingError = true
+    }
+
+    func dismissError() {
+        isShowingError = false
+    }
+
+    private func message(for error: TranscriptionError) -> String {
+        switch error {
+        case .missingAPIKey:
+            return "OpenAI API key not found. Add one in Settings ▸ Model before using the OpenAI backend."
+        case let .openAIError(message):
+            return "OpenAI transcription failed: \(message)"
+        case .contextInitializationFailed:
+            return "Unable to load the local Whisper model. Check your model files in Settings ▸ Model."
+        case .audioConversionFailed:
+            return "Failed to convert audio for transcription."
+        case .processingFailed:
+            return "Transcription did not complete. Please try again."
         }
     }
 
@@ -390,6 +423,24 @@ struct ContentView: View {
             }
         }
         .fileDropHandler()
+        .alert(
+            "Transcription Error",
+            isPresented: Binding(
+                get: { viewModel.isShowingError },
+                set: { presented in
+                    if !presented {
+                        viewModel.dismissError()
+                    }
+                }
+            ),
+            actions: {
+                Button("OK", role: .cancel) {
+                    viewModel.dismissError()
+                }
+            }, message: {
+                Text(viewModel.errorMessage ?? "Something went wrong.")
+            }
+        )
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
         }

@@ -15,6 +15,14 @@ class SettingsViewModel: ObservableObject {
     }
 
     @Published var availableModels: [URL] = []
+    @Published var openAIAPIKey: String = ""
+    @Published var apiKeyStatusMessage: String?
+    @Published var apiKeyStatusIsError: Bool = false
+    @Published var transcriptionBackend: TranscriptionBackend {
+        didSet {
+            AppPreferences.shared.transcriptionBackend = transcriptionBackend
+        }
+    }
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
@@ -87,8 +95,11 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    private let apiKeyStore = OpenAIAPIKeyStore.shared
+
     init() {
         let prefs = AppPreferences.shared
+        self.transcriptionBackend = prefs.transcriptionBackend
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -101,6 +112,7 @@ class SettingsViewModel: ObservableObject {
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
+        self.openAIAPIKey = (try? apiKeyStore.loadKey()) ?? ""
         
         if let savedPath = prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -114,12 +126,49 @@ class SettingsViewModel: ObservableObject {
             selectedModelURL = availableModels.first
         }
     }
+
+    func persistOpenAIAPIKey() {
+        let trimmed = openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if trimmed.isEmpty {
+                try apiKeyStore.deleteKey()
+                openAIAPIKey = ""
+                apiKeyStatusMessage = "Removed saved API key."
+                apiKeyStatusIsError = false
+            } else {
+                try apiKeyStore.saveKey(trimmed)
+                if trimmed != openAIAPIKey {
+                    openAIAPIKey = trimmed
+                }
+                apiKeyStatusMessage = "API key saved securely."
+                apiKeyStatusIsError = false
+            }
+        } catch {
+            apiKeyStatusMessage = "Could not update API key (\(error.localizedDescription))."
+            apiKeyStatusIsError = true
+        }
+    }
+
+    func reloadOpenAIAPIKeyFromStore() {
+        do {
+            openAIAPIKey = try apiKeyStore.loadKey() ?? ""
+        } catch {
+            apiKeyStatusMessage = "Could not read API key (\(error.localizedDescription))."
+            apiKeyStatusIsError = true
+        }
+    }
+
+    func clearAPIKeyStatus() {
+        apiKeyStatusMessage = nil
+        apiKeyStatusIsError = false
+    }
 }
 
 struct Settings {
     var selectedLanguage: String
     var translateToEnglish: Bool
     var suppressBlankAudio: Bool
+    var transcriptionBackend: TranscriptionBackend
     var showTimestamps: Bool
     var temperature: Double
     var noSpeechThreshold: Double
@@ -133,6 +182,7 @@ struct Settings {
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
+        self.transcriptionBackend = prefs.transcriptionBackend
         self.showTimestamps = prefs.showTimestamps
         self.temperature = prefs.temperature
         self.noSpeechThreshold = prefs.noSpeechThreshold
@@ -186,11 +236,10 @@ struct SettingsView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Done") {
-                    if viewModel.selectedModelURL != previousModelURL {
-                        // Reload model if changed
-                        if let modelPath = viewModel.selectedModelURL?.path {
-                            TranscriptionService.shared.reloadModel(with: modelPath)
-                        }
+                    if viewModel.transcriptionBackend == .local,
+                       let selectedModel = viewModel.selectedModelURL,
+                       selectedModel != previousModelURL {
+                        TranscriptionService.shared.reloadModel(with: selectedModel.path)
                     }
                     dismiss()
                 }
@@ -201,10 +250,39 @@ struct SettingsView: View {
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
         }
+        .onChange(of: viewModel.transcriptionBackend) { backend in
+            if backend == .openAI {
+                viewModel.reloadOpenAIAPIKeyFromStore()
+            } else {
+                viewModel.clearAPIKeyStatus()
+            }
+        }
     }
     
     private var modelSettings: some View {
         Form {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Transcription Backend")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Picker("Backend", selection: $viewModel.transcriptionBackend) {
+                        ForEach(TranscriptionBackend.allCases) { backend in
+                            Text(backend.displayName).tag(backend)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(viewModel.transcriptionBackend.helpText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+            }
             Section {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Whisper Model")
@@ -263,6 +341,59 @@ struct SettingsView: View {
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .disabled(viewModel.transcriptionBackend == .openAI)
+
+            if viewModel.transcriptionBackend == .openAI {
+                Section {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("OpenAI API Key")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        SecureField("sk-...", text: $viewModel.openAIAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                            .onChange(of: viewModel.openAIAPIKey) { _ in
+                                viewModel.clearAPIKeyStatus()
+                            }
+
+                        if viewModel.openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Label("Add an API key before using the OpenAI backend.", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+
+                        HStack(spacing: 12) {
+                            Button("Save Key") {
+                                viewModel.persistOpenAIAPIKey()
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button("Clear") {
+                                viewModel.openAIAPIKey = ""
+                                viewModel.persistOpenAIAPIKey()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                        if let message = viewModel.apiKeyStatusMessage {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundColor(viewModel.apiKeyStatusIsError ? .red : .secondary)
+                        }
+
+                        Text("Your key is stored securely in the macOS Keychain and never leaves this Mac except when contacting OpenAI.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Link("Manage OpenAI API keys", destination: URL(string: "https://platform.openai.com/account/api-keys")!)
+                            .font(.caption)
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+                }
             }
         }
         .padding()

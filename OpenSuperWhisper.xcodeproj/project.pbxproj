@@ -138,7 +138,6 @@
 		CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-tiny.en.bin"; sourceTree = "<group>"; };
 		CE84DF792D5578BE00C54EA6 /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libautocorrect_swift.dylib; path = build/libautocorrect_swift.dylib; sourceTree = "<group>"; };
-		CEAC00022D82F00100000000 /* autocorrect_swift.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = autocorrect_swift.h; path = asian-autocorrect/autocorrect-swift/autocorrect_swift.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -223,6 +222,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		9343D89C2E8F604000CCB0E5 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		CE37B60E2D54F274009D6564 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -258,6 +265,7 @@
 				CE57B0292D52C7BB00929AF3 /* Products */,
 				CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */,
 				CE84DF792D5578BE00C54EA6 /* jfk.wav */,
+				9343D89C2E8F604000CCB0E5 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};

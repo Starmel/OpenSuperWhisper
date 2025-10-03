@@ -121,3 +121,9 @@ default.profraw
 *.dmg
 .cursorrules
 OpenSuperWhisper.dmg.sha256
+
+
+# my codex resume session
+resume.codex.txt
+*~
+DEADJOE

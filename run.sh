@@ -24,6 +24,12 @@ fi
 
 # Build the app
 echo "Building OpenSuperWhisper..."
+mkdir -p build/ModuleCache build/SwiftPackageCache
+export MODULE_CACHE_DIR="$PWD/build/ModuleCache"
+export SWIFTCUSTOMMODULECACHE="$MODULE_CACHE_DIR"
+export SWIFTPM_PACKAGE_CACHE="$PWD/build/SwiftPackageCache"
+export HOME="$PWD/build/home"
+mkdir -p "$HOME/Library/Caches" "$HOME/.cache/clang/ModuleCache"
 BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)
 
 # sudo gem install xcpretty

@@ -29,6 +29,14 @@ final class AppPreferences {
     @OptionalUserDefault(key: "selectedModelPath")
     var selectedModelPath: String?
     
+    @UserDefault(key: "transcriptionBackend", defaultValue: TranscriptionBackend.local.rawValue)
+    private var transcriptionBackendRawValue: String
+
+    var transcriptionBackend: TranscriptionBackend {
+        get { TranscriptionBackend(rawValue: transcriptionBackendRawValue) ?? .local }
+        set { transcriptionBackendRawValue = newValue.rawValue }
+    }
+
     @UserDefault(key: "whisperLanguage", defaultValue: "en")
     var whisperLanguage: String
     

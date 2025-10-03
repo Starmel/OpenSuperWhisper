@@ -1,0 +1,9 @@
+# OpenAI Integration Progress Log
+
+- 2025-10-02: Documented integration plan and confirmed git remote now points to fork.
+- 2025-10-02: Added transcription backend preference and UI toggle stub in Settings.
+- 2025-10-02: Planned Keychain-backed API key storage approach (Security.framework helper, service/account constants).
+- 2025-10-02: Implemented Keychain-backed OpenAI API key storage and Settings view-model helpers.
+- 2025-10-02: Added Settings UI for OpenAI backend including secure key entry, save/clear actions, and status messaging.
+- 2025-10-02: Wired TranscriptionService for backend selection and added OpenAI network client (Keychain key loading, remote transcription path).
+- 2025-10-02: Added user-visible error handling (alerts for transcription failures, OpenAI key reminder) and updated Settings messaging.
