@@ -24,34 +24,36 @@ fi
 
 # Build the app
 echo "Building OpenSuperWhisper..."
-mkdir -p build/ModuleCache build/SwiftPackageCache
+mkdir -p build/ModuleCache build/SwiftPackageCache build/logs
 export MODULE_CACHE_DIR="$PWD/build/ModuleCache"
 export SWIFTCUSTOMMODULECACHE="$MODULE_CACHE_DIR"
+export CLANG_MODULE_CACHE_PATH="$MODULE_CACHE_DIR"
 export SWIFTPM_PACKAGE_CACHE="$PWD/build/SwiftPackageCache"
-export HOME="$PWD/build/home"
-mkdir -p "$HOME/Library/Caches" "$HOME/.cache/clang/ModuleCache"
-BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)
+export SWIFTPM_CUSTOM_CACHE_PATH="$SWIFTPM_PACKAGE_CACHE"
+export SWIFT_PACKAGE_CACHE_PATH="$SWIFTPM_PACKAGE_CACHE"
+mkdir -p "$HOME/.cache/clang/ModuleCache" "$HOME/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading" 2>/dev/null || true
 
-# sudo gem install xcpretty
-if command -v xcpretty &> /dev/null
-then
-    echo "$BUILD_OUTPUT" | xcpretty --simple --color
+XCODE_LOG="$PWD/build/logs/xcodebuild.log"
+CMD=(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build)
+
+"${CMD[@]}" 2>&1 | tee "$XCODE_LOG"
+BUILD_STATUS=${PIPESTATUS[0]}
+
+if command -v xcpretty &> /dev/null; then
+    xcpretty --simple --color < "$XCODE_LOG"
 else
-    echo "$BUILD_OUTPUT"
+    cat "$XCODE_LOG"
 fi
 
-# Check if build output contains BUILD FAILED or if the command failed
-if [[ $? -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
+if [[ $BUILD_STATUS -eq 0 ]]; then
     echo "Building successful!"
     if $JUST_BUILD; then
         exit 0
     fi
     echo "Starting the app..."
-    # Remove quarantine attribute if exists
     xattr -d com.apple.quarantine ./Build/Build/Products/Debug/OpenSuperWhisper.app 2>/dev/null || true
-    # Run the app and show logs
     ./Build/Build/Products/Debug/OpenSuperWhisper.app/Contents/MacOS/OpenSuperWhisper
 else
-    echo "Build failed!"
-    exit 1
-fi 
+    echo "Build failed! See $XCODE_LOG for details."
+    exit $BUILD_STATUS
+fi

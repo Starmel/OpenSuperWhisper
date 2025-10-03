@@ -7,3 +7,4 @@
 - 2025-10-02: Added Settings UI for OpenAI backend including secure key entry, save/clear actions, and status messaging.
 - 2025-10-02: Wired TranscriptionService for backend selection and added OpenAI network client (Keychain key loading, remote transcription path).
 - 2025-10-02: Added user-visible error handling (alerts for transcription failures, OpenAI key reminder) and updated Settings messaging.
+- 2025-10-03: Updated CI workflow to create clang/SwiftPM caches before build so xcodebuild can resolve packages on GitHub runners.

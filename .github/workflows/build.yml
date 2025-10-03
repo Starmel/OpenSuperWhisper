@@ -22,5 +22,9 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v2
       - name: Make run.sh executable
         run: chmod +x ./run.sh
+      - name: Prepare cache directories
+        run: |
+          mkdir -p "$HOME/.cache/clang/ModuleCache"
+          mkdir -p "$HOME/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading"
       - name: Build with run.sh
         run: ./run.sh build 
