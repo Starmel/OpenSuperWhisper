@@ -277,7 +277,6 @@ struct ContentView: View {
                     }
 
                     VStack(spacing: 16) {
-                        // Кнопка записи по центру
                         Button(action: {
                             if viewModel.isRecording {
                                 viewModel.startDecoding()
@@ -286,18 +285,16 @@ struct ContentView: View {
                             }
                         }) {
                             if viewModel.state == .decoding {
-                                // Show progress indicator ONLY when transcribing
                                 ProgressView()
-                                    .scaleEffect(1.0) // Smaller size
+                                    .scaleEffect(1.0)
                                     .frame(width: 48, height: 48)
                                     .contentTransition(.symbolEffect(.replace))
                             } else {
-                                // Show regular record button for idle state AND recording
                                 MainRecordButton(isRecording: viewModel.isRecording)
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.state == .decoding)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
