@@ -138,7 +138,6 @@
 		CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-tiny.en.bin"; sourceTree = "<group>"; };
 		CE84DF792D5578BE00C54EA6 /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libautocorrect_swift.dylib; path = build/libautocorrect_swift.dylib; sourceTree = "<group>"; };
-		CEAC00022D82F00100000000 /* autocorrect_swift.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = autocorrect_swift.h; path = asian-autocorrect/autocorrect-swift/autocorrect_swift.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -258,6 +257,7 @@
 				CE57B0292D52C7BB00929AF3 /* Products */,
 				CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */,
 				CE84DF792D5578BE00C54EA6 /* jfk.wav */,
+				CE9DA5672EA8DA4600EB417E /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -363,6 +363,14 @@
 			);
 			name = "Release-iphoneos";
 			path = "whisper.cpp/build/build/ggml.build/Release-iphoneos";
+			sourceTree = "<group>";
+		};
+		CE9DA5672EA8DA4600EB417E /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -775,15 +783,15 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/build",
-					"/opt/homebrew/lib",
+					/opt/homebrew/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.0.5;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lomp",
 				);
-				MARKETING_VERSION = 0.0.5;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -836,16 +844,16 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/build",
-					"/opt/homebrew/lib",
+					/opt/homebrew/opt/libomp/lib,
 				);
 				LLVM_LTO = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.0.5;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lomp",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.0.5;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
