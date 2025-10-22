@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-пше
+
 # Configuration
 NEW_VERSION="${1:-0.0.4}"
 CODE_SIGN_IDENTITY="${2}"
