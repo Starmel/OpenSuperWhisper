@@ -48,7 +48,8 @@ To build locally, you'll need:
     git clone git@github.com:Starmel/OpenSuperWhisper.git
     cd OpenSuperWhisper
     git submodule update --init --recursive
-    brew install cmake libomp rust
+    brew install cmake libomp rust ruby
+    gem install xcpretty
     ./run.sh build
 
 In case of problems, consult `.github/workflows/build.yml` which is our CI workflow
