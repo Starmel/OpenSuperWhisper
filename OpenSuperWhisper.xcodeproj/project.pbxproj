@@ -32,7 +32,22 @@
 		CE84DF762D5577D200C54EA6 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF752D5577D200C54EA6 /* Accelerate.framework */; };
 		CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */; };
 		CEAC00032D82F00200000000 /* libautocorrect_swift.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; };
+		CEAC00042D82F00300000000 /* libautocorrect_swift.dylib in Copy Files */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CEAC00052D82F00400000000 /* Copy Files */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				CEAC00042D82F00300000000 /* libautocorrect_swift.dylib in Copy Files */,
+			);
+			name = "Copy Files";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
 		840156C42D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
@@ -375,6 +390,7 @@
 				CE57B0242D52C7BB00929AF3 /* Sources */,
 				CE57B0252D52C7BB00929AF3 /* Frameworks */,
 				CE57B0262D52C7BB00929AF3 /* Resources */,
+				CEAC00052D82F00400000000 /* Copy Files */,
 			);
 			buildRules = (
 			);
