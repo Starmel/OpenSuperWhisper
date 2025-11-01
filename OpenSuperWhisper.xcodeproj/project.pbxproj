@@ -428,6 +428,7 @@
 			packageProductDependencies = (
 				CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */,
 				CE0EAD6D2D56ACA80067FDEE /* GRDB */,
+				CE84E17E2D56550B00C54EA7 /* FluidAudio */,
 			);
 			productName = OpenSuperWhisper;
 			productReference = CE57B0282D52C7BB00929AF3 /* OpenSuperWhisper.app */;
@@ -514,6 +515,7 @@
 			packageReferences = (
 				CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CE57B0292D52C7BB00929AF3 /* Products */;
@@ -1028,6 +1030,14 @@
 				minimumVersion = 2.3.0;
 			};
 		};
+		CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.7;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1040,6 +1050,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		CE84E17E2D56550B00C54EA7 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
