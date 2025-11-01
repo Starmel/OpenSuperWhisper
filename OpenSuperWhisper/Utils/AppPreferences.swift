@@ -23,11 +23,41 @@ struct OptionalUserDefault<T> {
 
 final class AppPreferences {
     static let shared = AppPreferences()
-    private init() {}
+    private init() {
+        migrateOldPreferences()
+    }
+    
+    private func migrateOldPreferences() {
+        if let oldPath = UserDefaults.standard.string(forKey: "selectedModelPath"),
+           UserDefaults.standard.string(forKey: "selectedWhisperModelPath") == nil {
+            UserDefaults.standard.set(oldPath, forKey: "selectedWhisperModelPath")
+        }
+    }
+    
+    // Engine settings
+    @UserDefault(key: "selectedEngine", defaultValue: "whisper")
+    var selectedEngine: String
     
     // Model settings
-    @OptionalUserDefault(key: "selectedModelPath")
-    var selectedModelPath: String?
+    var selectedModelPath: String? {
+        get {
+            if selectedEngine == "whisper" {
+                return selectedWhisperModelPath
+            }
+            return nil
+        }
+        set {
+            if selectedEngine == "whisper" {
+                selectedWhisperModelPath = newValue
+            }
+        }
+    }
+    
+    @OptionalUserDefault(key: "selectedWhisperModelPath")
+    var selectedWhisperModelPath: String?
+    
+    @UserDefault(key: "fluidAudioModelVersion", defaultValue: "v3")
+    var fluidAudioModelVersion: String
     
     @UserDefault(key: "whisperLanguage", defaultValue: "en")
     var whisperLanguage: String
@@ -63,8 +93,8 @@ final class AppPreferences {
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
     
-    @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
-    var hasCompletedOnboarding: Bool
+    // @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
+    var hasCompletedOnboarding: Bool = false
     
     @UserDefault(key: "useAsianAutocorrect", defaultValue: true)
     var useAsianAutocorrect: Bool

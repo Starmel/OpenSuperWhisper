@@ -4,17 +4,52 @@ import Combine
 import Foundation
 import KeyboardShortcuts
 import SwiftUI
+import FluidAudio
 
 class SettingsViewModel: ObservableObject {
+    @Published var selectedEngine: String {
+        didSet {
+            AppPreferences.shared.selectedEngine = selectedEngine
+            if selectedEngine == "whisper" {
+                loadAvailableModels()
+            } else {
+                initializeFluidAudioModels()
+            }
+            Task { @MainActor in
+                TranscriptionService.shared.reloadEngine()
+            }
+        }
+    }
+    
+    @Published var fluidAudioModelVersion: String {
+        didSet {
+            AppPreferences.shared.fluidAudioModelVersion = fluidAudioModelVersion
+            if selectedEngine == "fluidaudio" {
+                Task { @MainActor in
+                    TranscriptionService.shared.reloadEngine()
+                }
+            }
+            initializeFluidAudioModels()
+        }
+    }
+    
     @Published var selectedModelURL: URL? {
         didSet {
             if let url = selectedModelURL {
-                AppPreferences.shared.selectedModelPath = url.path
+                AppPreferences.shared.selectedWhisperModelPath = url.path
             }
         }
     }
 
     @Published var availableModels: [URL] = []
+    
+    @Published var downloadableModels: [SettingsDownloadableModel] = []
+    @Published var downloadableFluidAudioModels: [SettingsFluidAudioModel] = []
+    @Published var isDownloading: Bool = false
+    @Published var downloadProgress: Double = 0.0
+    @Published var downloadingModelName: String?
+    private var downloadTask: Task<Void, Error>?
+    
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
@@ -89,6 +124,8 @@ class SettingsViewModel: ObservableObject {
     
     init() {
         let prefs = AppPreferences.shared
+        self.selectedEngine = prefs.selectedEngine
+        self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -102,10 +139,41 @@ class SettingsViewModel: ObservableObject {
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         
-        if let savedPath = prefs.selectedModelPath {
+        if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
         loadAvailableModels()
+        initializeDownloadableModels()
+        initializeFluidAudioModels()
+    }
+    
+    func initializeFluidAudioModels() {
+        downloadableFluidAudioModels = SettingsFluidAudioModels.availableModels.map { model in
+            var updatedModel = model
+            updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: model.version)
+            return updatedModel
+        }
+    }
+    
+    func isFluidAudioModelDownloaded(version: String) -> Bool {
+        let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
+        
+        // Используем правильный путь к кэшу согласно документации:
+        // ~/Library/Application Support/FluidAudio/Models/<version-folder>/
+        let cacheDirectory = AsrModels.defaultCacheDirectory(for: asrVersion)
+        
+        // Проверяем наличие всех необходимых файлов модели
+        return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
+    }
+    
+    func initializeDownloadableModels() {
+        let modelManager = WhisperModelManager.shared
+        downloadableModels = SettingsDownloadableModels.availableModels.map { model in
+            var updatedModel = model
+            let filename = model.url.lastPathComponent
+            updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
+            return updatedModel
+        }
     }
     
     func loadAvailableModels() {
@@ -113,7 +181,281 @@ class SettingsViewModel: ObservableObject {
         if selectedModelURL == nil {
             selectedModelURL = availableModels.first
         }
+        initializeDownloadableModels()
     }
+    
+    @MainActor
+    func downloadModel(_ model: SettingsDownloadableModel) async throws {
+        guard !isDownloading else { return }
+        
+        isDownloading = true
+        downloadingModelName = model.name
+        downloadProgress = 0.0
+        
+        downloadTask = Task {
+            do {
+                let filename = model.url.lastPathComponent
+                
+                try await WhisperModelManager.shared.downloadModel(url: model.url, name: filename) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+                        
+                        self.downloadProgress = progress
+                        if let index = self.downloadableModels.firstIndex(where: { $0.name == model.name }) {
+                            self.downloadableModels[index].downloadProgress = progress
+                            if progress >= 1.0 {
+                                self.downloadableModels[index].isDownloaded = true
+                            }
+                        }
+                    }
+                }
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.isDownloading = false
+                        self.downloadingModelName = nil
+                        self.downloadProgress = 0.0
+                        if let index = self.downloadableModels.firstIndex(where: { $0.name == model.name }) {
+                            self.downloadableModels[index].downloadProgress = 0.0
+                        }
+                    }
+                    return
+                }
+                
+                await MainActor.run {
+                    if let index = downloadableModels.firstIndex(where: { $0.name == model.name }) {
+                        downloadableModels[index].isDownloaded = true
+                        downloadableModels[index].downloadProgress = 0.0
+                    }
+                    loadAvailableModels()
+                    let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(filename).path
+                    selectedModelURL = URL(fileURLWithPath: modelPath)
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    
+                    Task { @MainActor in
+                        TranscriptionService.shared.reloadModel(with: modelPath)
+                    }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    if let index = downloadableModels.firstIndex(where: { $0.name == model.name }) {
+                        downloadableModels[index].downloadProgress = 0.0
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    if let index = downloadableModels.firstIndex(where: { $0.name == model.name }) {
+                        downloadableModels[index].downloadProgress = 0.0
+                    }
+                }
+                throw error
+            }
+        }
+        
+        try await downloadTask?.value
+    }
+    
+    func cancelDownload() {
+        downloadTask?.cancel()
+        if let modelName = downloadingModelName {
+            if selectedEngine == "whisper", let model = downloadableModels.first(where: { $0.name == modelName }) {
+                let filename = model.url.lastPathComponent
+                WhisperModelManager.shared.cancelDownload(name: filename)
+            }
+            // Reset progress for the downloading model
+            if let index = downloadableModels.firstIndex(where: { $0.name == modelName }) {
+                downloadableModels[index].downloadProgress = 0.0
+            }
+            if let index = downloadableFluidAudioModels.firstIndex(where: { $0.name == modelName }) {
+                downloadableFluidAudioModels[index].downloadProgress = 0.0
+            }
+        }
+        isDownloading = false
+        downloadingModelName = nil
+        downloadProgress = 0.0
+    }
+    
+    @MainActor
+    func downloadFluidAudioModel(_ model: SettingsFluidAudioModel) async throws {
+        guard !isDownloading else { return }
+        
+        isDownloading = true
+        downloadingModelName = model.name
+        downloadProgress = 0.0
+        
+        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+            downloadableFluidAudioModels[index].downloadProgress = 0.0
+        }
+        
+        var wasCancelled = false
+        
+        downloadTask = Task {
+            do {
+                let version: AsrModelVersion = model.version == "v2" ? .v2 : .v3
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.isDownloading = false
+                        self.downloadingModelName = nil
+                        self.downloadProgress = 0.0
+                        if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                            self.downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        }
+                    }
+                    throw CancellationError()
+                }
+                
+                let models = try await AsrModels.downloadAndLoad(version: version)
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.isDownloading = false
+                        self.downloadingModelName = nil
+                        self.downloadProgress = 0.0
+                        if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                            self.downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        }
+                    }
+                    throw CancellationError()
+                }
+                
+                let manager = AsrManager(config: .default)
+                try await manager.initialize(models: models)
+                
+                await MainActor.run {
+                    if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                        downloadableFluidAudioModels[index].isDownloaded = true
+                        downloadableFluidAudioModels[index].downloadProgress = 1.0
+                    }
+                    fluidAudioModelVersion = model.version
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 1.0
+                    
+                    Task { @MainActor in
+                        TranscriptionService.shared.reloadEngine()
+                    }
+                }
+            } catch is CancellationError {
+                wasCancelled = true
+                await MainActor.run {
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                        downloadableFluidAudioModels[index].downloadProgress = 0.0
+                    }
+                }
+                // Don't re-throw CancellationError - it's a manual cancellation
+            } catch {
+                // Check if we were cancelled before the error occurred
+                if Task.isCancelled {
+                    wasCancelled = true
+                    await MainActor.run {
+                        isDownloading = false
+                        downloadingModelName = nil
+                        downloadProgress = 0.0
+                        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                            downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        isDownloading = false
+                        downloadingModelName = nil
+                        downloadProgress = 0.0
+                        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
+                            downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        }
+                    }
+                    throw error
+                }
+            }
+        }
+        
+        // Handle cancellation gracefully - don't throw if cancelled
+        do {
+            try await downloadTask?.value
+        } catch is CancellationError {
+            // Already handled in catch block above, just consume the error
+            wasCancelled = true
+        } catch {
+            // If we were cancelled, don't throw
+            if !wasCancelled {
+                throw error
+            }
+        }
+    }
+    
+    @MainActor
+    func downloadFluidAudioModel() async throws {
+        let versionString = AppPreferences.shared.fluidAudioModelVersion
+        if let model = downloadableFluidAudioModels.first(where: { $0.version == versionString }) {
+            try await downloadFluidAudioModel(model)
+        }
+    }
+}
+
+struct SettingsDownloadableModel: Identifiable {
+    let id = UUID()
+    let name: String
+    var isDownloaded: Bool
+    let url: URL
+    let size: Int
+    let description: String
+    var downloadProgress: Double = 0.0
+
+    var sizeString: String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        formatter.includesUnit = true
+        formatter.isAdaptive = true
+        return formatter.string(fromByteCount: Int64(size) * 1000000)
+    }
+
+    init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String) {
+        self.name = name
+        self.isDownloaded = isDownloaded
+        self.url = url
+        self.size = size
+        self.description = description
+    }
+}
+
+struct SettingsDownloadableModels {
+    static let availableModels = [
+        SettingsDownloadableModel(
+            name: "Turbo V3 large",
+            isDownloaded: false,
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
+            size: 1624,
+            description: "High accuracy, best quality"
+        ),
+        SettingsDownloadableModel(
+            name: "Turbo V3 medium",
+            isDownloaded: false,
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!,
+            size: 874,
+            description: "Balanced speed and accuracy"
+        ),
+        SettingsDownloadableModel(
+            name: "Turbo V3 small",
+            isDownloaded: false,
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
+            size: 574,
+            description: "Fastest processing"
+        )
+    ]
 }
 
 struct Settings {
@@ -186,9 +528,8 @@ struct SettingsView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Done") {
-                    if viewModel.selectedModelURL != previousModelURL {
-                        // Reload model if changed
-                        if let modelPath = viewModel.selectedModelURL?.path {
+                    if viewModel.selectedEngine == "whisper" {
+                        if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
                             TranscriptionService.shared.reloadModel(with: modelPath)
                         }
                     }
@@ -200,6 +541,26 @@ struct SettingsView: View {
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
+            if viewModel.selectedEngine == "fluidaudio" {
+                viewModel.initializeFluidAudioModels()
+            }
+        }
+        .onChange(of: viewModel.selectedEngine) { _, newEngine in
+            if newEngine == "fluidaudio" {
+                viewModel.initializeFluidAudioModels()
+            }
+        }
+        .onChange(of: viewModel.fluidAudioModelVersion) { _, _ in
+            Task { @MainActor in
+                TranscriptionService.shared.reloadEngine()
+            }
+        }
+        .onChange(of: viewModel.selectedModelURL) { _, newURL in
+            if viewModel.selectedEngine == "whisper", let modelPath = newURL?.path {
+                Task { @MainActor in
+                    TranscriptionService.shared.reloadModel(with: modelPath)
+                }
+            }
         }
     }
     
@@ -207,57 +568,162 @@ struct SettingsView: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Whisper Model")
+                    Text("Speech Recognition Engine")
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Picker("Model", selection: $viewModel.selectedModelURL) {
-                        ForEach(viewModel.availableModels, id: \.self) { url in
-                            Text(url.lastPathComponent)
-                                .tag(url as URL?)
-                        }
+                    Picker("Engine", selection: $viewModel.selectedEngine) {
+                        Text("Parakeet").tag("fluidaudio")
+                        Text("Whisper").tag("whisper")
                     }
-                    .pickerStyle(.menu)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .pickerStyle(.segmented)
+                    .padding(.bottom, 8)
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Models Directory:")
-                                .font(.subheadline)
-                            Spacer()
-                            Button(action: {
-                                NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
-                            }) {
-                                Label("Open Folder", systemImage: "folder")
-                                    .font(.subheadline)
+                    if viewModel.selectedEngine == "whisper" {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Whisper Model")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text("Download Models")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                                .padding(.top, 8)
+                            
+                            ScrollView {
+                                VStack(spacing: 12) {
+                                    ForEach($viewModel.downloadableModels) { $model in
+                                        ModelDownloadItemView(model: $model, viewModel: viewModel)
+                                    }
+                                }
                             }
-                            .buttonStyle(.borderless)
-                            .help("Open models directory")
+                            .frame(maxHeight: 200)
+                            
+                            if viewModel.isDownloading {
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        if viewModel.downloadProgress > 0 {
+                                            ProgressView(value: viewModel.downloadProgress)
+                                                .progressViewStyle(LinearProgressViewStyle())
+                                        } else {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle())
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Button("Cancel") {
+                                            viewModel.cancelDownload()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                    
+                                    if let downloadingName = viewModel.downloadingModelName {
+                                        Text("Downloading: \(downloadingName)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Models Directory:")
+                                        .font(.subheadline)
+                                    Button(action: {
+                                        NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
+                                    }) {
+                                        Label("Open Folder", systemImage: "folder")
+                                            .font(.subheadline)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Open models directory")
+                                }
+                                Text(WhisperModelManager.shared.modelsDirectory.path)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .textSelection(.enabled)
+                                    .padding(8)
+                                    .background(Color(.textBackgroundColor).opacity(0.5))
+                                    .cornerRadius(6)
+                            }
+                            .padding(.top, 8)
                         }
-                        Text(WhisperModelManager.shared.modelsDirectory.path)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .background(Color(.textBackgroundColor).opacity(0.5))
-                            .cornerRadius(6)
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Parakeet Model")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text("Download Models")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                                .padding(.top, 8)
+                            
+                            ScrollView {
+                                VStack(spacing: 12) {
+                                    ForEach($viewModel.downloadableFluidAudioModels) { $model in
+                                        FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 200)
+                            
+                            if viewModel.isDownloading {
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        if viewModel.downloadProgress > 0 {
+                                            ProgressView(value: viewModel.downloadProgress)
+                                                .progressViewStyle(LinearProgressViewStyle())
+                                        } else {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle())
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Button("Cancel") {
+                                            viewModel.cancelDownload()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                    
+                                    if let downloadingName = viewModel.downloadingModelName {
+                                        Text("Downloading: \(downloadingName)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Models Directory:")
+                                        .font(.subheadline)
+                                    Button(action: {
+                                        let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
+                                        let parentDir = cacheDir.deletingLastPathComponent()
+                                        NSWorkspace.shared.open(parentDir)
+                                    }) {
+                                        Label("Open Folder", systemImage: "folder")
+                                            .font(.subheadline)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Open models directory")
+                                }
+                                Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .textSelection(.enabled)
+                                    .padding(8)
+                                    .background(Color(.textBackgroundColor).opacity(0.5))
+                                    .cornerRadius(6)
+                            }
+                            .padding(.top, 8)
+                        }
                     }
-                    .padding(.top, 8)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("To display other models in the list, you need to download a ggml bin file and place it in the models folder. Then restart the application.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        
-                        Link("Download models here", destination: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/tree/main")!)
-                        .font(.caption)
-                    }
-                    .padding(.top, 8)
                 }
                 .padding()
                 .background(Color(.controlBackgroundColor).opacity(0.3))
@@ -585,3 +1051,233 @@ struct SettingsView: View {
         }
     }
 }
+
+struct SettingsFluidAudioModel: Identifiable {
+    let id = UUID()
+    let name: String
+    let version: String
+    var isDownloaded: Bool
+    let description: String
+    var downloadProgress: Double = 0.0
+}
+
+struct SettingsFluidAudioModels {
+    static let availableModels = [
+        SettingsFluidAudioModel(
+            name: "Parakeet v3",
+            version: "v3",
+            isDownloaded: false,
+            description: "Multilingual, 25 languages"
+        ),
+        SettingsFluidAudioModel(
+            name: "Parakeet v2",
+            version: "v2",
+            isDownloaded: false,
+            description: "English-only, higher recall"
+        )
+    ]
+}
+
+struct FluidAudioModelDownloadItemView: View {
+    @Binding var model: SettingsFluidAudioModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+    
+    var isSelected: Bool {
+        viewModel.fluidAudioModelVersion == model.version
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    if model.isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                            .imageScale(.small)
+                    }
+                }
+                
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(0.7)
+                        .padding(.top, 4)
+                } else if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+            
+            Spacer()
+            
+            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                Button("Cancel") {
+                    viewModel.cancelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .imageScale(.large)
+                } else {
+                    Button(action: {
+                        viewModel.fluidAudioModelVersion = model.version
+                    }) {
+                        Text("Select")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else {
+                Button(action: {
+                    Task {
+                        do {
+                            try await viewModel.downloadFluidAudioModel(model)
+                        } catch is CancellationError {
+                            // Don't show error for manual cancellation
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
+                }) {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.isDownloading)
+            }
+        }
+        .padding(12)
+        .background(isSelected ? Color(.controlBackgroundColor).opacity(0.7) : Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.isDownloaded && !isSelected {
+                viewModel.fluidAudioModelVersion = model.version
+            }
+        }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
+struct ModelDownloadItemView: View {
+    @Binding var model: SettingsDownloadableModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+    
+    var isSelected: Bool {
+        if let selectedURL = viewModel.selectedModelURL {
+            let filename = model.url.lastPathComponent
+            return selectedURL.lastPathComponent == filename
+        }
+        return false
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    if model.isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                            .imageScale(.small)
+                    }
+                }
+                
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+            
+            Spacer()
+            
+            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                Button("Cancel") {
+                    viewModel.cancelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .imageScale(.large)
+                } else {
+                    Button(action: {
+                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
+                        viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+                    }) {
+                        Text("Select")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else {
+                Button(action: {
+                    Task {
+                        do {
+                            try await viewModel.downloadModel(model)
+                        } catch is CancellationError {
+                            // Don't show error for manual cancellation
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
+                }) {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.isDownloading)
+            }
+        }
+        .padding(12)
+        .background(isSelected ? Color(.controlBackgroundColor).opacity(0.7) : Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.isDownloaded && !isSelected {
+                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
+                viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+            }
+        }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
