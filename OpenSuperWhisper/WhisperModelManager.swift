@@ -5,6 +5,7 @@ class WhisperDownloadDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownl
     private let progressCallback: (Double) -> Void
     private var expectedContentLength: Int64 = 0
     var completionHandler: ((URL?, Error?) -> Void)?
+    weak var downloadTask: URLSessionDownloadTask?
     
     init(progressCallback: @escaping (Double) -> Void) {
         self.progressCallback = progressCallback
@@ -43,6 +44,8 @@ class WhisperModelManager {
     static let shared = WhisperModelManager()
     
     private let modelsDirectoryName = "whisper-models"
+    private var activeDownloadTasks: [String: URLSessionDownloadTask] = [:]
+    private let downloadTasksLock = NSLock()
     
     var modelsDirectory: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -131,9 +134,27 @@ class WhisperModelManager {
             
             // Create a download task without completion handler
             let downloadTask = session.downloadTask(with: url)
+            delegate.downloadTask = downloadTask
+            
+            // Store task for cancellation
+            downloadTasksLock.lock()
+            activeDownloadTasks[name] = downloadTask
+            downloadTasksLock.unlock()
             
             // Add completion handling to delegate
-            delegate.completionHandler = { location, error in
+            delegate.completionHandler = { [weak self] location, error in
+                // Remove task from active downloads
+                self?.downloadTasksLock.lock()
+                self?.activeDownloadTasks.removeValue(forKey: name)
+                self?.downloadTasksLock.unlock()
+                
+                // Check if cancelled
+                if let error = error as? URLError, error.code == .cancelled {
+                    print("Download cancelled")
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                
                 if let error = error {
                     print("Download failed with error: \(error)")
                     continuation.resume(throwing: error)
@@ -163,6 +184,18 @@ class WhisperModelManager {
             }
             
             downloadTask.resume()
+        }
+    }
+    
+    // Cancel download task
+    func cancelDownload(name: String) {
+        downloadTasksLock.lock()
+        defer { downloadTasksLock.unlock() }
+        
+        if let task = activeDownloadTasks[name] {
+            task.cancel()
+            activeDownloadTasks.removeValue(forKey: name)
+            print("Cancelled download for: \(name)")
         }
     }
     
