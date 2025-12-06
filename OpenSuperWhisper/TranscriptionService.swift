@@ -10,6 +10,8 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var currentSegment = ""
     @Published private(set) var isLoading = false
     @Published private(set) var progress: Float = 0.0
+    @Published private(set) var isConverting = false
+    @Published private(set) var conversionProgress: Float = 0.0
     
     private var context: MyWhisperContext?
     private var totalDuration: Float = 0.0
@@ -91,6 +93,8 @@ class TranscriptionService: ObservableObject {
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
         await MainActor.run {
             self.progress = 0.0
+            self.conversionProgress = 0.0
+            self.isConverting = true
             self.isTranscribing = true
             self.transcribedText = ""
             self.currentSegment = ""
@@ -107,6 +111,7 @@ class TranscriptionService: ObservableObject {
         defer {
             Task { @MainActor in
                 self.isTranscribing = false
+                self.isConverting = false
                 self.currentSegment = ""
                 if !self.isCancelled {
                     self.progress = 1.0
@@ -136,8 +141,19 @@ class TranscriptionService: ObservableObject {
                 throw TranscriptionError.contextInitializationFailed
             }
             
-            guard let samples = try await self.convertAudioToPCM(fileURL: url) else {
+            let progressHandler: @Sendable (Float) -> Void = { progress in
+                Task { @MainActor in
+                    self.conversionProgress = progress
+                }
+            }
+            
+            guard let samples = try await self.convertAudioToPCM(fileURL: url, progressCallback: progressHandler) else {
                 throw TranscriptionError.audioConversionFailed
+            }
+            
+            await MainActor.run {
+                self.isConverting = false
+                self.conversionProgress = 1.0
             }
             
             // Check for cancellation
@@ -324,7 +340,7 @@ class TranscriptionService: ObservableObject {
         return MyWhisperContext.initFromFile(path: modelPath, params: params)
     }
     
-    nonisolated func convertAudioToPCM(fileURL: URL) async throws -> [Float]? {
+    nonisolated func convertAudioToPCM(fileURL: URL, progressCallback: @escaping @Sendable (Float) -> Void) async throws -> [Float]? {
         return try await Task.detached(priority: .userInitiated) {
             let audioFile = try AVAudioFile(forReading: fileURL)
             let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -338,6 +354,9 @@ class TranscriptionService: ObservableObject {
             
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: audioFile.processingFormat)
+            
+            let totalFrames = audioFile.length
+            var framesRead: Int64 = 0
             
             let lengthInFrames = UInt32(audioFile.length)
             let buffer = AVAudioPCMBuffer(pcmFormat: format,
@@ -355,6 +374,11 @@ class TranscriptionService: ObservableObject {
                         return nil
                     }
                     try audioFile.read(into: tempBuffer)
+                    framesRead += Int64(tempBuffer.frameLength)
+                    
+                    let progress = min(Float(framesRead) / Float(totalFrames), 1.0)
+                    progressCallback(progress)
+                    
                     outStatus.pointee = .haveData
                     return tempBuffer
                 } catch {
@@ -366,6 +390,8 @@ class TranscriptionService: ObservableObject {
             converter.convert(to: buffer,
                               error: &error,
                               withInputFrom: inputBlock)
+            
+            progressCallback(1.0)
             
             if let error = error {
                 print("Conversion error: \(error)")

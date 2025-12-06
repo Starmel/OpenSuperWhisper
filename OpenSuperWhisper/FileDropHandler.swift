@@ -166,21 +166,35 @@ struct FileDropOverlay: ViewModifier {
                             .blur(radius: 10)
                         
                         VStack(spacing: 16) {
-                            ProgressView(value: transcriptionService.progress)
-                                .progressViewStyle(LinearProgressViewStyle())
-                                .frame(width: 200)
-                            
-                            Text("Transcribing audio... \(Int(transcriptionService.progress * 100))%")
-                                .foregroundColor(.primary)
-                                .font(.headline)
-                            
-                            if !transcriptionService.currentSegment.isEmpty {
-                                Text(transcriptionService.currentSegment)
-                                    .foregroundColor(.primary.opacity(0.8))
-                                    .font(.subheadline)
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: 300)
-                                    .lineLimit(2)
+                            if transcriptionService.isConverting {
+                                ProgressView(value: transcriptionService.conversionProgress)
+                                    .progressViewStyle(LinearProgressViewStyle())
+                                    .frame(width: 200)
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "waveform")
+                                        .foregroundColor(.accentColor)
+                                    Text("Converting audio... \(Int(transcriptionService.conversionProgress * 100))%")
+                                        .foregroundColor(.primary)
+                                        .font(.headline)
+                                }
+                            } else {
+                                ProgressView(value: transcriptionService.progress)
+                                    .progressViewStyle(LinearProgressViewStyle())
+                                    .frame(width: 200)
+                                
+                                Text("Transcribing audio... \(Int(transcriptionService.progress * 100))%")
+                                    .foregroundColor(.primary)
+                                    .font(.headline)
+                                
+                                if !transcriptionService.currentSegment.isEmpty {
+                                    Text(transcriptionService.currentSegment)
+                                        .foregroundColor(.primary.opacity(0.8))
+                                        .font(.subheadline)
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: 300)
+                                        .lineLimit(2)
+                                }
                             }
                             
                             Button(action: {
