@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import Combine
 import KeyboardShortcuts
 import SwiftUI
 import UniformTypeIdentifiers
@@ -71,12 +72,16 @@ class ContentViewModel: ObservableObject {
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                    let recordingId = UUID()
                     let finalURL = Recording(
-                        id: UUID(),
+                        id: recordingId,
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: duration // Use tracked duration
+                        duration: duration,
+                        status: .completed,
+                        progress: 1.0,
+                        sourceFileURL: nil
                     ).url
 
                     // Move the temporary recording to final location
@@ -85,11 +90,14 @@ class ContentViewModel: ObservableObject {
                     // Save the recording to store
                     await MainActor.run {
                         self.recordingStore.addRecording(Recording(
-                            id: UUID(),
+                            id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
-                            duration: self.recordingDuration // Use tracked duration
+                            duration: self.recordingDuration,
+                            status: .completed,
+                            progress: 1.0,
+                            sourceFileURL: nil
                         ))
                     }
 
@@ -134,13 +142,39 @@ struct ContentView: View {
     @StateObject private var permissionsManager = PermissionsManager()
     @State private var isSettingsPresented = false
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchResults: [Recording]? = nil
     @State private var showDeleteConfirmation = false
+    @State private var searchTask: Task<Void, Never>? = nil
 
     private var filteredRecordings: [Recording] {
-        if searchText.isEmpty {
+        if debouncedSearchText.isEmpty {
             return viewModel.recordingStore.recordings
         } else {
-            return viewModel.recordingStore.searchRecordings(query: searchText)
+            return searchResults ?? viewModel.recordingStore.recordings
+        }
+    }
+    
+    private func performSearch(_ query: String) {
+        searchTask?.cancel()
+        
+        if query.isEmpty {
+            debouncedSearchText = ""
+            searchResults = nil
+            return
+        }
+        
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            
+            guard !Task.isCancelled else { return }
+            
+            let results = await viewModel.recordingStore.searchRecordingsAsync(query: query)
+            
+            guard !Task.isCancelled else { return }
+            
+            self.debouncedSearchText = query
+            self.searchResults = results
         }
     }
 
@@ -159,10 +193,16 @@ struct ContentView: View {
 
                         TextField("Search in transcriptions", text: $searchText)
                             .textFieldStyle(PlainTextFieldStyle())
+                            .onChange(of: searchText) { _, newValue in
+                                performSearch(newValue)
+                            }
 
                         if !searchText.isEmpty {
                             Button(action: {
                                 searchText = ""
+                                debouncedSearchText = ""
+                                searchResults = nil
+                                searchTask?.cancel()
                             }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.secondary)
@@ -179,7 +219,7 @@ struct ContentView: View {
                     ScrollView(showsIndicators: false) {
                         if filteredRecordings.isEmpty {
                             VStack(spacing: 16) {
-                                if !searchText.isEmpty {
+                                if !debouncedSearchText.isEmpty {
                                     // Show "no results" for search
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 40))
@@ -242,24 +282,19 @@ struct ContentView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                         } else {
                             LazyVStack(spacing: 8) {
                                 ForEach(filteredRecordings) { recording in
                                     RecordingRow(recording: recording)
-                                        .transition(.asymmetric(
-                                            insertion: .scale.combined(with: .opacity),
-                                            removal: .opacity.combined(with: .scale(scale: 0.8))
-                                        ))
+                                        .id(recording.id)
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.top, 16)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: filteredRecordings)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchText)
+                    .animation(.easeInOut(duration: 0.2), value: filteredRecordings.count)
+                    .animation(.easeInOut(duration: 0.2), value: debouncedSearchText.isEmpty)
                     .overlay(alignment: .top) {
                         Rectangle()
                             .fill(
@@ -296,7 +331,7 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
@@ -472,14 +507,118 @@ struct RecordingRow: View {
     private var isPlaying: Bool {
         audioRecorder.isPlaying && audioRecorder.currentlyPlayingURL == recording.url
     }
+    
+    private var isPending: Bool {
+        recording.status == .pending || recording.status == .converting || recording.status == .transcribing
+    }
+    
+    private var statusText: String {
+        switch recording.status {
+        case .pending:
+            return "In queue..."
+        case .converting:
+            return "Converting..."
+        case .transcribing:
+            return "Transcribing..."
+        case .completed:
+            return ""
+        case .failed:
+            return "Failed"
+        }
+    }
+    
+    private var displayText: String {
+        if recording.transcription.isEmpty || recording.transcription == "Starting transcription..." {
+            return ""
+        }
+        return recording.transcription
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TranscriptionView(
-                transcribedText: recording.transcription, isExpanded: $showTranscription
-            )
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
+            // Status indicator for pending/processing recordings
+            if isPending {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Show source filename
+                    if let sourceFileName = recording.sourceFileName {
+                        Text(sourceFileName)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    
+                    HStack(spacing: 6) {
+                        if recording.status == .pending {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                           
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
+                                
+                                Circle()
+                                    .trim(from: 0, to: CGFloat(recording.progress))
+                                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                            }
+                            .frame(width: 16, height: 16)
+
+                             Text("\(Int(recording.progress * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text(statusText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
+            
+            // Transcription content - same style for all states
+            if recording.status == .failed {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        Text("Transcription failed")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    
+                    if !recording.transcription.isEmpty {
+                        Text(recording.transcription)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, isPending ? 4 : 8)
+            } else if !displayText.isEmpty {
+                TranscriptionView(
+                    transcribedText: displayText, isExpanded: $showTranscription
+                )
+                .padding(.horizontal, 4)
+                .padding(.top, isPending ? 4 : 8)
+            } else if !isPending {
+                // Completed but empty transcription
+                Text("No speech detected")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+            }
 
             Divider()
                 .padding(.horizontal, 12)
@@ -499,7 +638,7 @@ struct RecordingRow: View {
                 Spacer()
 
                 HStack(spacing: 16) {
-                    if isHovered || isPlaying {
+                    if !isPending && recording.status != .failed && (isHovered || isPlaying) {
                         Button(action: {
                             if isPlaying {
                                 audioRecorder.stopPlaying()
@@ -526,14 +665,14 @@ struct RecordingRow: View {
                         }
                         .buttonStyle(.plain)
                         .help("Copy entire text")
-
+                    }
+                    
+                    if isHovered || isPlaying || isPending || recording.status == .failed {
                         Button(action: {
                             if isPlaying {
                                 audioRecorder.stopPlaying()
                             }
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                recordingStore.deleteRecording(recording)
-                            }
+                            recordingStore.deleteRecording(recording)
                         }) {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 18))
@@ -542,7 +681,6 @@ struct RecordingRow: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .transition(.opacity)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -551,12 +689,9 @@ struct RecordingRow: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
         .padding(.vertical, 4)
-        .transition(.scale.combined(with: .opacity))
     }
 }
 
@@ -572,23 +707,40 @@ struct TranscriptionView: View {
         VStack(alignment: .leading, spacing: 8) {
             Group {
                 if isExpanded {
-                    TextEditor(text: .constant(transcribedText))
-                        .font(.body)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 100, maxHeight: 200)
-                        .scrollContentBackground(.hidden)
-                } else {
-                    Text(transcribedText)
-                        .font(.body)
-                        .lineLimit(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if hasMoreLines {
-                                isExpanded.toggle()
+                    ScrollView {
+                        Text(transcribedText)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 200)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(
+                        TapGesture()
+                            .onEnded {
+                                if hasMoreLines {
+                                    isExpanded.toggle()
+                                }
                             }
+                    )
+                } else {
+                    if hasMoreLines {
+                        Button(action: { isExpanded.toggle() }) {
+                            Text(transcribedText)
+                                .font(.body)
+                                .lineLimit(3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                                .foregroundColor(.primary)
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(transcribedText)
+                            .font(.body)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .padding(8)

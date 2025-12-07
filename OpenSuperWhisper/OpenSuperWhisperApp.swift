@@ -41,6 +41,14 @@ struct OpenSuperWhisperApp: App {
     }
 }
 
+extension OpenSuperWhisperApp {
+    static func startTranscriptionQueue() {
+        Task { @MainActor in
+            TranscriptionQueue.shared.startProcessingQueue()
+        }
+    }
+}
+
 class AppState: ObservableObject {
     @Published var hasCompletedOnboarding: Bool {
         didSet {
@@ -67,6 +75,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             
             window.delegate = self
         }
+        
+        OpenSuperWhisperApp.startTranscriptionQueue()
     }
     
     private func setupStatusBarItem() {
