@@ -330,14 +330,8 @@ class TranscriptionService: ObservableObject {
         return (cleanedText, latestTimestamp)
     }
     
-    // Make this method nonisolated to be callable from any context
-    nonisolated func createContext() -> MyWhisperContext? {
-        guard let modelPath = AppPreferences.shared.selectedModelPath else {
-            return nil
-        }
-        
-        let params = WhisperContextParams()
-        return MyWhisperContext.initFromFile(path: modelPath, params: params)
+    func getContext() -> MyWhisperContext? {
+        return context
     }
     
     nonisolated func convertAudioToPCM(fileURL: URL, progressCallback: @escaping @Sendable (Float) -> Void) async throws -> [Float]? {

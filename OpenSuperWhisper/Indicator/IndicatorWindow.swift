@@ -27,14 +27,16 @@ class IndicatorViewModel: ObservableObject {
     
     private let recordingStore: RecordingStore
     private let transcriptionService: TranscriptionService
+    private let transcriptionQueue: TranscriptionQueue
     
     init() {
         self.recordingStore = RecordingStore.shared
         self.transcriptionService = TranscriptionService.shared
+        self.transcriptionQueue = TranscriptionQueue.shared
     }
     
     var isTranscriptionBusy: Bool {
-        transcriptionService.isTranscribing
+        transcriptionService.isTranscribing || transcriptionQueue.isProcessing
     }
     
     func showBusyMessage() {
@@ -49,7 +51,7 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func startRecording() {
-        if transcriptionService.isTranscribing {
+        if isTranscriptionBusy {
             showBusyMessage()
             return
         }
@@ -62,7 +64,7 @@ class IndicatorViewModel: ObservableObject {
     func startDecoding() {
         stopBlinking()
         
-        if transcriptionService.isTranscribing {
+        if isTranscriptionBusy {
             recorder.cancelRecording()
             showBusyMessage()
             return

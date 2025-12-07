@@ -52,9 +52,13 @@ class TranscriptionQueue: ObservableObject {
     func startProcessingQueue() {
         guard !isProcessing else { return }
         
+        isProcessing = true
+        
         processingTask = Task {
             await cleanupMissingFiles()
             await processQueue()
+            isProcessing = false
+            processingTask = nil
         }
     }
     
@@ -105,7 +109,7 @@ class TranscriptionQueue: ObservableObject {
     }
     
     private func processQueue() async {
-        isProcessing = true
+        // isProcessing is already set to true in startProcessingQueue
         
         while true {
             let pendingRecordings = recordingStore.getPendingRecordings()
@@ -119,7 +123,6 @@ class TranscriptionQueue: ObservableObject {
             currentRecordingId = nil
         }
         
-        isProcessing = false
     }
     
     private func processRecording(_ recording: Recording) async {
@@ -248,12 +251,13 @@ class TranscriptionQueue: ObservableObject {
         resetAbortFlag()
         let abortFlagForTask = abortFlag
         
+        guard let contextForTask = transcriptionService.getContext() else {
+            throw TranscriptionError.contextInitializationFailed
+        }
+        
         return try await withCheckedThrowingContinuation { continuation in
             Task.detached(priority: .userInitiated) { [self] in
-                guard let context = await self.transcriptionService.createContext() else {
-                    continuation.resume(throwing: TranscriptionError.contextInitializationFailed)
-                    return
-                }
+                let context = contextForTask
                 
                 let nThreads = 4
                 
@@ -305,7 +309,7 @@ class TranscriptionQueue: ObservableObject {
                     let info = userData.assumingMemoryBound(to: SegmentCallbackInfo.self).pointee
                     
                     let nSegments = Int(whisper_full_n_segments(ctx))
-                    let startIdx = max(0, nSegments - Int(n_new))
+                    let startIdx = 0
                     
                     var newText = ""
                     var latestTimestamp: Float = 0
@@ -328,15 +332,13 @@ class TranscriptionQueue: ObservableObject {
                         
                         Task { @MainActor in
                             let store = RecordingStore.shared
-                            if let current = store.recordings.first(where: { $0.id == recordingId }) {
-                                let updatedText = current.transcription == "Starting transcription..." ? cleanedText : current.transcription + " " + cleanedText
-                                store.updateRecordingProgressOnly(
-                                    recordingId,
-                                    transcription: updatedText,
-                                    progress: normalizedProgress,
-                                    status: .transcribing
-                                )
-                            }
+                            // Update directly without checking local cache
+                            store.updateRecordingProgressOnly(
+                                recordingId,
+                                transcription: cleanedText,
+                                progress: normalizedProgress,
+                                status: .transcribing
+                            )
                         }
                     }
                 }

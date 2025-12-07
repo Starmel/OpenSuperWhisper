@@ -17,12 +17,97 @@ class ContentViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
     @Published var transcriptionService = TranscriptionService.shared
+    @Published var transcriptionQueue = TranscriptionQueue.shared
     @Published var recordingStore = RecordingStore.shared
+    @Published var recordings: [Recording] = []
+    @Published var isLoadingMore = false
+    @Published var canLoadMore = true
     @Published var recordingDuration: TimeInterval = 0
-
+    
+    private var currentPage = 0
+    private let pageSize = 100
+    private var currentSearchQuery = ""
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
+    
+    func loadInitialData() {
+        currentSearchQuery = ""
+        currentPage = 0
+        canLoadMore = true
+        recordings = []
+        loadMore()
+    }
+
+    func loadMore() {
+        guard !isLoadingMore && canLoadMore else { return }
+        isLoadingMore = true
+        
+        // Capture current state for async task
+        let page = currentPage
+        let limit = pageSize
+        let query = currentSearchQuery
+        let offset = page * limit
+        
+        
+        Task {
+            let newRecordings: [Recording]
+            if query.isEmpty {
+                newRecordings = try await recordingStore.fetchRecordings(limit: limit, offset: offset)
+            } else {
+                newRecordings = await recordingStore.searchRecordingsAsync(query: query, limit: limit, offset: offset)
+            }
+            
+            
+            await MainActor.run {
+                // Ensure we are still consistent with the request (basic check)
+                guard self.currentSearchQuery == query else { 
+                    return 
+                }
+                
+                if page == 0 {
+                    self.recordings = newRecordings
+                } else {
+                    self.recordings.append(contentsOf: newRecordings)
+                }
+                
+                if newRecordings.count < limit {
+                    self.canLoadMore = false
+                } else {
+                    self.currentPage += 1
+                }
+                self.isLoadingMore = false
+            }
+        }
+    }
+    
+    func search(query: String) {
+        currentSearchQuery = query
+        currentPage = 0
+        canLoadMore = true
+        recordings = []
+        loadMore()
+    }
+    
+    func handleProgressUpdate(id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
+        if let index = recordings.firstIndex(where: { $0.id == id }) {
+            recordings[index].transcription = transcription
+            recordings[index].progress = progress
+            recordings[index].status = status
+        }
+    }
+    
+    func deleteRecording(_ recording: Recording) {
+        recordingStore.deleteRecording(recording)
+        if let index = recordings.firstIndex(where: { $0.id == recording.id }) {
+            recordings.remove(at: index)
+        }
+    }
+    
+    func deleteAllRecordings() {
+        recordingStore.deleteAllRecordings()
+        recordings.removeAll()
+    }
 
     var isRecording: Bool {
         recorder.isRecording
@@ -89,7 +174,7 @@ class ContentViewModel: ObservableObject {
 
                     // Save the recording to store
                     await MainActor.run {
-                        self.recordingStore.addRecording(Recording(
+                        let newRecording = Recording(
                             id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
@@ -98,7 +183,12 @@ class ContentViewModel: ObservableObject {
                             status: .completed,
                             progress: 1.0,
                             sourceFileURL: nil
-                        ))
+                        )
+                        self.recordingStore.addRecording(newRecording)
+                        // Prepend to the list if not searching or if it matches (simplification: just prepend)
+                        if self.currentSearchQuery.isEmpty {
+                            self.recordings.insert(newRecording, at: 0)
+                        }
                     }
 
                     print("Transcription result: \(text)")
@@ -143,24 +233,15 @@ struct ContentView: View {
     @State private var isSettingsPresented = false
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
-    @State private var searchResults: [Recording]? = nil
     @State private var showDeleteConfirmation = false
     @State private var searchTask: Task<Void, Never>? = nil
 
-    private var filteredRecordings: [Recording] {
-        if debouncedSearchText.isEmpty {
-            return viewModel.recordingStore.recordings
-        } else {
-            return searchResults ?? viewModel.recordingStore.recordings
-        }
-    }
-    
     private func performSearch(_ query: String) {
         searchTask?.cancel()
         
         if query.isEmpty {
             debouncedSearchText = ""
-            searchResults = nil
+            viewModel.search(query: "")
             return
         }
         
@@ -169,12 +250,10 @@ struct ContentView: View {
             
             guard !Task.isCancelled else { return }
             
-            let results = await viewModel.recordingStore.searchRecordingsAsync(query: query)
-            
-            guard !Task.isCancelled else { return }
-            
             self.debouncedSearchText = query
-            self.searchResults = results
+            await MainActor.run {
+                viewModel.search(query: query)
+            }
         }
     }
 
@@ -201,8 +280,8 @@ struct ContentView: View {
                             Button(action: {
                                 searchText = ""
                                 debouncedSearchText = ""
-                                searchResults = nil
                                 searchTask?.cancel()
+                                viewModel.search(query: "")
                             }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.secondary)
@@ -217,7 +296,7 @@ struct ContentView: View {
                     .padding([.horizontal, .top])
 
                     ScrollView(showsIndicators: false) {
-                        if filteredRecordings.isEmpty {
+                        if viewModel.recordings.isEmpty {
                             VStack(spacing: 16) {
                                 if !debouncedSearchText.isEmpty {
                                     // Show "no results" for search
@@ -284,16 +363,29 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                         } else {
                             LazyVStack(spacing: 8) {
-                                ForEach(filteredRecordings) { recording in
-                                    RecordingRow(recording: recording)
-                                        .id(recording.id)
+                                ForEach(viewModel.recordings) { recording in
+                                    RecordingRow(recording: recording, onDelete: {
+                                        viewModel.deleteRecording(recording)
+                                    })
+                                    .id(recording.id)
+                                    .onAppear {
+                                        if recording == viewModel.recordings.last {
+                                            viewModel.loadMore()
+                                        }
+                                    }
+                                }
+                                
+                                if viewModel.isLoadingMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.top, 16)
                         }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: filteredRecordings.count)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.recordings.count)
                     .animation(.easeInOut(duration: 0.2), value: debouncedSearchText.isEmpty)
                     .overlay(alignment: .top) {
                         Rectangle()
@@ -331,7 +423,7 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
@@ -368,7 +460,7 @@ struct ContentView: View {
                             Spacer()
 
                             // Кнопки управления
-                            if !viewModel.recordingStore.recordings.isEmpty {
+                            if !viewModel.recordings.isEmpty {
                                 Button(action: {
                                     showDeleteConfirmation = true
                                 }) {
@@ -382,7 +474,7 @@ struct ContentView: View {
                                     titleVisibility: .visible
                                 ) {
                                     Button("Delete All", role: .destructive) {
-                                        viewModel.recordingStore.deleteAllRecordings()
+                                        viewModel.deleteAllRecordings()
                                     }
                                     Button("Cancel", role: .cancel) {}
                                 } message: {
@@ -406,6 +498,28 @@ struct ContentView: View {
         }
         .frame(minWidth: 400, idealWidth: 400)
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            viewModel.loadInitialData()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: RecordingStore.recordingProgressDidUpdateNotification)) { notification in
+            guard let userInfo = notification.userInfo,
+                  let id = userInfo["id"] as? UUID,
+                  let transcription = userInfo["transcription"] as? String,
+                  let progress = userInfo["progress"] as? Float,
+                  let status = userInfo["status"] as? RecordingStatus else { return }
+            
+            viewModel.handleProgressUpdate(
+                id: id,
+                transcription: transcription,
+                progress: progress,
+                status: status
+            )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: RecordingStore.recordingsDidUpdateNotification)) { _ in
+            // For now, reload if we are at the top or just reload everything.
+            // Ideally we should intelligently merge, but for simplicity:
+            viewModel.loadInitialData()
+        }
         .overlay {
             let isPermissionsGranted = permissionsManager.isMicrophonePermissionGranted
                 && permissionsManager.isAccessibilityPermissionGranted
@@ -499,8 +613,8 @@ struct PermissionRow: View {
 
 struct RecordingRow: View {
     let recording: Recording
+    let onDelete: () -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
-    @StateObject private var recordingStore = RecordingStore.shared
     @State private var showTranscription = false
     @State private var isHovered = false
 
@@ -672,7 +786,7 @@ struct RecordingRow: View {
                             if isPlaying {
                                 audioRecorder.stopPlaying()
                             }
-                            recordingStore.deleteRecording(recording)
+                            onDelete()
                         }) {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 18))
