@@ -369,7 +369,7 @@ struct ContentView: View {
                                     })
                                     .id(recording.id)
                                     .onAppear {
-                                        if recording == viewModel.recordings.last {
+                                        if recording.id == viewModel.recordings.last?.id {
                                             viewModel.loadMore()
                                         }
                                     }
