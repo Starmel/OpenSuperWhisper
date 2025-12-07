@@ -60,6 +60,10 @@ class ContentViewModel: ObservableObject {
             
             
             await MainActor.run {
+                defer {
+                    self.isLoadingMore = false
+                }
+                
                 // Ensure we are still consistent with the request (basic check)
                 guard self.currentSearchQuery == query else { 
                     return 
@@ -76,7 +80,6 @@ class ContentViewModel: ObservableObject {
                 } else {
                     self.currentPage += 1
                 }
-                self.isLoadingMore = false
             }
         }
     }
@@ -250,8 +253,8 @@ struct ContentView: View {
             
             guard !Task.isCancelled else { return }
             
-            self.debouncedSearchText = query
             await MainActor.run {
+                self.debouncedSearchText = query
                 viewModel.search(query: query)
             }
         }
