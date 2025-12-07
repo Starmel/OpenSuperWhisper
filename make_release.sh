@@ -14,12 +14,38 @@ if [[ -z "$CODE_SIGN_IDENTITY" ]]; then
 fi
 
 if [[ -z "$GITHUB_TOKEN" ]]; then
-    echo "⚠️ Warning: No GitHub token provided. Will create tag but not GitHub release."
-    echo "To create GitHub release automatically, provide token as 3rd argument."
+    echo ""
+    echo "⚠️  GitHub token not found in environment or arguments"
+    echo ""
+    read -p "Enter GitHub token (or press Enter to skip GitHub release): " INPUT_TOKEN
+    if [[ -n "$INPUT_TOKEN" ]]; then
+        GITHUB_TOKEN="$INPUT_TOKEN"
+        echo "✅ GitHub token provided"
+    else
+        echo ""
+        echo "⚠️  WARNING: Proceeding without GitHub token"
+        echo "   - Git tag will be created and pushed"
+        echo "   - GitHub release will NOT be created automatically"
+        echo "   - DMG will NOT be uploaded to GitHub"
+        echo ""
+        read -p "Continue without GitHub release? (y/N): " CONTINUE
+        if [[ "$CONTINUE" != "y" && "$CONTINUE" != "Y" ]]; then
+            echo "❌ Aborted by user"
+            exit 1
+        fi
+    fi
+else
+    echo "✅ Using GitHub token from environment variable"
 fi
 
+echo ""
 echo "🚀 Making release for OpenSuperWhisper v${NEW_VERSION}"
 echo "   Code signing identity: ${CODE_SIGN_IDENTITY}"
+if [[ -n "$GITHUB_TOKEN" ]]; then
+    echo "   GitHub release: ✅ Enabled"
+else
+    echo "   GitHub release: ❌ Disabled (no token)"
+fi
 echo ""
 
 # # Update version in Xcode project

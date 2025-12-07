@@ -23,6 +23,7 @@ class ContentViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var canLoadMore = true
     @Published var recordingDuration: TimeInterval = 0
+    @Published var microphoneService = MicrophoneService.shared
     
     private var currentPage = 0
     private let pageSize = 100
@@ -406,7 +407,6 @@ struct ContentView: View {
                     }
 
                     VStack(spacing: 16) {
-                        // Кнопка записи по центру
                         Button(action: {
                             if viewModel.isRecording {
                                 viewModel.startDecoding()
@@ -415,25 +415,23 @@ struct ContentView: View {
                             }
                         }) {
                             if viewModel.state == .decoding {
-                                // Show progress indicator ONLY when transcribing
                                 ProgressView()
-                                    .scaleEffect(1.0) // Smaller size
+                                    .scaleEffect(1.0)
                                     .frame(width: 48, height: 48)
                                     .contentTransition(.symbolEffect(.replace))
                             } else {
-                                // Show regular record button for idle state AND recording
                                 MainRecordButton(isRecording: viewModel.isRecording)
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
 
                         // Нижняя панель с подсказкой и кнопками управления
-                        HStack {
+                        HStack(alignment: .bottom) {
                             VStack(alignment: .leading, spacing: 8) {
                                 // Подсказка о шорткате
                                 HStack(spacing: 6) {
@@ -462,37 +460,50 @@ struct ContentView: View {
 
                             Spacer()
 
-                            // Кнопки управления
-                            if !viewModel.recordings.isEmpty {
+                            HStack(spacing: 12) {
+                                MicrophonePickerIconView(microphoneService: viewModel.microphoneService)
+                                
+                                if !viewModel.recordings.isEmpty {
+                                    Button(action: {
+                                        showDeleteConfirmation = true
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .font(.title3)
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 32, height: 32)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Delete all recordings")
+                                    .confirmationDialog(
+                                        "Delete All Recordings",
+                                        isPresented: $showDeleteConfirmation,
+                                        titleVisibility: .visible
+                                    ) {
+                                        Button("Delete All", role: .destructive) {
+                                            viewModel.deleteAllRecordings()
+                                        }
+                                        Button("Cancel", role: .cancel) {}
+                                    } message: {
+                                        Text("Are you sure you want to delete all recordings? This action cannot be undone.")
+                                    }
+                                    .interactiveDismissDisabled()
+                                }
+                                
                                 Button(action: {
-                                    showDeleteConfirmation = true
+                                    isSettingsPresented.toggle()
                                 }) {
-                                    Text("Clear All")
+                                    Image(systemName: "gear")
+                                        .font(.title3)
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 32, height: 32)
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
-                                .padding(.trailing, 16)
-                                .confirmationDialog(
-                                    "Delete All Recordings",
-                                    isPresented: $showDeleteConfirmation,
-                                    titleVisibility: .visible
-                                ) {
-                                    Button("Delete All", role: .destructive) {
-                                        viewModel.deleteAllRecordings()
-                                    }
-                                    Button("Cancel", role: .cancel) {}
-                                } message: {
-                                    Text("Are you sure you want to delete all recordings? This action cannot be undone.")
-                                }
-                                .interactiveDismissDisabled()
-
+                                .help("Settings")
                             }
-                            Button(action: {
-                                isSettingsPresented.toggle()
-                            }) {
-                                Image(systemName: "gear")
-                                    .font(.title2)
-                            }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding()
@@ -874,6 +885,90 @@ struct TranscriptionView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
             }
+        }
+    }
+}
+
+struct MicrophonePickerIconView: View {
+    @ObservedObject var microphoneService: MicrophoneService
+    @State private var showMenu = false
+    
+    private var builtInMicrophones: [MicrophoneService.AudioDevice] {
+        microphoneService.availableMicrophones.filter { $0.isBuiltIn }
+    }
+    
+    private var externalMicrophones: [MicrophoneService.AudioDevice] {
+        microphoneService.availableMicrophones.filter { !$0.isBuiltIn }
+    }
+    
+    var body: some View {
+        Button(action: {
+            showMenu.toggle()
+        }) {
+            Image(systemName: microphoneService.availableMicrophones.isEmpty ? "mic.slash" : "mic.fill")
+                .font(.title3)
+                .foregroundColor(.secondary)
+                .frame(width: 32, height: 32)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+        .help(microphoneService.currentMicrophone?.displayName ?? "Select microphone")
+        .popover(isPresented: $showMenu, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 0) {
+                if microphoneService.availableMicrophones.isEmpty {
+                    Text("No microphones available")
+                        .foregroundColor(.secondary)
+                        .padding()
+                } else {
+                    ForEach(builtInMicrophones) { microphone in
+                        Button(action: {
+                            microphoneService.selectMicrophone(microphone)
+                            showMenu = false
+                        }) {
+                            HStack {
+                                Text(microphone.displayName)
+                                Spacer()
+                                if let current = microphoneService.currentMicrophone,
+                                   current.id == microphone.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    if !builtInMicrophones.isEmpty && !externalMicrophones.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+                    
+                    ForEach(externalMicrophones) { microphone in
+                        Button(action: {
+                            microphoneService.selectMicrophone(microphone)
+                            showMenu = false
+                        }) {
+                            HStack {
+                                Text(microphone.displayName)
+                                Spacer()
+                                if let current = microphoneService.currentMicrophone,
+                                   current.id == microphone.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(minWidth: 200)
+            .padding(.vertical, 8)
         }
     }
 }

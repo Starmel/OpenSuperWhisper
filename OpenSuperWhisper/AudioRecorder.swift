@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import SwiftUI
 import AppKit
+import CoreAudio
 
 class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -15,6 +16,7 @@ class AudioRecorder: NSObject, ObservableObject {
     private let temporaryDirectory: URL
     private var currentRecordingURL: URL?
     private var notificationObserver: Any?
+    private var microphoneChangeObserver: Any?
 
     // MARK: - Singleton Instance
 
@@ -33,29 +35,20 @@ class AudioRecorder: NSObject, ObservableObject {
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = microphoneChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     private func setup() {
-        // Check for audio input devices
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.microphone, .external],
-            mediaType: .audio,
-            position: .unspecified
-        )
-        canRecord = !discoverySession.devices.isEmpty
+        updateCanRecordStatus()
         
-        // Add observer for device connection/disconnection
         notificationObserver = NotificationCenter.default.addObserver(
             forName: .AVCaptureDeviceWasConnected,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            let session = AVCaptureDevice.DiscoverySession(
-                deviceTypes: [.microphone, .external],
-                mediaType: .audio,
-                position: .unspecified
-            )
-            self?.canRecord = !session.devices.isEmpty
+            self?.updateCanRecordStatus()
         }
         
         NotificationCenter.default.addObserver(
@@ -63,13 +56,20 @@ class AudioRecorder: NSObject, ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            let session = AVCaptureDevice.DiscoverySession(
-                deviceTypes: [.microphone, .external],
-                mediaType: .audio,
-                position: .unspecified
-            )
-            self?.canRecord = !session.devices.isEmpty
+            self?.updateCanRecordStatus()
         }
+        
+        microphoneChangeObserver = NotificationCenter.default.addObserver(
+            forName: .microphoneDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateCanRecordStatus()
+        }
+    }
+    
+    private func updateCanRecordStatus() {
+        canRecord = MicrophoneService.shared.getActiveMicrophone() != nil
     }
     
     private func createTemporaryDirectoryIfNeeded() {
@@ -112,7 +112,6 @@ class AudioRecorder: NSObject, ObservableObject {
         if isRecording {
             print("stop recording while recording")
             _ = stopRecording()
-            // return
         }
         
         if AppPreferences.shared.playSoundOnRecordStart {
@@ -126,6 +125,17 @@ class AudioRecorder: NSObject, ObservableObject {
         
         print("start record file to \(fileURL)")
         
+        #if os(macOS)
+        if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
+            _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
+            print("Set system default input to: \(activeMic.displayName)")
+        }
+        #endif
+        
+        startRecordingWithRecorder(fileURL: fileURL)
+    }
+    
+    private func startRecordingWithRecorder(fileURL: URL) {
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
@@ -140,6 +150,8 @@ class AudioRecorder: NSObject, ObservableObject {
             audioRecorder?.delegate = self
             audioRecorder?.record()
             isRecording = true
+            
+            print("Recording started successfully")
         } catch {
             print("Failed to start recording: \(error)")
             currentRecordingURL = nil
@@ -150,12 +162,10 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         isRecording = false
         
-        // Check if recording duration is less than 1 second
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
            duration < 1.0
         {
-            // Remove recordings shorter than 1 second
             try? FileManager.default.removeItem(at: url)
             currentRecordingURL = nil
             return nil

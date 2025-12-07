@@ -13,6 +13,22 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+echo "Building autocorrect-swift..."
+mkdir -p build
+cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml
+cp ./asian-autocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib ./build/libautocorrect_swift.dylib
+install_name_tool -id "@rpath/libautocorrect_swift.dylib" ./build/libautocorrect_swift.dylib
+codesign --force --sign - ./build/libautocorrect_swift.dylib
+if [[ $? -ne 0 ]]; then
+    echo "Cargo build failed!"
+    exit 1
+fi
+
+echo "Copying libomp.dylib..."
+cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
+install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
+codesign --force --sign - ./build/libomp.dylib
+
 # Build the app
 echo "Building OpenSuperWhisper..."
 BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)

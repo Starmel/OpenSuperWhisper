@@ -28,6 +28,7 @@ Or from [github releases page](https://github.com/Starmel/OpenSuperWhisper/relea
 - 🔄 Optional translation to English (for better translation add initial prompt with english sentences)
 - 💾 Local storage of recordings with transcriptions
 - 🎛️ Advanced transcription settings (not tested)
+- 🇯🇵🇨🇳🇰🇷 Support for Asian languages with [auto-correct](https://github.com/huacnlee/autocorrect)
 
 ## Requirements
 
@@ -47,7 +48,8 @@ To build locally, you'll need:
     git clone git@github.com:Starmel/OpenSuperWhisper.git
     cd OpenSuperWhisper
     git submodule update --init --recursive
-    brew install cmake
+    brew install cmake libomp rust ruby
+    gem install xcpretty
     ./run.sh build
 
 In case of problems, consult `.github/workflows/build.yml` which is our CI workflow
