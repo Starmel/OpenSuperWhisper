@@ -84,9 +84,6 @@ class RecordingStore: ObservableObject {
                 at: appDirectory, withIntermediateDirectories: true)
             dbQueue = try DatabaseQueue(path: dbPath.path)
             try setupDatabase()
-            Task {
-                await loadRecordings()
-            }
         } catch {
             fatalError("Failed to setup database: \(error)")
         }
@@ -128,17 +125,6 @@ class RecordingStore: ObservableObject {
         
         try migrator.migrate(dbQueue)
     }
-
-    func loadRecordings() async {
-        do {
-            let loadedRecordings = try await fetchAllRecordings()
-            await MainActor.run {
-                self.recordings = loadedRecordings
-            }
-        } catch {
-            print("Failed to load recordings: \(error)")
-        }
-    }
     
     private nonisolated func fetchAllRecordings() async throws -> [Recording] {
         try await dbQueue.read { db in
@@ -148,6 +134,15 @@ class RecordingStore: ObservableObject {
         }
     }
     
+    nonisolated func fetchRecordings(limit: Int, offset: Int) async throws -> [Recording] {
+        try await dbQueue.read { db in
+            try Recording
+                .order(Recording.Columns.timestamp.desc)
+                .limit(limit, offset: offset)
+                .fetchAll(db)
+        }
+    }
+
     func getPendingRecordings() -> [Recording] {
         do {
             return try dbQueue.read { db in
@@ -162,11 +157,15 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
+
     func addRecording(_ recording: Recording) {
         Task {
             do {
                 try await insertRecording(recording)
-                await loadRecordings()
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+                }
             } catch {
                 print("Failed to add recording: \(error)")
             }
@@ -175,7 +174,9 @@ class RecordingStore: ObservableObject {
     
     func addRecordingSync(_ recording: Recording) async throws {
         try await insertRecording(recording)
-        await loadRecordings()
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+        }
     }
     
     private nonisolated func insertRecording(_ recording: Recording) async throws {
@@ -188,7 +189,9 @@ class RecordingStore: ObservableObject {
         Task {
             do {
                 try await updateRecordingInDB(recording)
-                await loadRecordings()
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+                }
             } catch {
                 print("Failed to update recording: \(error)")
             }
@@ -197,7 +200,9 @@ class RecordingStore: ObservableObject {
     
     func updateRecordingSync(_ recording: Recording) async throws {
         try await updateRecordingInDB(recording)
-        await loadRecordings()
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+        }
     }
     
     func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
@@ -205,6 +210,8 @@ class RecordingStore: ObservableObject {
             await updateRecordingProgressOnlySync(id, transcription: transcription, progress: progress, status: status)
         }
     }
+    
+    static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
     
     func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) async {
         do {
@@ -224,6 +231,15 @@ class RecordingStore: ObservableObject {
                 updated.status = status
                 recordings[index] = updated
             }
+            
+            await MainActor.run {
+                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: [
+                    "id": id,
+                    "transcription": transcription,
+                    "progress": progress,
+                    "status": status
+                ])
+            }
         } catch {
             print("Failed to update recording progress: \(error)")
         }
@@ -236,7 +252,6 @@ class RecordingStore: ObservableObject {
     }
 
     func deleteRecording(_ recording: Recording) {
-        // If recording is pending/processing, cancel it first
         if recording.isPending {
             TranscriptionQueue.shared.cancelRecording(recording.id)
         }
@@ -244,12 +259,12 @@ class RecordingStore: ObservableObject {
         Task {
             do {
                 try await deleteRecordingFromDB(recording)
-                // Only delete the app's converted/cached file, NOT the user's source file
                 try? FileManager.default.removeItem(at: recording.url)
-                await loadRecordings()
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+                }
             } catch {
                 print("Failed to delete recording: \(error)")
-                await loadRecordings()
             }
         }
     }
@@ -263,11 +278,14 @@ class RecordingStore: ObservableObject {
     func deleteAllRecordings() {
         Task {
             do {
-                for recording in recordings {
+                let allRecordings = try await fetchAllRecordings()
+                for recording in allRecordings {
                     try? FileManager.default.removeItem(at: recording.url)
                 }
                 try await deleteAllRecordingsFromDB()
-                await loadRecordings()
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+                }
             } catch {
                 print("Failed to delete all recordings: \(error)")
             }
@@ -286,6 +304,7 @@ class RecordingStore: ObservableObject {
                 try Recording
                     .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
                     .order(Recording.Columns.timestamp.desc)
+                    .limit(100)
                     .fetchAll(db)
             }
         } catch {
@@ -294,12 +313,13 @@ class RecordingStore: ObservableObject {
         }
     }
     
-    nonisolated func searchRecordingsAsync(query: String) async -> [Recording] {
+    nonisolated func searchRecordingsAsync(query: String, limit: Int = 100, offset: Int = 0) async -> [Recording] {
         do {
             return try await dbQueue.read { db in
                 try Recording
                     .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
                     .order(Recording.Columns.timestamp.desc)
+                    .limit(limit, offset: offset)
                     .fetchAll(db)
             }
         } catch {
