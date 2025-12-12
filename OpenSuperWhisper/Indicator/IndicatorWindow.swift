@@ -5,6 +5,7 @@ enum RecordingState {
     case idle
     case recording
     case decoding
+    case busy
 }
 
 @MainActor
@@ -22,44 +23,76 @@ class IndicatorViewModel: ObservableObject {
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
+    private var hideTimer: Timer?
     
-    // Get a reference to the RecordingStore at initialization time
     private let recordingStore: RecordingStore
+    private let transcriptionService: TranscriptionService
+    private let transcriptionQueue: TranscriptionQueue
     
     init() {
         self.recordingStore = RecordingStore.shared
+        self.transcriptionService = TranscriptionService.shared
+        self.transcriptionQueue = TranscriptionQueue.shared
+    }
+    
+    var isTranscriptionBusy: Bool {
+        transcriptionService.isTranscribing || transcriptionQueue.isProcessing
+    }
+    
+    func showBusyMessage() {
+        state = .busy
+        
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.delegate?.didFinishDecoding()
+            }
+        }
     }
     
     func startRecording() {
+        if isTranscriptionBusy {
+            showBusyMessage()
+            return
+        }
+        
         state = .recording
         startBlinking()
         recorder.startRecording()
     }
     
     func startDecoding() {
-        state = .decoding
         stopBlinking()
         
+        if isTranscriptionBusy {
+            recorder.cancelRecording()
+            showBusyMessage()
+            return
+        }
+        
+        state = .decoding
+        
         if let tempURL = recorder.stopRecording() {
-            // Get a reference to the transcription service
-            let transcription = TranscriptionService.shared
-            
             Task { [weak self] in
                 guard let self = self else { return }
                 
                 do {
                     print("start decoding...")
-                    let text = try await transcription.transcribeAudio(url: tempURL, settings: Settings())
+                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
                     
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                    let recordingId = UUID()
                     let finalURL = Recording(
-                        id: UUID(),
+                        id: recordingId,
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: 0 // TODO: Get actual duration
+                        duration: 0,
+                        status: .completed,
+                        progress: 1.0,
+                        sourceFileURL: nil
                     ).url
                     
                     // Move the temporary recording to final location
@@ -68,11 +101,14 @@ class IndicatorViewModel: ObservableObject {
                     // Save the recording to store
                     await MainActor.run {
                         self.recordingStore.addRecording(Recording(
-                            id: UUID(),
+                            id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
-                            duration: 0 // TODO: Get actual duration
+                            duration: 0,
+                            status: .completed,
+                            progress: 1.0,
+                            sourceFileURL: nil
                         ))
                     }
                     
@@ -120,6 +156,8 @@ class IndicatorViewModel: ObservableObject {
     }
 
     func cancelRecording() {
+        hideTimer?.invalidate()
+        hideTimer = nil
         recorder.cancelRecording()
     }
 
@@ -191,6 +229,18 @@ struct IndicatorWindow: View {
                     
                     Text("Transcribing...")
                         .font(.system(size: 13, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+            case .busy:
+                HStack(spacing: 8) {
+                    Image(systemName: "hourglass")
+                        .foregroundColor(.orange)
+                        .frame(width: 24)
+                    
+                    Text("Processing...")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.orange)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
