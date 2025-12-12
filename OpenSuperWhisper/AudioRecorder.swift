@@ -89,8 +89,6 @@ class AudioRecorder: NSObject, ObservableObject {
             return
         }
         
-        print("Found notification sound at: \(soundURL)")
-        
         if let sound = NSSound(contentsOf: soundURL, byReference: false) {
             // Set maximum volume to ensure it's audible
             sound.volume = 0.3
