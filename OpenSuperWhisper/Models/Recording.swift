@@ -244,7 +244,17 @@ class RecordingStore: ObservableObject {
             print("Failed to update recording progress: \(error)")
         }
     }
-    
+
+    nonisolated func updateSourceFileURL(_ id: UUID, sourceURL: String) async throws {
+        try await dbQueue.write { db in
+            try Recording
+                .filter(Recording.Columns.id == id)
+                .updateAll(db, [
+                    Recording.Columns.sourceFileURL.set(to: sourceURL)
+                ])
+        }
+    }
+
     private nonisolated func updateRecordingInDB(_ recording: Recording) async throws {
         try await dbQueue.write { db in
             try recording.update(db)
