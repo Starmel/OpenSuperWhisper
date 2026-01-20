@@ -370,6 +370,10 @@ struct ContentView: View {
                                 ForEach(viewModel.recordings) { recording in
                                     RecordingRow(recording: recording, onDelete: {
                                         viewModel.deleteRecording(recording)
+                                    }, onRegenerate: {
+                                        Task {
+                                            await TranscriptionQueue.shared.requeueRecording(recording)
+                                        }
                                     })
                                     .id(recording.id)
                                     .onAppear {
@@ -396,8 +400,8 @@ struct ContentView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color(NSColor.windowBackgroundColor).opacity(1),
-                                        Color(NSColor.windowBackgroundColor).opacity(0)
+                                        Color(NSColor.underPageBackgroundColor).opacity(1),
+                                        Color(NSColor.underPageBackgroundColor).opacity(0)
                                     ]),
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -511,7 +515,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 400, idealWidth: 400)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color(NSColor.underPageBackgroundColor))
         .onAppear {
             viewModel.loadInitialData()
         }
@@ -628,6 +632,7 @@ struct PermissionRow: View {
 struct RecordingRow: View {
     let recording: Recording
     let onDelete: () -> Void
+    let onRegenerate: () -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
     @State private var showTranscription = false
     @State private var isHovered = false
@@ -794,7 +799,20 @@ struct RecordingRow: View {
                         .buttonStyle(.plain)
                         .help("Copy entire text")
                     }
-                    
+
+                    // Regenerate button - shows for completed and failed recordings on hover
+                    if (recording.status == .completed || recording.status == .failed) && isHovered {
+                        Button(action: {
+                            onRegenerate()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 18))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Regenerate transcription")
+                    }
+
                     if isHovered || isPlaying || isPending || recording.status == .failed {
                         Button(action: {
                             if isPlaying {
@@ -816,6 +834,10 @@ struct RecordingRow: View {
         }
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+        )
         .onHover { hovering in
             isHovered = hovering
         }
