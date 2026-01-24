@@ -18,12 +18,19 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
     var status: RecordingStatus
     var progress: Float
     var sourceFileURL: String?
+    
+    var isRegeneration: Bool = false
+    
+    enum CodingKeys: String, CodingKey {
+        case id, timestamp, fileName, transcription, duration, status, progress, sourceFileURL
+    }
 
     static func == (lhs: Recording, rhs: Recording) -> Bool {
         return lhs.id == rhs.id &&
                lhs.status == rhs.status &&
                lhs.progress == rhs.progress &&
-               lhs.transcription == rhs.transcription
+               lhs.transcription == rhs.transcription &&
+               lhs.isRegeneration == rhs.isRegeneration
     }
 
     static var recordingsDirectory: URL {
@@ -46,8 +53,6 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         guard let sourceFileURL = sourceFileURL else { return nil }
         return URL(fileURLWithPath: sourceFileURL).lastPathComponent
     }
-
-    // MARK: - Database Table Definition
 
     static let databaseTableName = "recordings"
 
@@ -157,6 +162,21 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    func getNextPendingRecording() -> Recording? {
+        do {
+            return try dbQueue.read { db in
+                try Recording
+                    .filter([RecordingStatus.pending.rawValue, RecordingStatus.converting.rawValue, RecordingStatus.transcribing.rawValue].contains(Recording.Columns.status))
+                    .order(Recording.Columns.timestamp.asc)
+                    .limit(1)
+                    .fetchOne(db)
+            }
+        } catch {
+            print("Failed to get next pending recording: \(error)")
+            return nil
+        }
+    }
+
     static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
 
     func addRecording(_ recording: Recording) {
@@ -213,9 +233,9 @@ class RecordingStore: ObservableObject {
     
     static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
     
-    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) async {
+    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
         do {
-            let updatedCount = try await dbQueue.write { db -> Int in
+            _ = try await dbQueue.write { db -> Int in
                 try Recording
                     .filter(Recording.Columns.id == id)
                     .updateAll(db, [
@@ -229,16 +249,24 @@ class RecordingStore: ObservableObject {
                 updated.transcription = transcription
                 updated.progress = progress
                 updated.status = status
+                if let isRegeneration = isRegeneration {
+                    updated.isRegeneration = isRegeneration
+                }
                 recordings[index] = updated
             }
             
+            var userInfo: [String: Any] = [
+                "id": id,
+                "transcription": transcription,
+                "progress": progress,
+                "status": status
+            ]
+            if let isRegeneration = isRegeneration {
+                userInfo["isRegeneration"] = isRegeneration
+            }
+            
             await MainActor.run {
-                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: [
-                    "id": id,
-                    "transcription": transcription,
-                    "progress": progress,
-                    "status": status
-                ])
+                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
             }
         } catch {
             print("Failed to update recording progress: \(error)")
@@ -252,6 +280,43 @@ class RecordingStore: ObservableObject {
                 .updateAll(db, [
                     Recording.Columns.sourceFileURL.set(to: sourceURL)
                 ])
+        }
+    }
+
+    func updateRecordingStatusOnly(_ id: UUID, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
+        do {
+            _ = try await dbQueue.write { db -> Int in
+                try Recording
+                    .filter(Recording.Columns.id == id)
+                    .updateAll(db, [
+                        Recording.Columns.progress.set(to: progress),
+                        Recording.Columns.status.set(to: status.rawValue)
+                    ])
+            }
+            if let index = recordings.firstIndex(where: { $0.id == id }) {
+                var updated = recordings[index]
+                updated.progress = progress
+                updated.status = status
+                if let isRegeneration = isRegeneration {
+                    updated.isRegeneration = isRegeneration
+                }
+                recordings[index] = updated
+            }
+            
+            var userInfo: [String: Any] = [
+                "id": id,
+                "progress": progress,
+                "status": status
+            ]
+            if let isRegeneration = isRegeneration {
+                userInfo["isRegeneration"] = isRegeneration
+            }
+            
+            await MainActor.run {
+                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
+            }
+        } catch {
+            print("Failed to update recording status: \(error)")
         }
     }
 

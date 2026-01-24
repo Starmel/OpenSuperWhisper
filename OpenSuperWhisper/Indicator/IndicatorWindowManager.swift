@@ -39,8 +39,9 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             self.window = panel
         }
         
-        // Position window
-        if let window = window, let screen = NSScreen.main {
+        // Position window - use the screen containing the point, or main screen as fallback
+        let targetScreen = point.flatMap { FocusUtils.screenContaining(point: $0) } ?? NSScreen.main
+        if let window = window, let screen = targetScreen {
             let windowFrame = window.frame
             let screenFrame = screen.frame
             
@@ -91,6 +92,8 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             
             self.window?.orderOut(nil)
             self.viewModel = nil
+            
+            NotificationCenter.default.post(name: .indicatorWindowDidHide, object: nil)
         }
     }
     
