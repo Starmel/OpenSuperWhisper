@@ -92,6 +92,8 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             
             self.window?.orderOut(nil)
             self.viewModel = nil
+            
+            NotificationCenter.default.post(name: .indicatorWindowDidHide, object: nil)
         }
     }
     

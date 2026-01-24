@@ -29,9 +29,21 @@ class ShortcutManager {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(hotkeySettingsChanged),
-            name: NSNotification.Name("HotkeySettingsChanged"),
+            name: .hotkeySettingsChanged,
             object: nil
         )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(indicatorWindowDidHide),
+            name: .indicatorWindowDidHide,
+            object: nil
+        )
+    }
+    
+    @objc private func indicatorWindowDidHide() {
+        activeVm = nil
+        holdMode = false
     }
     
     @objc private func hotkeySettingsChanged() {

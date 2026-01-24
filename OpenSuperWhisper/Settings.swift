@@ -18,7 +18,7 @@ class SettingsViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
-            NotificationCenter.default.post(name: NSNotification.Name("AppPreferencesLanguageChanged"), object: nil)
+            NotificationCenter.default.post(name: .appPreferencesLanguageChanged, object: nil)
         }
     }
 
@@ -91,7 +91,7 @@ class SettingsViewModel: ObservableObject {
     @Published var modifierOnlyHotkey: ModifierKey {
         didSet {
             AppPreferences.shared.modifierOnlyHotkey = modifierOnlyHotkey.rawValue
-            NotificationCenter.default.post(name: NSNotification.Name("HotkeySettingsChanged"), object: nil)
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
     }
     

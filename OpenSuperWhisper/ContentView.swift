@@ -151,6 +151,8 @@ class ContentViewModel: ObservableObject {
         state = .decoding
         stopBlinking()
         stopDurationTimer()
+        
+        IndicatorWindowManager.shared.hide()
 
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
