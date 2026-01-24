@@ -93,11 +93,16 @@ class ContentViewModel: ObservableObject {
         loadMore()
     }
     
-    func handleProgressUpdate(id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
+    func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?) {
         if let index = recordings.firstIndex(where: { $0.id == id }) {
-            recordings[index].transcription = transcription
+            if let transcription = transcription {
+                recordings[index].transcription = transcription
+            }
             recordings[index].progress = progress
             recordings[index].status = status
+            if let isRegeneration = isRegeneration {
+                recordings[index].isRegeneration = isRegeneration
+            }
         }
     }
     
@@ -206,6 +211,9 @@ class ContentViewModel: ObservableObject {
                     self.recordingDuration = 0
                 }
             }
+        } else {
+            state = .idle
+            recordingDuration = 0
         }
     }
 
@@ -234,6 +242,7 @@ class ContentViewModel: ObservableObject {
 struct ContentView: View {
     @StateObject private var viewModel = ContentViewModel()
     @StateObject private var permissionsManager = PermissionsManager()
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isSettingsPresented = false
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -295,7 +304,11 @@ struct ContentView: View {
                         }
                     }
                     .padding(10)
-                    .background(Color.gray.opacity(0.1))
+                    .background(ThemePalette.panelSurface(colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                    )
                     .cornerRadius(20)
                     .padding([.horizontal, .top])
 
@@ -400,8 +413,8 @@ struct ContentView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color(NSColor.underPageBackgroundColor).opacity(1),
-                                        Color(NSColor.underPageBackgroundColor).opacity(0)
+                                        ThemePalette.windowBackground(colorScheme).opacity(1),
+                                        ThemePalette.windowBackground(colorScheme).opacity(0)
                                     ]),
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -475,7 +488,11 @@ struct ContentView: View {
                                             .font(.title3)
                                             .foregroundColor(.secondary)
                                             .frame(width: 32, height: 32)
-                                            .background(Color.gray.opacity(0.1))
+                                            .background(ThemePalette.panelSurface(colorScheme))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                                            )
                                             .cornerRadius(8)
                                     }
                                     .buttonStyle(.plain)
@@ -502,7 +519,11 @@ struct ContentView: View {
                                         .font(.title3)
                                         .foregroundColor(.secondary)
                                         .frame(width: 32, height: 32)
-                                        .background(Color.gray.opacity(0.1))
+                                        .background(ThemePalette.panelSurface(colorScheme))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                                        )
                                         .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
@@ -515,27 +536,28 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 400, idealWidth: 400)
-        .background(Color(NSColor.underPageBackgroundColor))
+        .background(ThemePalette.windowBackground(colorScheme))
         .onAppear {
             viewModel.loadInitialData()
         }
         .onReceive(NotificationCenter.default.publisher(for: RecordingStore.recordingProgressDidUpdateNotification)) { notification in
             guard let userInfo = notification.userInfo,
                   let id = userInfo["id"] as? UUID,
-                  let transcription = userInfo["transcription"] as? String,
                   let progress = userInfo["progress"] as? Float,
                   let status = userInfo["status"] as? RecordingStatus else { return }
+            
+            let transcription = userInfo["transcription"] as? String
+            let isRegeneration = userInfo["isRegeneration"] as? Bool
             
             viewModel.handleProgressUpdate(
                 id: id,
                 transcription: transcription,
                 progress: progress,
-                status: status
+                status: status,
+                isRegeneration: isRegeneration
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: RecordingStore.recordingsDidUpdateNotification)) { _ in
-            // For now, reload if we are at the top or just reload everything.
-            // Ideally we should intelligently merge, but for simplicity:
             viewModel.loadInitialData()
         }
         .overlay {
@@ -599,6 +621,7 @@ struct PermissionRow: View {
     let title: String
     let description: String
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -624,7 +647,7 @@ struct PermissionRow: View {
                 .foregroundColor(.secondary)
         }
         .padding()
-        .background(Color.gray.opacity(0.1))
+        .background(ThemePalette.panelSurface(colorScheme))
         .cornerRadius(10)
     }
 }
@@ -636,6 +659,7 @@ struct RecordingRow: View {
     @StateObject private var audioRecorder = AudioRecorder.shared
     @State private var showTranscription = false
     @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
 
     private var isPlaying: Bool {
         audioRecorder.isPlaying && audioRecorder.currentlyPlayingURL == recording.url
@@ -643,6 +667,10 @@ struct RecordingRow: View {
     
     private var isPending: Bool {
         recording.status == .pending || recording.status == .converting || recording.status == .transcribing
+    }
+    
+    private var isRegenerating: Bool {
+        recording.isRegeneration && isPending
     }
     
     private var statusText: String {
@@ -661,7 +689,7 @@ struct RecordingRow: View {
     }
     
     private var displayText: String {
-        if recording.transcription.isEmpty || recording.transcription == "Starting transcription..." {
+        if recording.transcription.isEmpty || recording.transcription == "Starting transcription..." || recording.transcription == "In queue..." {
             return ""
         }
         return recording.transcription
@@ -669,10 +697,8 @@ struct RecordingRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Status indicator for pending/processing recordings
-            if isPending {
+            if isPending && !isRegenerating {
                 VStack(alignment: .leading, spacing: 4) {
-                    // Show source filename
                     if let sourceFileName = recording.sourceFileName {
                         Text(sourceFileName)
                             .font(.subheadline.weight(.medium))
@@ -718,7 +744,6 @@ struct RecordingRow: View {
                 .padding(.top, 8)
             }
             
-            // Transcription content - same style for all states
             if recording.status == .failed {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -737,15 +762,21 @@ struct RecordingRow: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, isPending ? 4 : 8)
+                .padding(.top, isPending && !isRegenerating ? 4 : 8)
             } else if !displayText.isEmpty {
-                TranscriptionView(
-                    transcribedText: displayText, isExpanded: $showTranscription
-                )
+                ZStack(alignment: .topLeading) {
+                    TranscriptionView(
+                        transcribedText: displayText, isExpanded: $showTranscription
+                    )
+                    
+                    if isRegenerating {
+                        ShimmerOverlay()
+                            .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+                    }
+                }
                 .padding(.horizontal, 4)
-                .padding(.top, isPending ? 4 : 8)
+                .padding(.top, isPending && !isRegenerating ? 4 : 8)
             } else if !isPending {
-                // Completed but empty transcription
                 Text("No speech detected")
                     .font(.body)
                     .foregroundColor(.secondary)
@@ -767,6 +798,39 @@ struct RecordingRow: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                
+                if isRegenerating {
+                    Spacer()
+                        .frame(width: 2)
+                    HStack(spacing: 6) {
+                        if recording.status == .pending {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
+                                
+                                Circle()
+                                    .trim(from: 0, to: CGFloat(recording.progress))
+                                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                            }
+                            .frame(width: 16, height: 16)
+
+                            Text("\(Int(recording.progress * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text(statusText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .transition(.opacity)
+                
+                }
 
                 Spacer()
 
@@ -781,10 +845,11 @@ struct RecordingRow: View {
                         }) {
                             Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
                                 .font(.system(size: 20))
-                                .foregroundColor(isPlaying ? .red : .accentColor)
+                                .foregroundColor(isPlaying ? .red : ThemePalette.iconAccent(colorScheme))
                                 .contentTransition(.symbolEffect(.replace))
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity)
 
                         Button(action: {
                             NSPasteboard.general.clearContents()
@@ -798,9 +863,9 @@ struct RecordingRow: View {
                         }
                         .buttonStyle(.plain)
                         .help("Copy entire text")
+                        .transition(.opacity)
                     }
 
-                    // Regenerate button - shows for completed and failed recordings on hover
                     if (recording.status == .completed || recording.status == .failed) && isHovered {
                         Button(action: {
                             onRegenerate()
@@ -811,9 +876,10 @@ struct RecordingRow: View {
                         }
                         .buttonStyle(.plain)
                         .help("Regenerate transcription")
+                        .transition(.opacity)
                     }
 
-                    if isHovered || isPlaying || isPending || recording.status == .failed {
+                    if isHovered || isPlaying || (isPending && !isRegenerating) || recording.status == .failed {
                         Button(action: {
                             if isPlaying {
                                 audioRecorder.stopPlaying()
@@ -825,18 +891,23 @@ struct RecordingRow: View {
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .transition(.opacity)
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                .animation(.easeInOut(duration: 0.2), value: isPlaying)
+                .animation(.easeInOut(duration: 0.2), value: isRegenerating)
             }
+            .animation(.easeInOut(duration: 0.2), value: isRegenerating)
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(ThemePalette.cardBackground(colorScheme))
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(ThemePalette.cardBackground(colorScheme))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                .stroke(ThemePalette.cardBorder(colorScheme), lineWidth: 1)
         )
         .onHover { hovering in
             isHovered = hovering
@@ -845,9 +916,45 @@ struct RecordingRow: View {
     }
 }
 
+struct ShimmerOverlay: View {
+    @State private var phase: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.secondary.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.clear,
+                                    Color.white.opacity(0.4),
+                                    Color.clear
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .offset(x: -geometry.size.width + (phase * geometry.size.width * 2))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .onAppear {
+            withAnimation(
+                .linear(duration: 1.2)
+                .repeatForever(autoreverses: false)
+            ) {
+                phase = 1
+            }
+        }
+    }
+}
+
 struct TranscriptionView: View {
     let transcribedText: String
     @Binding var isExpanded: Bool
+    @Environment(\.colorScheme) private var colorScheme
     
     private var hasMoreLines: Bool {
         !transcribedText.isEmpty && transcribedText.count > 150
@@ -901,7 +1008,7 @@ struct TranscriptionView: View {
                         Text(isExpanded ? "Show less" : "Show more")
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(ThemePalette.linkText(colorScheme))
                     .font(.footnote)
                 }
                 .padding(.horizontal, 8)
@@ -914,6 +1021,7 @@ struct TranscriptionView: View {
 struct MicrophonePickerIconView: View {
     @ObservedObject var microphoneService: MicrophoneService
     @State private var showMenu = false
+    @Environment(\.colorScheme) private var colorScheme
     
     private var builtInMicrophones: [MicrophoneService.AudioDevice] {
         microphoneService.availableMicrophones.filter { $0.isBuiltIn }
@@ -931,7 +1039,11 @@ struct MicrophonePickerIconView: View {
                 .font(.title3)
                 .foregroundColor(.secondary)
                 .frame(width: 32, height: 32)
-                .background(Color.gray.opacity(0.1))
+                .background(ThemePalette.panelSurface(colorScheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                )
                 .cornerRadius(8)
         }
         .buttonStyle(.plain)
@@ -1000,7 +1112,7 @@ struct MainRecordButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var buttonColor: Color {
-        colorScheme == .dark ? .white : .gray
+        ThemePalette.recordButtonBase(colorScheme)
     }
 
     var body: some View {
@@ -1038,6 +1150,52 @@ struct MainRecordButton: View {
             }
             .scaleEffect(isRecording ? 0.9 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRecording)
+    }
+}
+
+enum ThemePalette {
+    static func windowBackground(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(NSColor.underPageBackgroundColor)
+            : .white
+    }
+
+    static func panelSurface(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color.gray.opacity(0.1)
+            : Color(red: 0.95, green: 0.96, blue: 0.98)
+    }
+
+    static func panelBorder(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color.gray.opacity(0.2)
+            : Color(red: 0.86, green: 0.88, blue: 0.92)
+    }
+
+    static func cardBackground(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(NSColor.controlBackgroundColor)
+            : Color.white
+    }
+
+    static func cardBorder(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(NSColor.separatorColor)
+            : Color(red: 0.86, green: 0.88, blue: 0.92)
+    }
+
+    static func recordButtonBase(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? .white
+            : Color(red: 0.35, green: 0.60, blue: 0.92)
+    }
+
+    static func iconAccent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .accentColor : .primary
+    }
+
+    static func linkText(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .blue : .primary
     }
 }
 
