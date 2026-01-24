@@ -34,9 +34,9 @@ class ShortcutManager {
                     // First press: show indicator and start recording immediately
                     let cursorPosition = FocusUtils.getCurrentCursorPosition()
                     let indicatorPoint: NSPoint?
-                    if let caret = FocusUtils.getCaretRect(), let screen = FocusUtils.getFocusedWindowScreen() {
-                        let screenHeight = screen.frame.height
-                        indicatorPoint = NSPoint(x: caret.origin.x, y: screenHeight - caret.origin.y)
+                    if let caret = FocusUtils.getCaretRect() {
+                        // Convert AX API coordinates (Quartz) to Cocoa coordinates
+                        indicatorPoint = FocusUtils.convertAXPointToCocoa(caret.origin)
                     } else {
                         indicatorPoint = cursorPosition
                     }
