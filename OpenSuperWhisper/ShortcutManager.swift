@@ -14,76 +14,135 @@ extension KeyboardShortcuts.Name {
 class ShortcutManager {
     static let shared = ShortcutManager()
 
-    // Current recording indicator view and state
     private var activeVm: IndicatorViewModel?
     private var holdWorkItem: DispatchWorkItem?
     private let holdThreshold: TimeInterval = 0.3
     private var holdMode = false
+    private var useModifierOnlyHotkey = false
 
     private init() {
         print("ShortcutManager init")
-
-        // Handle key down for recording shortcut: start or toggle and detect hold
-        KeyboardShortcuts.onKeyDown(for: .toggleRecord) {
-            // Cancel any pending hold detection
-            self.holdWorkItem?.cancel()
-            self.holdMode = false
-            // Perform UI actions on the main actor
-            Task { @MainActor in
-                if self.activeVm == nil {
-                    // First press: show indicator and start recording immediately
-                    let cursorPosition = FocusUtils.getCurrentCursorPosition()
-                    let indicatorPoint: NSPoint?
-                    if let caret = FocusUtils.getCaretRect(), let screen = FocusUtils.getFocusedWindowScreen() {
-                        let screenHeight = screen.frame.height
-                        indicatorPoint = NSPoint(x: caret.origin.x, y: screenHeight - caret.origin.y)
-                    } else {
-                        indicatorPoint = cursorPosition
-                    }
-                    let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
-                    vm.startRecording()
-                    self.activeVm = vm
-                } else if !self.holdMode {
-                    // Second quick press: toggle off recording
-                    IndicatorWindowManager.shared.stopRecording()
-                    self.activeVm = nil
-                }
-            }
-            // Schedule hold-mode flag after threshold
-            let workItem = DispatchWorkItem {
-                self.holdMode = true
-            }
-            self.holdWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + self.holdThreshold, execute: workItem)
+        
+        setupKeyboardShortcuts()
+        setupModifierKeyMonitor()
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(hotkeySettingsChanged),
+            name: .hotkeySettingsChanged,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(indicatorWindowDidHide),
+            name: .indicatorWindowDidHide,
+            object: nil
+        )
+    }
+    
+    @objc private func indicatorWindowDidHide() {
+        activeVm = nil
+        holdMode = false
+    }
+    
+    @objc private func hotkeySettingsChanged() {
+        setupModifierKeyMonitor()
+    }
+    
+    private func setupKeyboardShortcuts() {
+        KeyboardShortcuts.onKeyDown(for: .toggleRecord) { [weak self] in
+            self?.handleKeyDown()
         }
 
-        // Handle key up for recording shortcut: end hold if in hold mode
-        KeyboardShortcuts.onKeyUp(for: .toggleRecord) {
-            // Cancel hold detection
-            self.holdWorkItem?.cancel()
-            self.holdWorkItem = nil
-            // Perform UI actions on the main actor
-            Task { @MainActor in
-                if self.holdMode {
-                    // End hold-to-record
-                    IndicatorWindowManager.shared.stopRecording()
-                    self.activeVm = nil
-                    self.holdMode = false
-                }
-                // Tap-mode toggle off handled on keyDown
-            }
+        KeyboardShortcuts.onKeyUp(for: .toggleRecord) { [weak self] in
+            self?.handleKeyUp()
         }
 
-        KeyboardShortcuts.onKeyUp(for: .escape) {
-            // Run on the main actor to safely interact with actor-isolated methods
+        KeyboardShortcuts.onKeyUp(for: .escape) { [weak self] in
             Task { @MainActor in
-                if self.activeVm != nil {
+                if self?.activeVm != nil {
                     IndicatorWindowManager.shared.stopForce()
-                    self.activeVm = nil
+                    self?.activeVm = nil
                 }
             }
         }
         KeyboardShortcuts.disable(.escape)
     }
-
+    
+    private func setupModifierKeyMonitor() {
+        let modifierKeyString = AppPreferences.shared.modifierOnlyHotkey
+        let modifierKey = ModifierKey(rawValue: modifierKeyString) ?? .none
+        
+        if modifierKey != .none {
+            useModifierOnlyHotkey = true
+            KeyboardShortcuts.disable(.toggleRecord)
+            
+            ModifierKeyMonitor.shared.onKeyDown = { [weak self] in
+                self?.handleKeyDown()
+            }
+            
+            ModifierKeyMonitor.shared.onKeyUp = { [weak self] in
+                self?.handleKeyUp()
+            }
+            
+            ModifierKeyMonitor.shared.start(modifierKey: modifierKey)
+            print("ShortcutManager: Using modifier-only hotkey: \(modifierKey.displayName)")
+        } else {
+            useModifierOnlyHotkey = false
+            ModifierKeyMonitor.shared.stop()
+            KeyboardShortcuts.enable(.toggleRecord)
+            print("ShortcutManager: Using regular keyboard shortcut")
+        }
+    }
+    
+    private func handleKeyDown() {
+        holdWorkItem?.cancel()
+        holdMode = false
+        
+        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
+        let holdToRecordEnabled = AppPreferences.shared.holdToRecord && !modifierKey.isCommandOrOption
+        
+        Task { @MainActor in
+            if self.activeVm == nil {
+                let cursorPosition = FocusUtils.getCurrentCursorPosition()
+                let indicatorPoint: NSPoint?
+                if let caret = FocusUtils.getCaretRect() {
+                    indicatorPoint = FocusUtils.convertAXPointToCocoa(caret.origin)
+                } else {
+                    indicatorPoint = cursorPosition
+                }
+                let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
+                vm.startRecording()
+                self.activeVm = vm
+            } else if !self.holdMode {
+                IndicatorWindowManager.shared.stopRecording()
+                self.activeVm = nil
+            }
+        }
+        
+        if holdToRecordEnabled {
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.holdMode = true
+            }
+            holdWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + holdThreshold, execute: workItem)
+        }
+    }
+    
+    private func handleKeyUp() {
+        holdWorkItem?.cancel()
+        holdWorkItem = nil
+        
+        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
+        let holdToRecordEnabled = AppPreferences.shared.holdToRecord && !modifierKey.isCommandOrOption
+        
+        Task { @MainActor in
+            if holdToRecordEnabled && self.holdMode {
+                IndicatorWindowManager.shared.stopRecording()
+                self.activeVm = nil
+                self.holdMode = false
+            }
+        }
+    }
 }

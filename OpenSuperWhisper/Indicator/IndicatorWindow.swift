@@ -112,7 +112,7 @@ class IndicatorViewModel: ObservableObject {
                         ))
                     }
                     
-                    insertTextUsingPasteboard(text)
+                    insertText(text)
                     print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
@@ -135,8 +135,8 @@ class IndicatorViewModel: ObservableObject {
         }
     }
     
-    func insertTextUsingPasteboard(_ text: String) {
-        ClipboardUtil.insertTextUsingPasteboard(text)
+    func insertText(_ text: String) {
+        ClipboardUtil.insertText(text)
     }
     
     private func startBlinking() {

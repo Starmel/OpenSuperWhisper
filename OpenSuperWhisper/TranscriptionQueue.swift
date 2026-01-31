@@ -109,7 +109,6 @@ class TranscriptionQueue: ObservableObject {
     }
 
     func requeueRecording(_ recording: Recording) async {
-        // Determine source URL FIRST - before making any changes
         let sourceURL: URL
         if let existingSource = recording.sourceFileURL,
            !existingSource.isEmpty,
@@ -118,7 +117,6 @@ class TranscriptionQueue: ObservableObject {
         } else if FileManager.default.fileExists(atPath: recording.url.path) {
             sourceURL = recording.url
         } else {
-            // No audio file available - cannot regenerate
             await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Cannot regenerate: audio file not found",
@@ -128,15 +126,13 @@ class TranscriptionQueue: ObservableObject {
             return
         }
 
-        // Now reset recording to pending state with visible "In queue..." message
-        await recordingStore.updateRecordingProgressOnlySync(
+        await recordingStore.updateRecordingStatusOnly(
             recording.id,
-            transcription: "In queue...",
             progress: 0.0,
-            status: .pending
+            status: .pending,
+            isRegeneration: true
         )
 
-        // Update sourceFileURL in database
         do {
             try await recordingStore.updateSourceFileURL(recording.id, sourceURL: sourceURL.path)
         } catch {
@@ -147,13 +143,7 @@ class TranscriptionQueue: ObservableObject {
     }
 
     private func processQueue() async {
-        while true {
-            let pendingRecordings = recordingStore.getPendingRecordings()
-
-            guard let recording = pendingRecordings.first else {
-                break
-            }
-
+        while let recording = recordingStore.getNextPendingRecording() {
             currentRecordingId = recording.id
             await processRecording(recording)
             currentRecordingId = nil
@@ -189,12 +179,24 @@ class TranscriptionQueue: ObservableObject {
             return
         }
 
-        await recordingStore.updateRecordingProgressOnlySync(
-            recording.id,
-            transcription: "",
-            progress: 0.0,
-            status: .converting
-        )
+        let isRegeneration = !recording.transcription.isEmpty && 
+            recording.transcription != "In queue..." && 
+            recording.transcription != "Starting transcription..."
+
+        if isRegeneration {
+            await recordingStore.updateRecordingStatusOnly(
+                recording.id,
+                progress: 0.0,
+                status: .converting
+            )
+        } else {
+            await recordingStore.updateRecordingProgressOnlySync(
+                recording.id,
+                transcription: "",
+                progress: 0.0,
+                status: .converting
+            )
+        }
 
         currentTranscriptionTask = Task {
             do {
@@ -205,12 +207,20 @@ class TranscriptionQueue: ObservableObject {
                 let samples = try await transcriptionService.convertAudioToPCM(fileURL: sourceURL) { [weak self] progress in
                     Task { @MainActor in
                         guard let self = self, !self.isRecordingCancelled(recording.id) else { return }
-                        self.recordingStore.updateRecordingProgressOnly(
-                            recording.id,
-                            transcription: "",
-                            progress: progress * 0.1,
-                            status: .converting
-                        )
+                        if isRegeneration {
+                            await self.recordingStore.updateRecordingStatusOnly(
+                                recording.id,
+                                progress: progress * 0.1,
+                                status: .converting
+                            )
+                        } else {
+                            self.recordingStore.updateRecordingProgressOnly(
+                                recording.id,
+                                transcription: "",
+                                progress: progress * 0.1,
+                                status: .converting
+                            )
+                        }
                     }
                 }
 
@@ -222,12 +232,20 @@ class TranscriptionQueue: ObservableObject {
                     throw TranscriptionError.audioConversionFailed
                 }
 
-                await recordingStore.updateRecordingProgressOnlySync(
-                    recording.id,
-                    transcription: "Starting transcription...",
-                    progress: 0.1,
-                    status: .transcribing
-                )
+                if isRegeneration {
+                    await recordingStore.updateRecordingStatusOnly(
+                        recording.id,
+                        progress: 0.1,
+                        status: .transcribing
+                    )
+                } else {
+                    await recordingStore.updateRecordingProgressOnlySync(
+                        recording.id,
+                        transcription: "Starting transcription...",
+                        progress: 0.1,
+                        status: .transcribing
+                    )
+                }
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
                     return
@@ -249,20 +267,19 @@ class TranscriptionQueue: ObservableObject {
                     withIntermediateDirectories: true
                 )
 
-                // Only copy if source and destination are different files
                 if sourceURL.path != finalURL.path {
                     if FileManager.default.fileExists(atPath: finalURL.path) {
                         try? FileManager.default.removeItem(at: finalURL)
                     }
                     try FileManager.default.copyItem(at: sourceURL, to: finalURL)
                 }
-                // If sourceURL == finalURL, the file is already in place
 
                 await recordingStore.updateRecordingProgressOnlySync(
                     recording.id,
                     transcription: text,
                     progress: 1.0,
-                    status: .completed
+                    status: .completed,
+                    isRegeneration: false
                 )
 
             } catch {
@@ -271,7 +288,8 @@ class TranscriptionQueue: ObservableObject {
                         recording.id,
                         transcription: "Failed to transcribe: \(error.localizedDescription)",
                         progress: 0.0,
-                        status: .failed
+                        status: .failed,
+                        isRegeneration: false
                     )
                 }
             }
