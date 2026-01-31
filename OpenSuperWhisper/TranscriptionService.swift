@@ -10,6 +10,8 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var currentSegment = ""
     @Published private(set) var isLoading = false
     @Published private(set) var progress: Float = 0.0
+    @Published private(set) var isConverting = false
+    @Published private(set) var conversionProgress: Float = 0.0
     
     private var currentEngine: TranscriptionEngine?
     private var totalDuration: Float = 0.0
@@ -78,6 +80,8 @@ class TranscriptionService: ObservableObject {
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
         await MainActor.run {
             self.progress = 0.0
+            self.conversionProgress = 0.0
+            self.isConverting = true
             self.isTranscribing = true
             self.transcribedText = ""
             self.currentSegment = ""
@@ -87,6 +91,7 @@ class TranscriptionService: ObservableObject {
         defer {
             Task { @MainActor in
                 self.isTranscribing = false
+                self.isConverting = false
                 self.currentSegment = ""
                 if !self.isCancelled {
                     self.progress = 1.0
