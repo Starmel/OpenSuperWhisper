@@ -135,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(languagePreferenceChanged),
-            name: NSNotification.Name("AppPreferencesLanguageChanged"),
+            name: .appPreferencesLanguageChanged,
             object: nil
         )
         

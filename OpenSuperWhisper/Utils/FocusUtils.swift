@@ -71,6 +71,28 @@ class FocusUtils {
         return rect.toCGRect()
     }
     
+    /// Converts a point from AX API coordinate system (Quartz: origin at top-left of primary screen, Y increases downward)
+    /// to Cocoa coordinate system (origin at bottom-left of primary screen, Y increases upward)
+    static func convertAXPointToCocoa(_ axPoint: CGPoint) -> NSPoint {
+        guard let primaryScreen = NSScreen.screens.first else {
+            return NSPoint(x: axPoint.x, y: axPoint.y)
+        }
+        // Primary screen maxY represents the total height in Cocoa coordinates
+        // AX Y=0 is at Cocoa Y=maxY, so we subtract axPoint.y from maxY
+        let cocoaY = primaryScreen.frame.maxY - axPoint.y
+        return NSPoint(x: axPoint.x, y: cocoaY)
+    }
+    
+    /// Finds the screen that contains the given point (in Cocoa coordinates)
+    static func screenContaining(point: NSPoint) -> NSScreen? {
+        for screen in NSScreen.screens {
+            if screen.frame.contains(point) {
+                return screen
+            }
+        }
+        return NSScreen.main
+    }
+    
     static func getFocusedWindowScreen() -> NSScreen? {
         let systemWideElement = AXUIElementCreateSystemWide()
         
