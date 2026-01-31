@@ -53,6 +53,7 @@ class SettingsViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
+            NotificationCenter.default.post(name: .appPreferencesLanguageChanged, object: nil)
         }
     }
 
@@ -122,6 +123,19 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var modifierOnlyHotkey: ModifierKey {
+        didSet {
+            AppPreferences.shared.modifierOnlyHotkey = modifierOnlyHotkey.rawValue
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+        }
+    }
+    
+    @Published var holdToRecord: Bool {
+        didSet {
+            AppPreferences.shared.holdToRecord = holdToRecord
+        }
+    }
+    
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -138,6 +152,8 @@ class SettingsViewModel: ObservableObject {
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
+        self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
+        self.holdToRecord = prefs.holdToRecord
         
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -971,29 +987,116 @@ struct SettingsView: View {
         }
     }
     
+    private var useModifierKey: Bool {
+        viewModel.modifierOnlyHotkey != .none
+    }
+    
     private var shortcutSettings: some View {
         Form {
             VStack(spacing: 20) {
-                // Recording Shortcut
+                // Recording Trigger
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Recording Shortcut")
+                    Text("Recording Trigger")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        Picker("", selection: Binding(
+                            get: { useModifierKey },
+                            set: { newValue in
+                                if !newValue {
+                                    viewModel.modifierOnlyHotkey = .none
+                                } else if viewModel.modifierOnlyHotkey == .none {
+                                    viewModel.modifierOnlyHotkey = .leftCommand
+                                }
+                            }
+                        )) {
+                            Text("Key Combination").tag(false)
+                            Text("Single Modifier Key").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        
+                        if useModifierKey {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Modifier Key")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Picker("", selection: $viewModel.modifierOnlyHotkey) {
+                                        ForEach(ModifierKey.allCases.filter { $0 != .none }) { key in
+                                            Text(key.displayName).tag(key)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 200)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
+                                
+                                Text("Double-tap to toggle recording")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Shortcut")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    KeyboardShortcuts.Recorder("", name: .toggleRecord)
+                                        .frame(width: 150)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
+                                
+                                if isRecordingNewShortcut {
+                                    Text("Press your new shortcut combination...")
+                                        .foregroundColor(.secondary)
+                                        .font(.subheadline)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Recording Behavior
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Recording Behavior")
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Toggle record:")
-                                .font(.subheadline)
-                            Spacer()
-                            KeyboardShortcuts.Recorder("", name: .toggleRecord)
-                                .frame(width: 120)
-                        }
+                        let isHoldDisabled = viewModel.modifierOnlyHotkey.isCommandOrOption
                         
-                        if isRecordingNewShortcut {
-                            Text("Press your new shortcut combination...")
-                                .foregroundColor(.secondary)
-                                .font(.subheadline)
-                                .padding(.vertical, 4)
+                        Toggle(isOn: $viewModel.holdToRecord) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Hold to Record")
+                                    .font(.subheadline)
+                                Text("Hold the shortcut to record, release to stop")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .disabled(isHoldDisabled)
+                        .opacity(isHoldDisabled ? 0.5 : 1.0)
+                        
+                        if isHoldDisabled {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                Text("Not available for Command/Option keys")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.orange)
                         }
                         
                         Toggle(isOn: $viewModel.playSoundOnRecordStart) {
@@ -1020,7 +1123,7 @@ struct SettingsView: View {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "1.circle.fill")
                                 .foregroundColor(.accentColor)
-                            Text("Press any key combination to set as the recording shortcut")
+                            Text("Choose between a single modifier key or a key combination")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -1028,7 +1131,7 @@ struct SettingsView: View {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "2.circle.fill")
                                 .foregroundColor(.accentColor)
-                            Text("The shortcut will work even when the app is in the background")
+                            Text("The shortcut works globally, even when the app is in the background")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -1036,7 +1139,7 @@ struct SettingsView: View {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "3.circle.fill")
                                 .foregroundColor(.accentColor)
-                            Text("Recommended to use Command (⌘) or Option (⌥) key combinations")
+                            Text("With Hold-to-record, release to stop and transcribe")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
