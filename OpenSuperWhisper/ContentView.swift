@@ -324,7 +324,7 @@ struct ContentView: View {
                     .cornerRadius(20)
                     .padding([.horizontal, .top])
 
-                    ScrollView(showsIndicators: false) {
+                    ScrollViewWithBottomFade(colorScheme: colorScheme) {
                         if viewModel.recordings.isEmpty {
                             VStack(spacing: 16) {
                                 if !debouncedSearchText.isEmpty {
@@ -393,13 +393,18 @@ struct ContentView: View {
                         } else {
                             LazyVStack(spacing: 8) {
                                 ForEach(viewModel.recordings) { recording in
-                                    RecordingRow(recording: recording, onDelete: {
-                                        viewModel.deleteRecording(recording)
-                                    }, onRegenerate: {
-                                        Task {
-                                            await TranscriptionQueue.shared.requeueRecording(recording)
+                                    RecordingRowWithFadeEffect(
+                                        recording: recording,
+                                        colorScheme: colorScheme,
+                                        onDelete: {
+                                            viewModel.deleteRecording(recording)
+                                        },
+                                        onRegenerate: {
+                                            Task {
+                                                await TranscriptionQueue.shared.requeueRecording(recording)
+                                            }
                                         }
-                                    })
+                                    )
                                     .id(recording.id)
                                     .onAppear {
                                         if recording.id == viewModel.recordings.last?.id {
@@ -1212,6 +1217,130 @@ enum ThemePalette {
 
     static func linkText(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? .blue : .primary
+    }
+}
+
+struct ScrollViewWithBottomFade<Content: View>: View {
+    let colorScheme: ColorScheme
+    @ViewBuilder let content: () -> Content
+    
+    var body: some View {
+        GeometryReader { outerGeometry in
+            ScrollView(showsIndicators: false) {
+                content()
+            }
+            .environment(\.scrollViewContainerHeight, outerGeometry.size.height)
+            .environment(\.scrollViewContainerMinY, outerGeometry.frame(in: .global).minY)
+        }
+    }
+}
+
+private struct ScrollViewContainerHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+private struct ScrollViewContainerMinYKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var scrollViewContainerHeight: CGFloat {
+        get { self[ScrollViewContainerHeightKey.self] }
+        set { self[ScrollViewContainerHeightKey.self] = newValue }
+    }
+    
+    var scrollViewContainerMinY: CGFloat {
+        get { self[ScrollViewContainerMinYKey.self] }
+        set { self[ScrollViewContainerMinYKey.self] = newValue }
+    }
+}
+
+struct RecordingRowWithFadeEffect: View {
+    let recording: Recording
+    let colorScheme: ColorScheme
+    let onDelete: () -> Void
+    let onRegenerate: () -> Void
+    
+    @Environment(\.scrollViewContainerHeight) private var containerHeight
+    @Environment(\.scrollViewContainerMinY) private var containerMinY
+    
+    @State private var visibilityRatio: CGFloat = 1.0
+    
+    private var isFullyVisible: Bool {
+        visibilityRatio >= 0.99
+    }
+    
+    private var scale: CGFloat {
+        guard !isFullyVisible else { return 1.0 }
+        let minScale: CGFloat = 0.94
+        return minScale + (1 - minScale) * visibilityRatio
+    }
+    
+    private var cardOpacity: CGFloat {
+        guard !isFullyVisible else { return 1.0 }
+        let minOpacity: CGFloat = 0.4
+        return minOpacity + (1 - minOpacity) * visibilityRatio
+    }
+    
+    private var gradientHeight: CGFloat {
+        guard !isFullyVisible else { return 0 }
+        return 50 * (1 - visibilityRatio)
+    }
+    
+    var body: some View {
+        RecordingRow(recording: recording, onDelete: onDelete, onRegenerate: onRegenerate)
+            .opacity(cardOpacity)
+            .scaleEffect(scale, anchor: .top)
+            .overlay(alignment: .bottom) {
+                if !isFullyVisible {
+                    LinearGradient(
+                        colors: [
+                            ThemePalette.windowBackground(colorScheme).opacity(0),
+                            ThemePalette.windowBackground(colorScheme).opacity(0.9 - visibilityRatio * 0.9)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: gradientHeight)
+                    .allowsHitTesting(false)
+                    .clipped()
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            updateVisibility(frame: geometry.frame(in: .global))
+                        }
+                        .onChange(of: geometry.frame(in: .global)) { _, newFrame in
+                            updateVisibility(frame: newFrame)
+                        }
+                }
+            )
+            .animation(.easeOut(duration: 0.1), value: isFullyVisible)
+            .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.9), value: visibilityRatio)
+    }
+    
+    private func updateVisibility(frame: CGRect) {
+        let cardHeight = frame.height
+        guard cardHeight > 0, containerHeight > 0 else {
+            visibilityRatio = 1.0
+            return
+        }
+        
+        let cardBottom = frame.maxY
+        let containerBottom = containerMinY + containerHeight
+        
+        let overflow = cardBottom - containerBottom
+        
+        if overflow <= 0 {
+            visibilityRatio = 1.0
+        } else {
+            let fadeZone: CGFloat = 80
+            let progress = min(overflow / fadeZone, 1.0)
+            visibilityRatio = max(0.2, 1 - progress)
+        }
     }
 }
 
