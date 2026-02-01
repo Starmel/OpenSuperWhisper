@@ -767,9 +767,9 @@ struct SettingsView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding()
@@ -801,27 +801,33 @@ struct SettingsView: View {
                         .cornerRadius(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         
-                        Toggle(isOn: $viewModel.translateToEnglish) {
+                        HStack {
                             Text("Translate to English")
                                 .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.translateToEnglish)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         .padding(.top, 4)
                         
                         if Settings.asianLanguages.contains(viewModel.selectedLanguage) {
-                            Toggle(isOn: $viewModel.useAsianAutocorrect) {
+                            HStack {
                                 Text("Use Asian Autocorrect")
                                     .font(.subheadline)
+                                Spacer()
+                                Toggle("", isOn: $viewModel.useAsianAutocorrect)
+                                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                    .labelsHidden()
                             }
-                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                             .padding(.top, 4)
                         }
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Output Options
                 VStack(alignment: .leading, spacing: 16) {
@@ -830,23 +836,29 @@ struct SettingsView: View {
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle(isOn: $viewModel.showTimestamps) {
+                        HStack {
                             Text("Show Timestamps")
                                 .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.showTimestamps)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         
-                        Toggle(isOn: $viewModel.suppressBlankAudio) {
+                        HStack {
                             Text("Suppress Blank Audio")
                                 .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.suppressBlankAudio)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Initial Prompt
                 VStack(alignment: .leading, spacing: 16) {
@@ -871,9 +883,9 @@ struct SettingsView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Transcriptions Directory
                 VStack(alignment: .leading, spacing: 16) {
@@ -901,14 +913,15 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                             .textSelection(.enabled)
                             .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(.textBackgroundColor).opacity(0.5))
                             .cornerRadius(6)
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }
@@ -924,12 +937,15 @@ struct SettingsView: View {
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle(isOn: $viewModel.useBeamSearch) {
+                        HStack {
                             Text("Use Beam Search")
                                 .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.useBeamSearch)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .help("Beam search can provide better results but is slower")
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                        .help("Beam search can provide better results but is slower")
                         
                         if viewModel.useBeamSearch {
                             HStack {
@@ -940,14 +956,13 @@ struct SettingsView: View {
                                     .help("Number of beams to use in beam search")
                                     .frame(width: 120)
                             }
-                            .padding(.leading, 24)
                         }
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Model Parameters
                 VStack(alignment: .leading, spacing: 16) {
@@ -986,9 +1001,9 @@ struct SettingsView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Debug Options
                 VStack(alignment: .leading, spacing: 16) {
@@ -996,17 +1011,20 @@ struct SettingsView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Toggle(isOn: $viewModel.debugMode) {
+                    HStack {
                         Text("Debug Mode")
                             .font(.subheadline)
+                        Spacer()
+                        Toggle("", isOn: $viewModel.debugMode)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                            .help("Enable additional logging and debugging information")
                     }
-                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                    .help("Enable additional logging and debugging information")
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }
@@ -1088,9 +1106,9 @@ struct SettingsView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Recording Behavior
                 VStack(alignment: .leading, spacing: 16) {
@@ -1099,7 +1117,7 @@ struct SettingsView: View {
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: $viewModel.holdToRecord) {
+                        HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Hold to Record")
                                     .font(.subheadline)
@@ -1107,59 +1125,27 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.holdToRecord)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         
-                        Toggle(isOn: $viewModel.playSoundOnRecordStart) {
+                        HStack {
                             Text("Play sound when recording starts")
                                 .font(.subheadline)
-                        }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                        .help("Play a notification sound when recording begins")
-                        .padding(.top, 4)
-                    }
-                }
-                .padding()
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Instructions
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Instructions")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "1.circle.fill")
-                                .foregroundColor(.accentColor)
-                            Text("Choose between a single modifier key or a key combination")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "2.circle.fill")
-                                .foregroundColor(.accentColor)
-                            Text("The shortcut works globally, even when the app is in the background")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "3.circle.fill")
-                                .foregroundColor(.accentColor)
-                            Text("With Hold-to-record, release to stop and transcribe")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.playSoundOnRecordStart)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .help("Play a notification sound when recording begins")
                         }
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }

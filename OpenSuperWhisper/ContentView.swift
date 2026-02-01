@@ -24,6 +24,7 @@ class ContentViewModel: ObservableObject {
     @Published var canLoadMore = true
     @Published var recordingDuration: TimeInterval = 0
     @Published var microphoneService = MicrophoneService.shared
+    @Published var shouldClearSearch = false
     
     private var currentPage = 0
     private let pageSize = 100
@@ -142,7 +143,7 @@ class ContentViewModel: ObservableObject {
                 }
             }
         }
-        RunLoop.current.add(durationTimer!, forMode: .common)
+        RunLoop.main.add(durationTimer!, forMode: .common)
         
         recorder.startRecording()
     }
@@ -196,10 +197,13 @@ class ContentViewModel: ObservableObject {
                             sourceFileURL: nil
                         )
                         self.recordingStore.addRecording(newRecording)
-                        // Prepend to the list if not searching or if it matches (simplification: just prepend)
-                        if self.currentSearchQuery.isEmpty {
-                            self.recordings.insert(newRecording, at: 0)
+                        
+                        // Clear search and show the new recording
+                        if !self.currentSearchQuery.isEmpty {
+                            self.shouldClearSearch = true
+                            self.currentSearchQuery = ""
                         }
+                        self.recordings.insert(newRecording, at: 0)
                     }
 
                     print("Transcription result: \(text)")
@@ -231,7 +235,7 @@ class ContentViewModel: ObservableObject {
                 self?.isBlinking.toggle()
             }
         }
-        RunLoop.current.add(blinkTimer!, forMode: .common)
+        RunLoop.main.add(blinkTimer!, forMode: .common)
     }
 
     private func stopBlinking() {
@@ -324,7 +328,7 @@ struct ContentView: View {
                     .cornerRadius(20)
                     .padding([.horizontal, .top])
 
-                    ScrollViewWithBottomFade(colorScheme: colorScheme) {
+                    ScrollView(showsIndicators: false) {
                         if viewModel.recordings.isEmpty {
                             VStack(spacing: 16) {
                                 if !debouncedSearchText.isEmpty {
@@ -393,9 +397,9 @@ struct ContentView: View {
                         } else {
                             LazyVStack(spacing: 8) {
                                 ForEach(viewModel.recordings) { recording in
-                                    RecordingRowWithFadeEffect(
+                                    RecordingRow(
                                         recording: recording,
-                                        colorScheme: colorScheme,
+                                        searchQuery: debouncedSearchText,
                                         onDelete: {
                                             viewModel.deleteRecording(recording)
                                         },
@@ -597,6 +601,14 @@ struct ContentView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
         }
+        .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
+            if shouldClear {
+                searchText = ""
+                debouncedSearchText = ""
+                searchTask?.cancel()
+                viewModel.shouldClearSearch = false
+            }
+        }
     }
 }
 
@@ -669,6 +681,7 @@ struct PermissionRow: View {
 
 struct RecordingRow: View {
     let recording: Recording
+    let searchQuery: String
     let onDelete: () -> Void
     let onRegenerate: () -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
@@ -784,7 +797,9 @@ struct RecordingRow: View {
             } else if !displayText.isEmpty {
                 ZStack(alignment: .topLeading) {
                     TranscriptionView(
-                        transcribedText: displayText, isExpanded: $showTranscription
+                        transcribedText: displayText,
+                        searchQuery: searchQuery,
+                        isExpanded: $showTranscription
                     )
                     
                     if isRegenerating {
@@ -974,11 +989,58 @@ struct ShimmerOverlay: View {
 
 struct TranscriptionView: View {
     let transcribedText: String
+    let searchQuery: String
     @Binding var isExpanded: Bool
     @Environment(\.colorScheme) private var colorScheme
     
+    @State private var highlightedAttributedString: AttributedString?
+    @State private var computeTask: Task<Void, Never>?
+    
     private var hasMoreLines: Bool {
         !transcribedText.isEmpty && transcribedText.count > 150
+    }
+    
+    private var highlightedText: Text {
+        guard !searchQuery.isEmpty else {
+            return Text(transcribedText)
+        }
+        if let attributed = highlightedAttributedString {
+            return Text(attributed)
+        }
+        return Text(transcribedText)
+    }
+    
+    private func computeHighlighting() {
+        computeTask?.cancel()
+        
+        guard !searchQuery.isEmpty else {
+            highlightedAttributedString = nil
+            return
+        }
+        
+        let text = transcribedText
+        let query = searchQuery
+        
+        computeTask = Task.detached(priority: .userInitiated) {
+            var attributedString = AttributedString(text)
+            let searchOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+            
+            var searchStartIndex = text.startIndex
+            while let range = text.range(of: query, options: searchOptions, range: searchStartIndex..<text.endIndex) {
+                guard !Task.isCancelled else { return }
+                if let attributedRange = Range(range, in: attributedString) {
+                    attributedString[attributedRange].backgroundColor = .yellow
+                    attributedString[attributedRange].foregroundColor = .black
+                }
+                searchStartIndex = range.upperBound
+            }
+            
+            guard !Task.isCancelled else { return }
+            
+            await MainActor.run {
+                self.highlightedAttributedString = attributedString
+            }
+        }
     }
 
     var body: some View {
@@ -986,7 +1048,7 @@ struct TranscriptionView: View {
             Group {
                 if isExpanded {
                     ScrollView {
-                        Text(transcribedText)
+                        highlightedText
                             .font(.body)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
@@ -1004,7 +1066,7 @@ struct TranscriptionView: View {
                 } else {
                     if hasMoreLines {
                         Button(action: { isExpanded.toggle() }) {
-                            Text(transcribedText)
+                            highlightedText
                                 .font(.body)
                                 .lineLimit(3)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1013,7 +1075,7 @@ struct TranscriptionView: View {
                         }
                         .buttonStyle(.plain)
                     } else {
-                        Text(transcribedText)
+                        highlightedText
                             .font(.body)
                             .lineLimit(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1035,6 +1097,18 @@ struct TranscriptionView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
             }
+        }
+        .onAppear {
+            computeHighlighting()
+        }
+        .onChange(of: searchQuery) { _, _ in
+            computeHighlighting()
+        }
+        .onChange(of: transcribedText) { _, _ in
+            computeHighlighting()
+        }
+        .onDisappear {
+            computeTask?.cancel()
         }
     }
 }
@@ -1217,130 +1291,6 @@ enum ThemePalette {
 
     static func linkText(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? .blue : .primary
-    }
-}
-
-struct ScrollViewWithBottomFade<Content: View>: View {
-    let colorScheme: ColorScheme
-    @ViewBuilder let content: () -> Content
-    
-    var body: some View {
-        GeometryReader { outerGeometry in
-            ScrollView(showsIndicators: false) {
-                content()
-            }
-            .environment(\.scrollViewContainerHeight, outerGeometry.size.height)
-            .environment(\.scrollViewContainerMinY, outerGeometry.frame(in: .global).minY)
-        }
-    }
-}
-
-private struct ScrollViewContainerHeightKey: EnvironmentKey {
-    static let defaultValue: CGFloat = 0
-}
-
-private struct ScrollViewContainerMinYKey: EnvironmentKey {
-    static let defaultValue: CGFloat = 0
-}
-
-extension EnvironmentValues {
-    var scrollViewContainerHeight: CGFloat {
-        get { self[ScrollViewContainerHeightKey.self] }
-        set { self[ScrollViewContainerHeightKey.self] = newValue }
-    }
-    
-    var scrollViewContainerMinY: CGFloat {
-        get { self[ScrollViewContainerMinYKey.self] }
-        set { self[ScrollViewContainerMinYKey.self] = newValue }
-    }
-}
-
-struct RecordingRowWithFadeEffect: View {
-    let recording: Recording
-    let colorScheme: ColorScheme
-    let onDelete: () -> Void
-    let onRegenerate: () -> Void
-    
-    @Environment(\.scrollViewContainerHeight) private var containerHeight
-    @Environment(\.scrollViewContainerMinY) private var containerMinY
-    
-    @State private var visibilityRatio: CGFloat = 1.0
-    
-    private var isFullyVisible: Bool {
-        visibilityRatio >= 0.99
-    }
-    
-    private var scale: CGFloat {
-        guard !isFullyVisible else { return 1.0 }
-        let minScale: CGFloat = 0.94
-        return minScale + (1 - minScale) * visibilityRatio
-    }
-    
-    private var cardOpacity: CGFloat {
-        guard !isFullyVisible else { return 1.0 }
-        let minOpacity: CGFloat = 0.4
-        return minOpacity + (1 - minOpacity) * visibilityRatio
-    }
-    
-    private var gradientHeight: CGFloat {
-        guard !isFullyVisible else { return 0 }
-        return 50 * (1 - visibilityRatio)
-    }
-    
-    var body: some View {
-        RecordingRow(recording: recording, onDelete: onDelete, onRegenerate: onRegenerate)
-            .opacity(cardOpacity)
-            .scaleEffect(scale, anchor: .top)
-            .overlay(alignment: .bottom) {
-                if !isFullyVisible {
-                    LinearGradient(
-                        colors: [
-                            ThemePalette.windowBackground(colorScheme).opacity(0),
-                            ThemePalette.windowBackground(colorScheme).opacity(0.9 - visibilityRatio * 0.9)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: gradientHeight)
-                    .allowsHitTesting(false)
-                    .clipped()
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            updateVisibility(frame: geometry.frame(in: .global))
-                        }
-                        .onChange(of: geometry.frame(in: .global)) { _, newFrame in
-                            updateVisibility(frame: newFrame)
-                        }
-                }
-            )
-            .animation(.easeOut(duration: 0.1), value: isFullyVisible)
-            .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.9), value: visibilityRatio)
-    }
-    
-    private func updateVisibility(frame: CGRect) {
-        let cardHeight = frame.height
-        guard cardHeight > 0, containerHeight > 0 else {
-            visibilityRatio = 1.0
-            return
-        }
-        
-        let cardBottom = frame.maxY
-        let containerBottom = containerMinY + containerHeight
-        
-        let overflow = cardBottom - containerBottom
-        
-        if overflow <= 0 {
-            visibilityRatio = 1.0
-        } else {
-            let fadeZone: CGFloat = 80
-            let progress = min(overflow / fadeZone, 1.0)
-            visibilityRatio = max(0.2, 1 - progress)
-        }
     }
 }
 
