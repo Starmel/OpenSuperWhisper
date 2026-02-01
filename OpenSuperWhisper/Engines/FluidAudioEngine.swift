@@ -6,8 +6,12 @@ class FluidAudioEngine: TranscriptionEngine {
     var engineName: String { "FluidAudio" }
     
     private var asrManager: AsrManager?
+    private var asrModels: AsrModels?
     private var isCancelled = false
     private var transcriptionTask: Task<String, Error>?
+    private var progressTask: Task<Void, Never>?
+    
+    var onProgressUpdate: ((Float) -> Void)?
     
     var isModelLoaded: Bool {
         asrManager != nil
@@ -22,6 +26,7 @@ class FluidAudioEngine: TranscriptionEngine {
         try await manager.initialize(models: models)
         
         asrManager = manager
+        asrModels = models
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
@@ -31,44 +36,68 @@ class FluidAudioEngine: TranscriptionEngine {
         
         isCancelled = false
         
-        let task = Task.detached(priority: .userInitiated) { [weak self] in
-            try Task.checkCancellation()
-            
-            guard let self = self, !self.isCancelled else {
-                throw CancellationError()
-            }
-            
-            let result = try await asrManager.transcribe(url)
-            
-            try Task.checkCancellation()
-            
-            guard !self.isCancelled else {
-                throw CancellationError()
-            }
-            
-            let text = result.text
-            
-            var processedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            if ["zh", "ja", "ko"].contains(settings.selectedLanguage) && settings.useAsianAutocorrect && !processedText.isEmpty {
-                processedText = AutocorrectWrapper.format(processedText)
-            }
-            
-            return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        // Notify start
+        onProgressUpdate?(0.02)
+        
+        guard !isCancelled else {
+            throw CancellationError()
         }
         
-        transcriptionTask = task
-        
-        do {
-            return try await task.value
-        } catch is CancellationError {
-            isCancelled = true
-            throw TranscriptionError.processingFailed
+        // Start progress monitoring task using FluidAudio's transcriptionProgressStream
+        let onProgress = onProgressUpdate
+        progressTask?.cancel()
+        progressTask = Task { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Get the real progress stream from FluidAudio
+                let progressStream = await asrManager.transcriptionProgressStream
+                
+                for try await progress in progressStream {
+                    guard !Task.isCancelled, !self.isCancelled else { break }
+                    
+                    // FluidAudio reports 0.0-1.0, we map to 0.05-0.95
+                    let scaledProgress = 0.05 + Float(progress) * 0.90
+                    
+                    await MainActor.run {
+                        onProgress?(scaledProgress)
+                    }
+                }
+            } catch {
+                // Stream finished or error
+            }
         }
+        
+        defer {
+            progressTask?.cancel()
+            progressTask = nil
+        }
+        
+        // Perform actual transcription - FluidAudio will emit progress automatically
+        let result = try await asrManager.transcribe(url)
+        
+        guard !isCancelled else {
+            throw CancellationError()
+        }
+        
+        // Finalize
+        onProgressUpdate?(0.95)
+        
+        var processedText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if settings.shouldApplyAsianAutocorrect && !processedText.isEmpty {
+            processedText = AutocorrectWrapper.format(processedText)
+        }
+        
+        onProgressUpdate?(1.0)
+        
+        return processedText.isEmpty ? "No speech detected in the audio" : processedText
     }
     
     func cancelTranscription() {
         isCancelled = true
+        progressTask?.cancel()
+        progressTask = nil
         transcriptionTask?.cancel()
         transcriptionTask = nil
     }

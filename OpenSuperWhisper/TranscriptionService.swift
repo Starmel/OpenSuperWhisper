@@ -112,6 +112,23 @@ class TranscriptionService: ObservableObject {
             throw TranscriptionError.contextInitializationFailed
         }
         
+        // Setup progress callback for engines
+        if let whisperEngine = engine as? WhisperEngine {
+            whisperEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self = self, !self.isCancelled else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let fluidEngine = engine as? FluidAudioEngine {
+            fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self = self, !self.isCancelled else { return }
+                    self.progress = newProgress
+                }
+            }
+        }
+        
         let task = Task.detached(priority: .userInitiated) { [weak self] in
             try Task.checkCancellation()
             

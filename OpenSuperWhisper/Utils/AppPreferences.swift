@@ -93,8 +93,8 @@ final class AppPreferences {
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
     
-    // @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
-    var hasCompletedOnboarding: Bool = false
+    @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
+    var hasCompletedOnboarding: Bool
     
     @UserDefault(key: "useAsianAutocorrect", defaultValue: true)
     var useAsianAutocorrect: Bool
