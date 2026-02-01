@@ -100,9 +100,11 @@ class TranscriptionService: ObservableObject {
             }
         }
         
-        let asset = AVAsset(url: url)
-        let duration = try await asset.load(.duration)
-        let durationInSeconds = Float(CMTimeGetSeconds(duration))
+        let durationInSeconds = try await Task.detached(priority: .userInitiated) {
+            let asset = AVAsset(url: url)
+            let duration = try await asset.load(.duration)
+            return Float(CMTimeGetSeconds(duration))
+        }.value
         
         await MainActor.run {
             self.totalDuration = durationInSeconds

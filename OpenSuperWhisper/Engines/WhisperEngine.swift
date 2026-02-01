@@ -3,16 +3,57 @@ import AVFoundation
 
 private class ProgressContext {
     var onProgress: ((Float) -> Void)?
-    var lastReportedProgress: Float = 0.0
+    private var _lastReportedProgress: Float = 0.0
+    private let lock = NSLock()
+    
+    var lastReportedProgress: Float {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _lastReportedProgress
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _lastReportedProgress = newValue
+        }
+    }
 }
 
 class WhisperEngine: TranscriptionEngine {
     var engineName: String { "Whisper" }
     
     private var context: MyWhisperContext?
-    private var isCancelled = false
-    private var abortFlag: UnsafeMutablePointer<Bool>?
+    private let stateLock = NSLock()
+    private var _isCancelled = false
+    private var _abortFlag: UnsafeMutablePointer<Bool>?
     private var progressContext: ProgressContext?
+    
+    private var isCancelled: Bool {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _isCancelled
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _isCancelled = newValue
+        }
+    }
+    
+    private var abortFlag: UnsafeMutablePointer<Bool>? {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _abortFlag
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _abortFlag = newValue
+        }
+    }
     
     var onProgressUpdate: ((Float) -> Void)?
     

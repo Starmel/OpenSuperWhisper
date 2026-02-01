@@ -74,25 +74,35 @@ class TranscriptionQueue: ObservableObject {
     private func cleanupMissingFiles() async {
         let pendingRecordings = recordingStore.getPendingRecordings()
 
-        for recording in pendingRecordings {
-            guard let sourceURLString = recording.sourceFileURL,
-                  !sourceURLString.isEmpty else {
-                recordingStore.deleteRecording(recording)
-                continue
-            }
+        let recordingsToDelete = await Task.detached(priority: .utility) {
+            var toDelete: [Recording] = []
+            for recording in pendingRecordings {
+                guard let sourceURLString = recording.sourceFileURL,
+                      !sourceURLString.isEmpty else {
+                    toDelete.append(recording)
+                    continue
+                }
 
-            let sourceURL = URL(fileURLWithPath: sourceURLString)
-            if !FileManager.default.fileExists(atPath: sourceURL.path) {
-                recordingStore.deleteRecording(recording)
+                let sourceURL = URL(fileURLWithPath: sourceURLString)
+                if !FileManager.default.fileExists(atPath: sourceURL.path) {
+                    toDelete.append(recording)
+                }
             }
+            return toDelete
+        }.value
+        
+        for recording in recordingsToDelete {
+            recordingStore.deleteRecording(recording)
         }
     }
 
     func addFileToQueue(url: URL) async {
         do {
-            let asset = AVAsset(url: url)
-            let duration = try await asset.load(.duration)
-            let durationInSeconds = CMTimeGetSeconds(duration)
+            let durationInSeconds = try await Task.detached(priority: .userInitiated) {
+                let asset = AVAsset(url: url)
+                let duration = try await asset.load(.duration)
+                return CMTimeGetSeconds(duration)
+            }.value
 
             let timestamp = Date()
             let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -118,14 +128,18 @@ class TranscriptionQueue: ObservableObject {
     }
 
     func requeueRecording(_ recording: Recording) async {
-        let sourceURL: URL
-        if let existingSource = recording.sourceFileURL,
-           !existingSource.isEmpty,
-           FileManager.default.fileExists(atPath: existingSource) {
-            sourceURL = URL(fileURLWithPath: existingSource)
-        } else if FileManager.default.fileExists(atPath: recording.url.path) {
-            sourceURL = recording.url
-        } else {
+        let sourceURL: URL? = await Task.detached(priority: .userInitiated) {
+            if let existingSource = recording.sourceFileURL,
+               !existingSource.isEmpty,
+               FileManager.default.fileExists(atPath: existingSource) {
+                return URL(fileURLWithPath: existingSource)
+            } else if FileManager.default.fileExists(atPath: recording.url.path) {
+                return recording.url
+            }
+            return nil
+        }.value
+        
+        guard let sourceURL = sourceURL else {
             await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Cannot regenerate: audio file not found",
@@ -178,7 +192,11 @@ class TranscriptionQueue: ObservableObject {
 
         let sourceURL = URL(fileURLWithPath: sourceURLString)
 
-        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+        let sourceExists = await Task.detached(priority: .userInitiated) {
+            FileManager.default.fileExists(atPath: sourceURL.path)
+        }.value
+        
+        guard sourceExists else {
             await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Source file not found",
@@ -225,17 +243,19 @@ class TranscriptionQueue: ObservableObject {
                 }
 
                 let finalURL = recording.url
-                try? FileManager.default.createDirectory(
-                    at: Recording.recordingsDirectory,
-                    withIntermediateDirectories: true
-                )
+                try await Task.detached(priority: .userInitiated) {
+                    try? FileManager.default.createDirectory(
+                        at: Recording.recordingsDirectory,
+                        withIntermediateDirectories: true
+                    )
 
-                if sourceURL.path != finalURL.path {
-                    if FileManager.default.fileExists(atPath: finalURL.path) {
-                        try? FileManager.default.removeItem(at: finalURL)
+                    if sourceURL.path != finalURL.path {
+                        if FileManager.default.fileExists(atPath: finalURL.path) {
+                            try? FileManager.default.removeItem(at: finalURL)
+                        }
+                        try FileManager.default.copyItem(at: sourceURL, to: finalURL)
                     }
-                    try FileManager.default.copyItem(at: sourceURL, to: finalURL)
-                }
+                }.value
 
                 await recordingStore.updateRecordingProgressOnlySync(
                     recording.id,
