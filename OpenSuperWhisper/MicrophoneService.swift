@@ -360,6 +360,91 @@ class MicrophoneService: ObservableObject {
         
         return status == noErr ? deviceID : nil
     }
+    
+    func getInputVolume(for deviceID: AudioDeviceID) -> Float? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: 1
+        )
+        
+        var hasProperty = AudioObjectHasProperty(deviceID, &propertyAddress)
+        
+        if !hasProperty {
+            propertyAddress.mElement = kAudioObjectPropertyElementMain
+            hasProperty = AudioObjectHasProperty(deviceID, &propertyAddress)
+        }
+        
+        guard hasProperty else {
+            return nil
+        }
+        
+        var volume: Float32 = 0.0
+        var propertySize = UInt32(MemoryLayout<Float32>.size)
+        
+        let status = AudioObjectGetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &volume
+        )
+        
+        return status == noErr ? volume : nil
+    }
+    
+    func setInputVolume(_ volume: Float, for deviceID: AudioDeviceID) -> Bool {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: 1
+        )
+        
+        var hasProperty = AudioObjectHasProperty(deviceID, &propertyAddress)
+        
+        if !hasProperty {
+            propertyAddress.mElement = kAudioObjectPropertyElementMain
+            hasProperty = AudioObjectHasProperty(deviceID, &propertyAddress)
+        }
+        
+        guard hasProperty else {
+            return false
+        }
+        
+        var isSettable: DarwinBoolean = false
+        var status = AudioObjectIsPropertySettable(deviceID, &propertyAddress, &isSettable)
+        
+        guard status == noErr, isSettable.boolValue else {
+            return false
+        }
+        
+        var mutableVolume = max(0.0, min(1.0, volume))
+        status = AudioObjectSetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0,
+            nil,
+            UInt32(MemoryLayout<Float32>.size),
+            &mutableVolume
+        )
+        
+        return status == noErr
+    }
+    
+    func getInputVolume(for device: AudioDevice) -> Float? {
+        guard let deviceID = getCoreAudioDeviceID(for: device) else {
+            return nil
+        }
+        return getInputVolume(for: deviceID)
+    }
+    
+    func setInputVolume(_ volume: Float, for device: AudioDevice) -> Bool {
+        guard let deviceID = getCoreAudioDeviceID(for: device) else {
+            return false
+        }
+        return setInputVolume(volume, for: deviceID)
+    }
     #endif
 }
 

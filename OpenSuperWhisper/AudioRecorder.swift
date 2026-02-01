@@ -19,6 +19,8 @@ class AudioRecorder: NSObject, ObservableObject {
     private var notificationObserver: Any?
     private var microphoneChangeObserver: Any?
     private var connectionCheckTimer: DispatchSourceTimer?
+    private var savedInputVolume: Float?
+    private var recordingDeviceID: AudioDeviceID?
 
     // MARK: - Singleton Instance
 
@@ -34,6 +36,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     deinit {
+        restoreInputVolume()
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -129,6 +132,16 @@ class AudioRecorder: NSObject, ObservableObject {
         if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
             _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
             print("Set system default input to: \(activeMic.displayName)")
+            
+            if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
+                recordingDeviceID = deviceID
+                if let currentVolume = MicrophoneService.shared.getInputVolume(for: deviceID) {
+                    savedInputVolume = currentVolume
+                    if MicrophoneService.shared.setInputVolume(1.0, for: deviceID) {
+                        print("Microphone input volume boosted: \(currentVolume) -> 1.0")
+                    }
+                }
+            }
         }
         #endif
         
@@ -162,6 +175,7 @@ class AudioRecorder: NSObject, ObservableObject {
             print("Failed to start recording: \(error)")
             currentRecordingURL = nil
             updateRecordingState(isRecording: false, isConnecting: false)
+            restoreInputVolume()
         }
     }
     
@@ -169,6 +183,7 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+        restoreInputVolume()
         
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
@@ -188,11 +203,24 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+        restoreInputVolume()
         
         if let url = currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
         }
         currentRecordingURL = nil
+    }
+    
+    private func restoreInputVolume() {
+        #if os(macOS)
+        if let deviceID = recordingDeviceID, let volume = savedInputVolume {
+            if MicrophoneService.shared.setInputVolume(volume, for: deviceID) {
+                print("Microphone input volume restored: 1.0 -> \(volume)")
+            }
+        }
+        savedInputVolume = nil
+        recordingDeviceID = nil
+        #endif
     }
     
     func moveTemporaryRecording(from tempURL: URL, to finalURL: URL) throws {
@@ -276,6 +304,7 @@ extension AudioRecorder: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
             currentRecordingURL = nil
+            restoreInputVolume()
         }
     }
 }
