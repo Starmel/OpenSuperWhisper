@@ -10,18 +10,6 @@ import SwiftUI
 import FluidAudio
 
 class OnboardingViewModel: ObservableObject {
-    @Published var selectedEngine: String {
-        didSet {
-            AppPreferences.shared.selectedEngine = selectedEngine
-            if selectedEngine == "fluidaudio" {
-                selectedWhisperModelURL = nil
-                initializeFluidAudioModels()
-            } else {
-                initializeWhisperModels()
-            }
-        }
-    }
-    
     @Published var selectedLanguage: String {
         didSet {
             AppPreferences.shared.whisperLanguage = selectedLanguage
@@ -34,24 +22,11 @@ class OnboardingViewModel: ObservableObject {
         }
     }
 
-    @Published var selectedWhisperModelURL: URL? {
-        didSet {
-            if let url = selectedWhisperModelURL {
-                AppPreferences.shared.selectedWhisperModelPath = url.path
-            }
-        }
-    }
-    @Published var downloadableModels: [SettingsDownloadableModel] = []
-    @Published var downloadableFluidAudioModels: [SettingsFluidAudioModel] = []
+    @Published var unifiedModels: [OnboardingUnifiedModel] = []
+    @Published var selectedModelId: UUID?
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
-    
-    @Published var fluidAudioModelVersion: String {
-        didSet {
-            AppPreferences.shared.fluidAudioModelVersion = fluidAudioModelVersion
-        }
-    }
 
     private let modelManager = WhisperModelManager.shared
     private var downloadTask: Task<Void, Error>?
@@ -61,36 +36,24 @@ class OnboardingViewModel: ObservableObject {
         AppPreferences.shared.whisperLanguage = systemLanguage
         self.selectedLanguage = systemLanguage
         self.useAsianAutocorrect = AppPreferences.shared.useAsianAutocorrect
-        self.selectedEngine = AppPreferences.shared.selectedEngine
-        self.fluidAudioModelVersion = AppPreferences.shared.fluidAudioModelVersion
-        initializeWhisperModels()
-        initializeFluidAudioModels()
-        
-        if selectedEngine == "whisper", let defaultPath = AppPreferences.shared.selectedWhisperModelPath {
-            self.selectedWhisperModelURL = URL(fileURLWithPath: defaultPath)
-        }
+        initializeUnifiedModels()
     }
 
-    func initializeWhisperModels() {
-        guard selectedEngine == "whisper" else { return }
-        downloadableModels = SettingsDownloadableModels.availableModels.map { model in
+    func initializeUnifiedModels() {
+        unifiedModels = OnboardingUnifiedModels.availableModels.map { model in
             var updatedModel = model
-            let filename = model.url.lastPathComponent
-            updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
+            switch model.type {
+            case .whisper(let url, _):
+                let filename = url.lastPathComponent
+                updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
+            case .parakeet(let version):
+                updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: version)
+            }
             return updatedModel
         }
         
-        if selectedWhisperModelURL == nil, let firstDownloaded = downloadableModels.first(where: { $0.isDownloaded }) {
-            let modelPath = modelManager.modelsDirectory.appendingPathComponent(firstDownloaded.url.lastPathComponent).path
-            selectedWhisperModelURL = URL(fileURLWithPath: modelPath)
-        }
-    }
-    
-    func initializeFluidAudioModels() {
-        downloadableFluidAudioModels = SettingsFluidAudioModels.availableModels.map { model in
-            var updatedModel = model
-            updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: model.version)
-            return updatedModel
+        if selectedModelId == nil, let firstDownloaded = unifiedModels.first(where: { $0.isDownloaded }) {
+            selectedModelId = firstDownloaded.id
         }
     }
     
@@ -101,44 +64,60 @@ class OnboardingViewModel: ObservableObject {
     }
     
     var canContinue: Bool {
-        if selectedEngine == "whisper" {
-            if let selectedURL = selectedWhisperModelURL {
-                let filename = selectedURL.lastPathComponent
-                return downloadableModels.contains { $0.url.lastPathComponent == filename && $0.isDownloaded }
-            }
-            return false
-        } else {
-            // FluidAudio - проверяем что выбрана загруженная модель
-            return downloadableFluidAudioModels.contains { $0.version == fluidAudioModelVersion && $0.isDownloaded }
+        guard let selectedId = selectedModelId else { return false }
+        return unifiedModels.contains { $0.id == selectedId && $0.isDownloaded }
+    }
+    
+    func selectModel(_ model: OnboardingUnifiedModel) {
+        selectedModelId = model.id
+        
+        switch model.type {
+        case .whisper(let url, _):
+            AppPreferences.shared.selectedEngine = "whisper"
+            let modelPath = modelManager.modelsDirectory.appendingPathComponent(url.lastPathComponent).path
+            AppPreferences.shared.selectedWhisperModelPath = modelPath
+        case .parakeet(let version):
+            AppPreferences.shared.selectedEngine = "fluidaudio"
+            AppPreferences.shared.fluidAudioModelVersion = version
         }
     }
 
     @MainActor
-    func downloadModel(_ model: SettingsDownloadableModel) async throws {
+    func downloadModel(_ model: OnboardingUnifiedModel) async throws {
         guard !isDownloading else { return }
         
         isDownloading = true
         downloadingModelName = model.name
         downloadProgress = 0.0
         
-        if let index = downloadableModels.firstIndex(where: { $0.id == model.id }) {
-            downloadableModels[index].downloadProgress = 0.0
+        if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+            unifiedModels[index].downloadProgress = 0.0
         }
         
+        switch model.type {
+        case .whisper(let url, _):
+            try await downloadWhisperModel(model: model, url: url)
+        case .parakeet(let version):
+            try await downloadParakeetModel(model: model, version: version)
+        }
+    }
+    
+    @MainActor
+    private func downloadWhisperModel(model: OnboardingUnifiedModel, url: URL) async throws {
         downloadTask = Task {
             do {
-                let filename = model.url.lastPathComponent
+                let filename = url.lastPathComponent
                 
-                try await modelManager.downloadModel(url: model.url, name: filename) { [weak self] progress in
+                try await modelManager.downloadModel(url: url, name: filename) { [weak self] progress in
                     Task { @MainActor [weak self] in
                         guard let self = self, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
                         
                         self.downloadProgress = progress
-                        if let index = self.downloadableModels.firstIndex(where: { $0.id == model.id }) {
-                            self.downloadableModels[index].downloadProgress = progress
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = progress
                             if progress >= 1.0 {
-                                self.downloadableModels[index].isDownloaded = true
+                                self.unifiedModels[index].isDownloaded = true
                             }
                         }
                     }
@@ -149,21 +128,19 @@ class OnboardingViewModel: ObservableObject {
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
-                        if let index = self.downloadableModels.firstIndex(where: { $0.id == model.id }) {
-                            self.downloadableModels[index].downloadProgress = 0.0
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = 0.0
                         }
                     }
                     throw CancellationError()
                 }
                 
                 await MainActor.run {
-                    if let index = downloadableModels.firstIndex(where: { $0.id == model.id }) {
-                        downloadableModels[index].isDownloaded = true
-                        downloadableModels[index].downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].isDownloaded = true
+                        unifiedModels[index].downloadProgress = 0.0
                     }
-                    initializeWhisperModels()
-                    let modelPath = modelManager.modelsDirectory.appendingPathComponent(filename).path
-                    selectedWhisperModelURL = URL(fileURLWithPath: modelPath)
+                    selectModel(model)
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -173,18 +150,17 @@ class OnboardingViewModel: ObservableObject {
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
-                    if let index = downloadableModels.firstIndex(where: { $0.id == model.id }) {
-                        downloadableModels[index].downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].downloadProgress = 0.0
                     }
                 }
-                // Don't re-throw CancellationError - it's a manual cancellation
             } catch {
                 await MainActor.run {
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
-                    if let index = downloadableModels.firstIndex(where: { $0.id == model.id }) {
-                        downloadableModels[index].downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].downloadProgress = 0.0
                     }
                 }
                 throw error
@@ -195,44 +171,34 @@ class OnboardingViewModel: ObservableObject {
     }
     
     @MainActor
-    func downloadFluidAudioModel(_ model: SettingsFluidAudioModel) async throws {
-        guard !isDownloading else { return }
-        
-        isDownloading = true
-        downloadingModelName = model.name
-        downloadProgress = 0.0
-        
-        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-            downloadableFluidAudioModels[index].downloadProgress = 0.0
-        }
-        
+    private func downloadParakeetModel(model: OnboardingUnifiedModel, version: String) async throws {
         var wasCancelled = false
         
         downloadTask = Task {
             do {
-                let version: AsrModelVersion = model.version == "v2" ? .v2 : .v3
+                let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
-                        if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                            self.downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = 0.0
                         }
                     }
                     throw CancellationError()
                 }
                 
-                let models = try await AsrModels.downloadAndLoad(version: version)
+                let models = try await AsrModels.downloadAndLoad(version: asrVersion)
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
-                        if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                            self.downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = 0.0
                         }
                     }
                     throw CancellationError()
@@ -242,11 +208,11 @@ class OnboardingViewModel: ObservableObject {
                 try await manager.initialize(models: models)
                 
                 await MainActor.run {
-                    if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                        downloadableFluidAudioModels[index].isDownloaded = true
-                        downloadableFluidAudioModels[index].downloadProgress = 1.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].isDownloaded = true
+                        unifiedModels[index].downloadProgress = 1.0
                     }
-                    fluidAudioModelVersion = model.version
+                    selectModel(model)
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 1.0
@@ -257,21 +223,19 @@ class OnboardingViewModel: ObservableObject {
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
-                    if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                        downloadableFluidAudioModels[index].downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].downloadProgress = 0.0
                     }
                 }
-                // Don't re-throw CancellationError - it's a manual cancellation
             } catch {
-                // Check if we were cancelled before the error occurred
                 if Task.isCancelled {
                     wasCancelled = true
                     await MainActor.run {
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
-                        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                            downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            unifiedModels[index].downloadProgress = 0.0
                         }
                     }
                 } else {
@@ -279,8 +243,8 @@ class OnboardingViewModel: ObservableObject {
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
-                        if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
-                            downloadableFluidAudioModels[index].downloadProgress = 0.0
+                        if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            unifiedModels[index].downloadProgress = 0.0
                         }
                     }
                     throw error
@@ -288,14 +252,11 @@ class OnboardingViewModel: ObservableObject {
             }
         }
         
-        // Handle cancellation gracefully - don't throw if cancelled
         do {
             try await downloadTask?.value
         } catch is CancellationError {
-            // Already handled in catch block above, just consume the error
             wasCancelled = true
         } catch {
-            // If we were cancelled, don't throw
             if !wasCancelled {
                 throw error
             }
@@ -305,16 +266,14 @@ class OnboardingViewModel: ObservableObject {
     func cancelDownload() {
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
-            if selectedEngine == "whisper", let model = downloadableModels.first(where: { $0.name == modelName }) {
-                let filename = model.url.lastPathComponent
-                modelManager.cancelDownload(name: filename)
+            if let model = unifiedModels.first(where: { $0.name == modelName }) {
+                if case .whisper(let url, _) = model.type {
+                    let filename = url.lastPathComponent
+                    modelManager.cancelDownload(name: filename)
+                }
             }
-            // Reset progress for the downloading model
-            if let index = downloadableModels.firstIndex(where: { $0.name == modelName }) {
-                downloadableModels[index].downloadProgress = 0.0
-            }
-            if let index = downloadableFluidAudioModels.firstIndex(where: { $0.name == modelName }) {
-                downloadableFluidAudioModels[index].downloadProgress = 0.0
+            if let index = unifiedModels.firstIndex(where: { $0.name == modelName }) {
+                unifiedModels[index].downloadProgress = 0.0
             }
         }
         isDownloading = false
@@ -347,7 +306,7 @@ struct OnboardingView: View {
                 }
                 .padding(.bottom, 8)
                 
-                // Language Selection (before engine selection)
+                // Language Selection
                 HStack(spacing: 8) {
                     
                     Picker("Language", selection: $viewModel.selectedLanguage) {
@@ -360,20 +319,13 @@ struct OnboardingView: View {
                     .frame(width: 150)
                 }
                 
-                if ["zh", "ja", "ko"].contains(viewModel.selectedLanguage) {
+                if Settings.asianLanguages.contains(viewModel.selectedLanguage) {
                     Toggle(isOn: $viewModel.useAsianAutocorrect) {
                         Text("Use Asian Autocorrect")
                             .font(.caption)
                     }
                     .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                 }
-                
-                
-                Picker("Engine", selection: $viewModel.selectedEngine) {
-                    Text("Parakeet").tag("fluidaudio")
-                    Text("Whisper").tag("whisper")
-                }
-                .pickerStyle(.segmented)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -394,7 +346,7 @@ struct OnboardingView: View {
             // Content - Scrollable area
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(viewModel.selectedEngine == "whisper" ? "Whisper Model" : "Parakeet Model")
+                    Text("Model")
                         .font(.headline)
                         .fontWeight(.semibold)
                     
@@ -402,17 +354,9 @@ struct OnboardingView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    if viewModel.selectedEngine == "whisper" {
-                        VStack(spacing: 8) {
-                            ForEach($viewModel.downloadableModels) { $model in
-                                OnboardingWhisperModelItemView(model: $model, viewModel: viewModel)
-                            }
-                        }
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach($viewModel.downloadableFluidAudioModels) { $model in
-                                OnboardingFluidAudioModelItemView(model: $model, viewModel: viewModel)
-                            }
+                    VStack(spacing: 8) {
+                        ForEach($viewModel.unifiedModels) { $model in
+                            OnboardingUnifiedModelItemView(model: $model, viewModel: viewModel)
                         }
                     }
                 }
@@ -470,17 +414,18 @@ struct OnboardingView: View {
     }
 }
 
-struct OnboardingWhisperModelItemView: View {
-    @Binding var model: SettingsDownloadableModel
+struct OnboardingUnifiedModelItemView: View {
+    @Binding var model: OnboardingUnifiedModel
     @ObservedObject var viewModel: OnboardingViewModel
     @State private var showError = false
     @State private var errorMessage = ""
     
     var isSelected: Bool {
-        if let selectedURL = viewModel.selectedWhisperModelURL {
-            let filename = model.url.lastPathComponent
-            return selectedURL.lastPathComponent == filename
-        }
+        viewModel.selectedModelId == model.id
+    }
+    
+    var isParakeet: Bool {
+        if case .parakeet = model.type { return true }
         return false
     }
     
@@ -503,7 +448,12 @@ struct OnboardingWhisperModelItemView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name && isParakeet {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(0.7)
+                        .padding(.top, 4)
+                } else if model.downloadProgress > 0 && model.downloadProgress < 1 {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(height: 6)
@@ -526,8 +476,7 @@ struct OnboardingWhisperModelItemView: View {
                         .imageScale(.large)
                 } else {
                     Button(action: {
-                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                        viewModel.selectedWhisperModelURL = URL(fileURLWithPath: modelPath)
+                        viewModel.selectModel(model)
                     }) {
                         Text("Select")
                     }
@@ -567,116 +516,7 @@ struct OnboardingWhisperModelItemView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if model.isDownloaded && !isSelected {
-                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                viewModel.selectedWhisperModelURL = URL(fileURLWithPath: modelPath)
-            }
-        }
-        .alert("Download Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
-    }
-}
-
-struct OnboardingFluidAudioModelItemView: View {
-    @Binding var model: SettingsFluidAudioModel
-    @ObservedObject var viewModel: OnboardingViewModel
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    var isSelected: Bool {
-        viewModel.fluidAudioModelVersion == model.version
-    }
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(model.name)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    if model.isDownloaded {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.blue)
-                            .imageScale(.small)
-                    }
-                }
-                
-                Text(model.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(0.7)
-                        .padding(.top, 4)
-                } else if model.downloadProgress > 0 && model.downloadProgress < 1 {
-                    ProgressView(value: model.downloadProgress)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .frame(height: 6)
-                        .padding(.top, 4)
-                }
-            }
-            
-            Spacer()
-            
-            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
-                Button("Cancel") {
-                    viewModel.cancelDownload()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            } else if model.isDownloaded {
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .imageScale(.large)
-                } else {
-                    Button(action: {
-                        viewModel.fluidAudioModelVersion = model.version
-                    }) {
-                        Text("Select")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-            } else {
-                Button(action: {
-                    Task {
-                        do {
-                            try await viewModel.downloadFluidAudioModel(model)
-                        } catch is CancellationError {
-                            // Don't show error for manual cancellation
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
-                        }
-                    }
-                }) {
-                    Label("Download", systemImage: "arrow.down.circle")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(viewModel.isDownloading)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color(.controlBackgroundColor).opacity(0.8) : Color(.controlBackgroundColor).opacity(0.5))
-                .shadow(color: isSelected ? Color.blue.opacity(0.2) : Color.black.opacity(0.05), radius: isSelected ? 8 : 4, x: 0, y: 2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1.5)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if model.isDownloaded && !isSelected {
-                viewModel.fluidAudioModelVersion = model.version
+                viewModel.selectModel(model)
             }
         }
         .alert("Download Error", isPresented: $showError) {

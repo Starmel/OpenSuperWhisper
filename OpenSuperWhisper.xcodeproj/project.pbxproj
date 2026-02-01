@@ -1047,7 +1047,7 @@
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.7.7;
+				minimumVersion = 0.7.9;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

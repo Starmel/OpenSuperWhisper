@@ -475,6 +475,8 @@ struct SettingsDownloadableModels {
 }
 
 struct Settings {
+    static let asianLanguages: Set<String> = ["zh", "ja", "ko"]
+    
     var selectedLanguage: String
     var translateToEnglish: Bool
     var suppressBlankAudio: Bool
@@ -485,6 +487,14 @@ struct Settings {
     var useBeamSearch: Bool
     var beamSize: Int
     var useAsianAutocorrect: Bool
+    
+    var isAsianLanguage: Bool {
+        Settings.asianLanguages.contains(selectedLanguage)
+    }
+    
+    var shouldApplyAsianAutocorrect: Bool {
+        isAsianLanguage && useAsianAutocorrect
+    }
     
     init() {
         let prefs = AppPreferences.shared
@@ -541,8 +551,8 @@ struct SettingsView: View {
         .padding()
         .frame(width: 550)
         .background(Color(.windowBackgroundColor))
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
+        .safeAreaInset(edge: .bottom) {
+            HStack {
                 Button("Done") {
                     if viewModel.selectedEngine == "whisper" {
                         if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
@@ -553,7 +563,22 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
+                
+                Spacer()
+                
+                Link(destination: URL(string: "https://github.com/Starmel/OpenSuperWhisper")!) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star")
+                            .font(.system(size: 10))
+                        Text("GitHub")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
             }
+            .padding()
+            .background(Color(.windowBackgroundColor))
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
@@ -783,7 +808,7 @@ struct SettingsView: View {
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         .padding(.top, 4)
                         
-                        if ["zh", "ja", "ko"].contains(viewModel.selectedLanguage) {
+                        if Settings.asianLanguages.contains(viewModel.selectedLanguage) {
                             Toggle(isOn: $viewModel.useAsianAutocorrect) {
                                 Text("Use Asian Autocorrect")
                                     .font(.subheadline)
@@ -1074,8 +1099,6 @@ struct SettingsView: View {
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        let isHoldDisabled = viewModel.modifierOnlyHotkey.isCommandOrOption
-                        
                         Toggle(isOn: $viewModel.holdToRecord) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Hold to Record")
@@ -1086,18 +1109,6 @@ struct SettingsView: View {
                             }
                         }
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                        .disabled(isHoldDisabled)
-                        .opacity(isHoldDisabled ? 0.5 : 1.0)
-                        
-                        if isHoldDisabled {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle")
-                                    .font(.caption)
-                                Text("Not available for Command/Option keys")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.orange)
-                        }
                         
                         Toggle(isOn: $viewModel.playSoundOnRecordStart) {
                             Text("Play sound when recording starts")
@@ -1177,6 +1188,64 @@ struct SettingsFluidAudioModels {
             version: "v2",
             isDownloaded: false,
             description: "English-only, higher recall"
+        )
+    ]
+}
+
+enum OnboardingModelType {
+    case whisper(url: URL, size: Int)
+    case parakeet(version: String)
+}
+
+struct OnboardingUnifiedModel: Identifiable {
+    let id = UUID()
+    let name: String
+    var isDownloaded: Bool
+    let description: String
+    let type: OnboardingModelType
+    var downloadProgress: Double = 0.0
+}
+
+struct OnboardingUnifiedModels {
+    static let availableModels = [
+        OnboardingUnifiedModel(
+            name: "Whisper V3 Large",
+            isDownloaded: false,
+            description: "High accuracy, best quality",
+            type: .whisper(
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
+                size: 1624
+            )
+        ),
+        OnboardingUnifiedModel(
+            name: "Parakeet v3",
+            isDownloaded: false,
+            description: "Fastest processing and accurate",
+            type: .parakeet(version: "v3")
+        ),
+        OnboardingUnifiedModel(
+            name: "Parakeet v2",
+            isDownloaded: false,
+            description: "Fastest processing and English-only, higher recall",
+            type: .parakeet(version: "v2")
+        ),
+        OnboardingUnifiedModel(
+            name: "Whisper Medium",
+            isDownloaded: false,
+            description: "Balanced speed and accuracy",
+            type: .whisper(
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!,
+                size: 874
+            )
+        ),
+        OnboardingUnifiedModel(
+            name: "Whisper Small",
+            isDownloaded: false,
+            description: "Very fast processing",
+            type: .whisper(
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
+                size: 574
+            )
         )
     ]
 }

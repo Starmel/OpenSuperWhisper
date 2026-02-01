@@ -31,6 +31,21 @@ enum ModifierKey: String, CaseIterable, Identifiable, Codable {
         }
     }
     
+    var shortSymbol: String {
+        switch self {
+        case .none: return ""
+        case .leftCommand: return "⌘"
+        case .rightCommand: return "⌘"
+        case .leftOption: return "⌥"
+        case .rightOption: return "⌥"
+        case .leftShift: return "⇧"
+        case .rightShift: return "⇧"
+        case .leftControl: return "⌃"
+        case .rightControl: return "⌃"
+        case .fn: return "fn"
+        }
+    }
+    
     var keyCode: UInt16 {
         switch self {
         case .none: return 0

@@ -251,6 +251,16 @@ struct ContentView: View {
     @State private var showDeleteConfirmation = false
     @State private var searchTask: Task<Void, Never>? = nil
 
+    private var currentShortcutDescription: String {
+        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
+        if modifierKey != .none {
+            return modifierKey.shortSymbol
+        } else if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
+            return shortcut.description
+        }
+        return ""
+    }
+    
     private func performSearch(_ query: String) {
         searchTask?.cancel()
         
@@ -454,11 +464,9 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 // Подсказка о шорткате
                                 HStack(spacing: 6) {
-                                    if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
-                                        Text(shortcut.description)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
+                                    Text(currentShortcutDescription)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                     Text("to show mini recorder")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -724,12 +732,15 @@ struct RecordingRow: View {
                                     .trim(from: 0, to: CGFloat(recording.progress))
                                     .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 0.1), value: recording.progress)
                             }
                             .frame(width: 16, height: 16)
 
-                             Text("\(Int(recording.progress * 100))%")
+                            Text("\(Int(recording.progress * 100))%")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
+                                .contentTransition(.numericText())
+                                .animation(.linear(duration: 0.1), value: recording.progress)
                         }
                         
                         Text(statusText)
@@ -818,12 +829,15 @@ struct RecordingRow: View {
                                     .trim(from: 0, to: CGFloat(recording.progress))
                                     .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 0.1), value: recording.progress)
                             }
                             .frame(width: 16, height: 16)
 
                             Text("\(Int(recording.progress * 100))%")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
+                                .contentTransition(.numericText())
+                                .animation(.linear(duration: 0.1), value: recording.progress)
                         }
                         
                         Text(statusText)

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 @MainActor
 class TranscriptionQueue: ObservableObject {
@@ -13,32 +14,40 @@ class TranscriptionQueue: ObservableObject {
     private var processingTask: Task<Void, Never>?
     private var currentTranscriptionTask: Task<Void, Never>?
     private var cancelledRecordingIds: Set<UUID> = []
-    private var abortFlag: UnsafeMutablePointer<Bool>?
+    private var progressCancellable: AnyCancellable?
 
     private init() {
         self.transcriptionService = TranscriptionService.shared
         self.recordingStore = RecordingStore.shared
+        setupProgressObserver()
     }
-
-    deinit {
-        abortFlag?.deallocate()
+    
+    private func setupProgressObserver() {
+        progressCancellable = transcriptionService.$progress
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newProgress in
+                guard let self = self,
+                      let recordingId = self.currentRecordingId,
+                      newProgress > 0,
+                      newProgress < 1.0 else { return }
+                
+                Task {
+                    await self.recordingStore.updateRecordingStatusOnly(
+                        recordingId,
+                        progress: newProgress,
+                        status: .transcribing
+                    )
+                }
+            }
     }
 
     func cancelRecording(_ recordingId: UUID) {
         cancelledRecordingIds.insert(recordingId)
 
         if currentRecordingId == recordingId {
-            abortFlag?.pointee = true
+            transcriptionService.cancelTranscription()
             currentTranscriptionTask?.cancel()
         }
-    }
-
-    private func resetAbortFlag() {
-        if abortFlag != nil {
-            abortFlag?.deallocate()
-        }
-        abortFlag = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
-        abortFlag?.initialize(to: false)
     }
 
     private func isRecordingCancelled(_ recordingId: UUID) -> Bool {
@@ -204,58 +213,12 @@ class TranscriptionQueue: ObservableObject {
                     return
                 }
 
-                let samples = try await transcriptionService.convertAudioToPCM(fileURL: sourceURL) { [weak self] progress in
-                    Task { @MainActor in
-                        guard let self = self, !self.isRecordingCancelled(recording.id) else { return }
-                        if isRegeneration {
-                            await self.recordingStore.updateRecordingStatusOnly(
-                                recording.id,
-                                progress: progress * 0.1,
-                                status: .converting
-                            )
-                        } else {
-                            self.recordingStore.updateRecordingProgressOnly(
-                                recording.id,
-                                transcription: "",
-                                progress: progress * 0.1,
-                                status: .converting
-                            )
-                        }
-                    }
-                }
-
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
                     return
                 }
 
-                guard let samples = samples else {
-                    throw TranscriptionError.audioConversionFailed
-                }
-
-                if isRegeneration {
-                    await recordingStore.updateRecordingStatusOnly(
-                        recording.id,
-                        progress: 0.1,
-                        status: .transcribing
-                    )
-                } else {
-                    await recordingStore.updateRecordingProgressOnlySync(
-                        recording.id,
-                        transcription: "Starting transcription...",
-                        progress: 0.1,
-                        status: .transcribing
-                    )
-                }
-
-                if isRecordingCancelled(recording.id) || Task.isCancelled {
-                    return
-                }
-
-                let text = try await transcribeWithProgress(
-                    samples: samples,
-                    recordingId: recording.id,
-                    sourceURL: sourceURL
-                )
+                let settings = Settings()
+                let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings)
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
                     return
@@ -300,147 +263,4 @@ class TranscriptionQueue: ObservableObject {
         clearCancellation(recording.id)
     }
 
-    private func transcribeWithProgress(samples: [Float], recordingId: UUID, sourceURL: URL) async throws -> String {
-        let asset = AVAsset(url: sourceURL)
-        let duration = try await asset.load(.duration)
-        let totalDuration = Float(CMTimeGetSeconds(duration))
-
-        resetAbortFlag()
-        let abortFlagForTask = abortFlag
-
-        guard let contextForTask = transcriptionService.getContext() else {
-            throw TranscriptionError.contextInitializationFailed
-        }
-
-        return try await withCheckedThrowingContinuation { continuation in
-            Task.detached(priority: .userInitiated) { [self] in
-                let context = contextForTask
-
-                let nThreads = 4
-
-                guard context.pcmToMel(samples: samples, nSamples: samples.count, nThreads: nThreads) else {
-                    continuation.resume(throwing: TranscriptionError.processingFailed)
-                    return
-                }
-
-                guard context.encode(offset: 0, nThreads: nThreads) else {
-                    continuation.resume(throwing: TranscriptionError.processingFailed)
-                    return
-                }
-
-                var params = WhisperFullParams()
-                let settings = Settings()
-
-                params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
-                params.nThreads = Int32(nThreads)
-                params.noTimestamps = !settings.showTimestamps
-                params.suppressBlank = settings.suppressBlankAudio
-                params.translate = settings.translateToEnglish
-                params.language = settings.selectedLanguage != "auto" ? settings.selectedLanguage : nil
-                params.detectLanguage = false
-                params.temperature = Float(settings.temperature)
-                params.noSpeechThold = Float(settings.noSpeechThreshold)
-                params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
-
-                if settings.useBeamSearch {
-                    params.beamSearchBeamSize = Int32(settings.beamSize)
-                }
-
-                params.printRealtime = false
-                params.print_realtime = false
-
-                let abortCallback: @convention(c) (UnsafeMutableRawPointer?) -> Bool = { userData in
-                    guard let userData = userData else { return false }
-                    let flag = userData.assumingMemoryBound(to: Bool.self)
-                    return flag.pointee
-                }
-                params.abortCallback = abortCallback
-                if let abortFlag = abortFlagForTask {
-                    params.abortCallbackUserData = UnsafeMutableRawPointer(abortFlag)
-                }
-
-                let segmentCallback: @convention(c) (OpaquePointer?, OpaquePointer?, Int32, UnsafeMutableRawPointer?) -> Void = { ctx, state, n_new, user_data in
-                    guard let ctx = ctx,
-                          let userData = user_data else { return }
-
-                    let info = userData.assumingMemoryBound(to: SegmentCallbackInfo.self).pointee
-
-                    let nSegments = Int(whisper_full_n_segments(ctx))
-                    let startIdx = 0
-
-                    var newText = ""
-                    var latestTimestamp: Float = 0
-
-                    for i in startIdx..<nSegments {
-                        guard let cString = whisper_full_get_segment_text(ctx, Int32(i)) else { continue }
-                        let segmentText = String(cString: cString)
-                        newText += segmentText + " "
-
-                        let t1 = Float(whisper_full_get_segment_t1(ctx, Int32(i))) / 100.0
-                        latestTimestamp = max(latestTimestamp, t1)
-                    }
-
-                    let cleanedText = newText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !cleanedText.isEmpty {
-                        let recordingId = info.recordingId
-                        let totalDuration = info.totalDuration
-                        let progress = totalDuration > 0 ? min(latestTimestamp / totalDuration, 1.0) : 0.0
-                        let normalizedProgress = 0.1 + (progress * 0.9)
-
-                        Task { @MainActor in
-                            let store = RecordingStore.shared
-                            store.updateRecordingProgressOnly(
-                                recordingId,
-                                transcription: cleanedText,
-                                progress: normalizedProgress,
-                                status: .transcribing
-                            )
-                        }
-                    }
-                }
-
-                let callbackInfo = UnsafeMutablePointer<SegmentCallbackInfo>.allocate(capacity: 1)
-                callbackInfo.initialize(to: SegmentCallbackInfo(recordingId: recordingId, totalDuration: totalDuration))
-                defer { callbackInfo.deallocate() }
-
-                params.newSegmentCallback = segmentCallback
-                params.newSegmentCallbackUserData = UnsafeMutableRawPointer(callbackInfo)
-
-                var cParams = params.toC()
-
-                guard context.full(samples: samples, params: &cParams) else {
-                    continuation.resume(throwing: TranscriptionError.processingFailed)
-                    return
-                }
-
-                var text = ""
-                let nSegments = context.fullNSegments
-
-                for i in 0..<nSegments {
-                    guard let segmentText = context.fullGetSegmentText(iSegment: i) else { continue }
-
-                    if settings.showTimestamps {
-                        let t0 = context.fullGetSegmentT0(iSegment: i)
-                        let t1 = context.fullGetSegmentT1(iSegment: i)
-                        text += String(format: "[%.1f->%.1f] ", Float(t0) / 100.0, Float(t1) / 100.0)
-                    }
-                    text += segmentText + "\n"
-                }
-
-                let cleanedText = text
-                    .replacingOccurrences(of: "[MUSIC]", with: "")
-                    .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                let finalText = cleanedText.isEmpty ? "No speech detected in the audio" : cleanedText
-
-                continuation.resume(returning: finalText)
-            }
-        }
-    }
-}
-
-struct SegmentCallbackInfo {
-    let recordingId: UUID
-    let totalDuration: Float
 }
