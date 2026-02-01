@@ -119,11 +119,17 @@ class MicrophoneService: ObservableObject {
         let mfr = manufacturer.lowercased()
         if mfr.contains("apple") {
             let uniqueID = device.uniqueID.lowercased()
+            let name = device.localizedName.lowercased()
+            
+            let isContinuity = name.contains("iphone") || name.contains("continuity") || name.contains("handoff") ||
+                               uniqueID.contains("iphone") || uniqueID.contains("continuity") || uniqueID.contains("handoff")
+            
             if uniqueID.contains("builtin") || 
                uniqueID.contains("internal") ||
                (!uniqueID.contains("usb") &&
                !uniqueID.contains("bluetooth") &&
-               !uniqueID.contains("airpods")) {
+               !uniqueID.contains("airpods") &&
+               !isContinuity) {
                 return true
             }
         }
@@ -172,6 +178,83 @@ class MicrophoneService: ObservableObject {
     
     func getActiveMicrophone() -> AudioDevice? {
         return currentMicrophone
+    }
+    
+    func isActiveMicrophoneBluetooth() -> Bool {
+        guard let device = getActiveMicrophone() else { return false }
+        return isBluetoothMicrophone(device)
+    }
+    
+    func isActiveMicrophoneRequiresConnection() -> Bool {
+        guard let device = getActiveMicrophone() else { return false }
+        return isBluetoothMicrophone(device) || isContinuityMicrophone(device)
+    }
+    
+    func isBluetoothMicrophone(_ device: AudioDevice) -> Bool {
+        if let avDevice = AVCaptureDevice(uniqueID: device.id) {
+            let transportType = avDevice.transportType
+            if transportType == 1651275109 {
+                return true
+            }
+        }
+        
+        let name = device.name.lowercased()
+        let id = device.id.lowercased()
+        let hasBluetoothInName = name.contains("bluetooth")
+        let hasBluetoothInID = id.contains("bluetooth")
+        let macAddressPattern = "^[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}"
+        let hasMACAddress = id.range(of: macAddressPattern, options: .regularExpression) != nil
+        
+        if hasBluetoothInName || hasBluetoothInID {
+            return true
+        }
+        
+        if hasMACAddress {
+            let transportType = getTransportType(for: device)
+            return transportType == 1651275109
+        }
+        
+        return false
+    }
+    
+    private func getTransportType(for device: AudioDevice) -> Int32 {
+        guard let deviceID = getCoreAudioDeviceID(for: device) else { return 0 }
+        
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var transportType: UInt32 = 0
+        var propertySize = UInt32(MemoryLayout<UInt32>.size)
+        
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(deviceID),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &transportType
+        )
+        
+        return status == noErr ? Int32(transportType) : 0
+    }
+    
+    func isActiveMicrophoneContinuity() -> Bool {
+        guard let device = getActiveMicrophone() else { return false }
+        return isContinuityMicrophone(device)
+    }
+    
+    func isContinuityMicrophone(_ device: AudioDevice) -> Bool {
+        let name = device.name.lowercased()
+        let id = device.id.lowercased()
+        let manufacturer = (device.manufacturer ?? "").lowercased()
+        let isApple = manufacturer.contains("apple")
+        let hasContinuityName = name.contains("continuity") || id.contains("continuity")
+        let hasIPhoneName = name.contains("iphone") || id.contains("iphone")
+        let hasHandoffName = name.contains("handoff") || id.contains("handoff")
+        return isApple && (hasContinuityName || hasIPhoneName || hasHandoffName)
     }
     
     func getAVCaptureDevice() -> AVCaptureDevice? {
