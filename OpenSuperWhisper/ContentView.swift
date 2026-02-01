@@ -32,6 +32,34 @@ class ContentViewModel: ObservableObject {
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        recorder.$isConnecting
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isConnecting in
+                guard let self = self else { return }
+                if isConnecting && self.state != .decoding {
+                    self.state = .connecting
+                    self.stopBlinking()
+                    self.stopDurationTimer()
+                    self.recordingDuration = 0
+                }
+            }
+            .store(in: &cancellables)
+        
+        recorder.$isRecording
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isRecording in
+                guard let self = self else { return }
+                if isRecording && self.state != .decoding {
+                    self.state = .recording
+                    self.startBlinking()
+                    self.startDurationTimerIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+    }
     
     func loadInitialData() {
         currentSearchQuery = ""
@@ -124,28 +152,22 @@ class ContentViewModel: ObservableObject {
     }
     
     func startRecording() {
-        state = .recording
-        startBlinking()
-        recordingStartTime = Date()
-        recordingDuration = 0
-        
-        // Start timer to track recording duration
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            // Capture the start time in a local variable to avoid actor isolation issues
-            let startTime = Date()
-            
-            // Update duration on the main thread
-            Task { @MainActor in
-                if let recordingStartTime = self.recordingStartTime {
-                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
-                }
-            }
+        if microphoneService.isActiveMicrophoneRequiresConnection() {
+            state = .connecting
+            stopBlinking()
+            stopDurationTimer()
+            recordingDuration = 0
+        } else {
+            state = .recording
+            startBlinking()
+            recordingStartTime = Date()
+            recordingDuration = 0
+            startDurationTimerIfNeeded()
         }
-        RunLoop.main.add(durationTimer!, forMode: .common)
         
-        recorder.startRecording()
+        Task.detached { [recorder] in
+            recorder.startRecording()
+        }
     }
 
     func startDecoding() {
@@ -228,8 +250,27 @@ class ContentViewModel: ObservableObject {
         durationTimer = nil
         recordingStartTime = nil
     }
+    
+    private func startDurationTimerIfNeeded() {
+        guard durationTimer == nil else { return }
+        if recordingStartTime == nil {
+            recordingStartTime = Date()
+            recordingDuration = 0
+        }
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let startTime = Date()
+            Task { @MainActor in
+                if let recordingStartTime = self.recordingStartTime {
+                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
+                }
+            }
+        }
+        RunLoop.main.add(durationTimer!, forMode: .common)
+    }
 
     private func startBlinking() {
+        blinkTimer?.invalidate()
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.isBlinking.toggle()
@@ -452,7 +493,7 @@ struct ContentView: View {
                                 viewModel.startRecording()
                             }
                         }) {
-                            if viewModel.state == .decoding {
+                            if viewModel.state == .decoding || viewModel.state == .connecting {
                                 ProgressView()
                                     .scaleEffect(1.0)
                                     .frame(width: 48, height: 48)

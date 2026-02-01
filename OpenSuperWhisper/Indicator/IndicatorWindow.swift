@@ -1,8 +1,10 @@
 import Cocoa
+import Combine
 import SwiftUI
 
 enum RecordingState {
     case idle
+    case connecting
     case recording
     case decoding
     case busy
@@ -24,6 +26,7 @@ class IndicatorViewModel: ObservableObject {
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
+    private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
     private let transcriptionService: TranscriptionService
@@ -33,6 +36,28 @@ class IndicatorViewModel: ObservableObject {
         self.recordingStore = RecordingStore.shared
         self.transcriptionService = TranscriptionService.shared
         self.transcriptionQueue = TranscriptionQueue.shared
+        
+        recorder.$isConnecting
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isConnecting in
+                guard let self = self else { return }
+                if isConnecting {
+                    self.state = .connecting
+                    self.stopBlinking()
+                }
+            }
+            .store(in: &cancellables)
+        
+        recorder.$isRecording
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isRecording in
+                guard let self = self else { return }
+                if isRecording {
+                    self.state = .recording
+                    self.startBlinking()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     var isTranscriptionBusy: Bool {
@@ -56,9 +81,17 @@ class IndicatorViewModel: ObservableObject {
             return
         }
         
-        state = .recording
-        startBlinking()
-        recorder.startRecording()
+        if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
+            state = .connecting
+            stopBlinking()
+        } else {
+            state = .recording
+            startBlinking()
+        }
+        
+        Task.detached { [recorder] in
+            recorder.startRecording()
+        }
     }
     
     func startDecoding() {
@@ -140,6 +173,7 @@ class IndicatorViewModel: ObservableObject {
     }
     
     private func startBlinking() {
+        blinkTimer?.invalidate()
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             // Update UI on the main thread
             Task { @MainActor in
@@ -211,6 +245,17 @@ struct IndicatorWindow: View {
         
         VStack(spacing: 12) {
             switch viewModel.state {
+            case .connecting:
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 24)
+                    
+                    Text("Connecting...")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
             case .recording:
                 HStack(spacing: 8) {
                     RecordingIndicator(isBlinking: viewModel.isBlinking)
