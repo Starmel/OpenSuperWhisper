@@ -85,7 +85,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     private func observeMicrophoneChanges() {
-        microphoneObserver = microphoneService.$availableMicrophones
+        microphoneObserver = microphoneService.objectWillChange
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.updateStatusBarMenu()
             }
