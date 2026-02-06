@@ -110,23 +110,7 @@ class WhisperEngine: TranscriptionEngine {
         
         try Task.checkCancellation()
         
-        let nThreads = 4
-        
-        guard context.pcmToMel(samples: samples, nSamples: samples.count, nThreads: nThreads) else {
-            throw TranscriptionError.processingFailed
-        }
-        
-        onProgressUpdate?(0.15)
-        
-        try Task.checkCancellation()
-        
-        guard context.encode(offset: 0, nThreads: nThreads) else {
-            throw TranscriptionError.processingFailed
-        }
-        
-        onProgressUpdate?(0.20)
-        
-        try Task.checkCancellation()
+        let nThreads = max(2, min(ProcessInfo.processInfo.activeProcessorCount, 8))
         
         var params = WhisperFullParams()
         params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
@@ -134,8 +118,9 @@ class WhisperEngine: TranscriptionEngine {
         params.noTimestamps = !settings.showTimestamps
         params.suppressBlank = settings.suppressBlankAudio
         params.translate = settings.translateToEnglish
-        params.language = settings.selectedLanguage != "auto" ? settings.selectedLanguage : nil
-        params.detectLanguage = false
+        let isAutoDetect = settings.selectedLanguage == "auto"
+        params.language = isAutoDetect ? nil : settings.selectedLanguage
+        params.detectLanguage = isAutoDetect
         params.temperature = Float(settings.temperature)
         params.noSpeechThold = Float(settings.noSpeechThreshold)
         params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
@@ -147,14 +132,14 @@ class WhisperEngine: TranscriptionEngine {
             return flag.pointee
         }
         
-        // Progress callback: whisper reports 0-100%, we map to 20-95%
+        // Progress callback: whisper reports 0-100%, we map to 10-95%
         // Note: callback is called from C code, we need to bridge to Swift safely
         typealias WhisperProgressCallback = @convention(c) (OpaquePointer?, OpaquePointer?, Int32, UnsafeMutableRawPointer?) -> Void
         let progressCallback: WhisperProgressCallback = { _, _, progressPercent, userData in
             guard let userData = userData else { return }
             let ctx = Unmanaged<ProgressContext>.fromOpaque(userData).takeUnretainedValue()
-            // Map whisper progress (0-100) to our range (20-95%)
-            let normalizedProgress = 0.20 + (Float(progressPercent) / 100.0) * 0.75
+            // Map whisper progress (0-100) to our range (10-95%)
+            let normalizedProgress = 0.10 + (Float(progressPercent) / 100.0) * 0.85
             // Report every progress update for smooth animation
             if normalizedProgress > ctx.lastReportedProgress {
                 ctx.lastReportedProgress = normalizedProgress
@@ -300,7 +285,7 @@ class WhisperEngine: TranscriptionEngine {
                         hasError = true
                         return
                     }
-                    converter.sampleRateConverterQuality = AVAudioQuality.min.rawValue
+                    converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
                     
                     let inputChunkSize: AVAudioFrameCount = 262144 // 256K for parallel
                     let outputChunkSize = AVAudioFrameCount(Double(inputChunkSize) * ratio) + 256
@@ -391,7 +376,7 @@ class WhisperEngine: TranscriptionEngine {
         guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
             return nil
         }
-        converter.sampleRateConverterQuality = AVAudioQuality.min.rawValue
+        converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         
         let outputFrameCount = AVAudioFrameCount(Double(totalFrames) * ratio) + 1024
         let inputChunkSize: AVAudioFrameCount = 1048576 // 1M for sequential

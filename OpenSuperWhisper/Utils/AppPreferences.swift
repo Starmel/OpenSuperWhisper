@@ -66,7 +66,7 @@ final class AppPreferences {
     @UserDefault(key: "translateToEnglish", defaultValue: false)
     var translateToEnglish: Bool
     
-    @UserDefault(key: "suppressBlankAudio", defaultValue: false)
+    @UserDefault(key: "suppressBlankAudio", defaultValue: true)
     var suppressBlankAudio: Bool
     
     @UserDefault(key: "showTimestamps", defaultValue: false)
