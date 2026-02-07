@@ -9,6 +9,11 @@ import Foundation
 import SwiftUI
 import FluidAudio
 
+enum OnboardingShortcutOption: String, CaseIterable {
+    case keyCombination
+    case rightOption
+}
+
 class OnboardingViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
@@ -19,6 +24,18 @@ class OnboardingViewModel: ObservableObject {
     @Published var useAsianAutocorrect: Bool {
         didSet {
             AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
+        }
+    }
+    
+    @Published var selectedShortcut: OnboardingShortcutOption {
+        didSet {
+            switch selectedShortcut {
+            case .keyCombination:
+                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
+            case .rightOption:
+                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.rightOption.rawValue
+            }
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
     }
 
@@ -36,6 +53,16 @@ class OnboardingViewModel: ObservableObject {
         AppPreferences.shared.whisperLanguage = systemLanguage
         self.selectedLanguage = systemLanguage
         self.useAsianAutocorrect = AppPreferences.shared.useAsianAutocorrect
+        
+        let currentHotkey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
+        if currentHotkey == .none && !AppPreferences.shared.hasCompletedOnboarding {
+            self.selectedShortcut = .rightOption
+            AppPreferences.shared.modifierOnlyHotkey = ModifierKey.rightOption.rawValue
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+        } else {
+            self.selectedShortcut = currentHotkey == .rightOption ? .rightOption : .keyCombination
+        }
+        
         initializeUnifiedModels()
     }
 
@@ -287,6 +314,8 @@ struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showError = false
     @State private var errorMessage = ""
+    
+    private let keyboardLayoutInfo: KeyboardLayoutInfo? = KeyboardLayoutProvider.shared.resolveInfo()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -345,18 +374,58 @@ struct OnboardingView: View {
             
             // Content - Scrollable area
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Model")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: 20) {
+                    // Shortcut Selection
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Shortcut")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Text("Choose how to trigger recording")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        if let layoutInfo = keyboardLayoutInfo {
+                            OnboardingKeyboardView(selectedShortcut: viewModel.selectedShortcut, layoutInfo: layoutInfo)
+                        }
+                        
+                        HStack(spacing: 8) {
+                            OnboardingShortcutCard(
+                                title: "⌥ + ~",
+                                subtitle: "Key Combination",
+                                isSelected: viewModel.selectedShortcut == .keyCombination
+                            ) {
+                                viewModel.selectedShortcut = .keyCombination
+                            }
+                            
+                            OnboardingShortcutCard(
+                                title: "Right ⌥",
+                                subtitle: "Single Modifier Key",
+                                isSelected: viewModel.selectedShortcut == .rightOption
+                            ) {
+                                viewModel.selectedShortcut = .rightOption
+                            }
+                        }
+                        
+                        Text("You can change this later in Settings")
+                            .font(.caption2)
+                            .foregroundColor(Color(.tertiaryLabelColor))
+                    }
                     
-                    Text("Download a model to get started")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    VStack(spacing: 8) {
-                        ForEach($viewModel.unifiedModels) { $model in
-                            OnboardingUnifiedModelItemView(model: $model, viewModel: viewModel)
+                    // Model Selection
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Model")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Text("Download a model to get started")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        VStack(spacing: 8) {
+                            ForEach($viewModel.unifiedModels) { $model in
+                                OnboardingUnifiedModelItemView(model: $model, viewModel: viewModel)
+                            }
                         }
                     }
                 }
@@ -524,6 +593,187 @@ struct OnboardingUnifiedModelItemView: View {
         } message: {
             Text(errorMessage)
         }
+    }
+}
+
+private struct KeyCap: View {
+    let label: String
+    let w: CGFloat
+    let h: CGFloat
+    let highlighted: Bool
+    
+    var body: some View {
+        Text(label)
+            .font(.system(size: w > 20 ? 9 : 7, weight: .medium))
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .frame(width: w, height: h)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(highlighted ? Color.accentColor.opacity(0.35) : Color(.controlBackgroundColor).opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(highlighted ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .foregroundColor(highlighted ? .white : .secondary)
+    }
+}
+
+struct OnboardingKeyboardView: View {
+    let selectedShortcut: OnboardingShortcutOption
+    let layoutInfo: KeyboardLayoutInfo
+    
+    private let gap: CGFloat = 2
+    private let pad: CGFloat = 6
+    private let refUnits: CGFloat = 14.5
+    private let refGaps: CGFloat = 13
+    
+    private static let row0Keycodes: [UInt16] = [50, 18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 27, 24]
+    private static let row1Keycodes: [UInt16] = [12, 13, 14, 15, 17, 16, 32, 34, 31, 35, 33, 30]
+    private static let row2Keycodes: [UInt16] = [0, 1, 2, 3, 5, 4, 38, 40, 37, 41, 39]
+    private static let row3Keycodes: [UInt16] = [6, 7, 8, 9, 11, 45, 46, 43, 47, 44]
+    
+    private func isHighlighted(_ id: String) -> Bool {
+        switch selectedShortcut {
+        case .keyCombination:
+            return id == "leftOption" || id == "tilde"
+        case .rightOption:
+            return id == "rightOption"
+        }
+    }
+    
+    private func label(_ keycode: UInt16) -> String {
+        layoutInfo.labels[keycode] ?? ""
+    }
+    
+    private func u(for width: CGFloat) -> CGFloat {
+        (width - pad * 2 - gap * refGaps) / refUnits
+    }
+    
+    private func wideKey(singleCount: Int, wideCount: Int, u: CGFloat) -> CGFloat {
+        let rowWidth = refUnits * u + refGaps * gap
+        let singleWidth = CGFloat(singleCount) * u
+        let totalGaps = CGFloat(singleCount + wideCount - 1) * gap
+        return (rowWidth - singleWidth - totalGaps) / CGFloat(wideCount)
+    }
+    
+    private func spaceWidth(singleCount: Int, cmdWidth: CGFloat, u: CGFloat) -> CGFloat {
+        let rowWidth = refUnits * u + refGaps * gap
+        let singleWidth = CGFloat(singleCount) * u
+        let cmds = cmdWidth * 2
+        let totalGaps = CGFloat(singleCount + 3) * gap
+        return rowWidth - singleWidth - cmds - totalGaps
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            let u = u(for: geo.size.width)
+            let h = u
+            
+            let backspace = refUnits * u + refGaps * gap - 13 * u - 13 * gap
+            let tab = backspace
+            let caps = wideKey(singleCount: 11, wideCount: 2, u: u)
+            let shift = wideKey(singleCount: 10, wideCount: 2, u: u)
+            let cmd = u * 1.25
+            let space = spaceWidth(singleCount: 7, cmdWidth: cmd, u: u)
+            
+            VStack(spacing: gap) {
+                HStack(spacing: gap) {
+                    KeyCap(label: label(50), w: u, h: h, highlighted: isHighlighted("tilde"))
+                    ForEach(Array(Self.row0Keycodes.dropFirst()), id: \.self) { kc in
+                        KeyCap(label: label(kc), w: u, h: h, highlighted: false)
+                    }
+                    KeyCap(label: "⌫", w: backspace, h: h, highlighted: false)
+                }
+                
+                HStack(spacing: gap) {
+                    KeyCap(label: "⇥", w: tab, h: h, highlighted: false)
+                    ForEach(Self.row1Keycodes, id: \.self) { kc in
+                        KeyCap(label: label(kc), w: u, h: h, highlighted: false)
+                    }
+                    KeyCap(label: label(42), w: u, h: h, highlighted: false)
+                }
+                
+                HStack(spacing: gap) {
+                    KeyCap(label: "⇪", w: caps, h: h, highlighted: false)
+                    ForEach(Self.row2Keycodes, id: \.self) { kc in
+                        KeyCap(label: label(kc), w: u, h: h, highlighted: false)
+                    }
+                    KeyCap(label: "⏎", w: caps, h: h, highlighted: false)
+                }
+                
+                HStack(spacing: gap) {
+                    KeyCap(label: "⇧", w: shift, h: h, highlighted: false)
+                    ForEach(Self.row3Keycodes, id: \.self) { kc in
+                        KeyCap(label: label(kc), w: u, h: h, highlighted: false)
+                    }
+                    KeyCap(label: "⇧", w: shift, h: h, highlighted: false)
+                }
+                
+                HStack(spacing: gap) {
+                    KeyCap(label: "fn", w: u, h: h, highlighted: false)
+                    KeyCap(label: "⌃", w: u, h: h, highlighted: false)
+                    KeyCap(label: "⌥", w: u, h: h, highlighted: isHighlighted("leftOption"))
+                    KeyCap(label: "⌘", w: cmd, h: h, highlighted: false)
+                    KeyCap(label: "", w: space, h: h, highlighted: false)
+                    KeyCap(label: "⌘", w: cmd, h: h, highlighted: false)
+                    KeyCap(label: "⌥", w: u, h: h, highlighted: isHighlighted("rightOption"))
+                    KeyCap(label: "←", w: u, h: h, highlighted: false)
+                    VStack(spacing: 1) {
+                        KeyCap(label: "↑", w: u, h: h / 2 - 0.5, highlighted: false)
+                        KeyCap(label: "↓", w: u, h: h / 2 - 0.5, highlighted: false)
+                    }
+                    KeyCap(label: "→", w: u, h: h, highlighted: false)
+                }
+            }
+            .padding(pad)
+        }
+        .frame(height: heightForWidth(450 - 24))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.controlBackgroundColor).opacity(0.3))
+        )
+        .animation(.easeInOut(duration: 0.2), value: selectedShortcut)
+    }
+    
+    private func heightForWidth(_ width: CGFloat) -> CGFloat {
+        let u = u(for: width)
+        return pad * 2 + u * 5 + gap * 4
+    }
+}
+
+struct OnboardingShortcutCard: View {
+    let title: String
+    let subtitle: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color(.controlBackgroundColor).opacity(0.8) : Color(.controlBackgroundColor).opacity(0.5))
+                    .shadow(color: isSelected ? Color.blue.opacity(0.2) : Color.black.opacity(0.05), radius: isSelected ? 8 : 4, x: 0, y: 2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -60,7 +60,13 @@ class AppState: ObservableObject {
     }
 
     init() {
-        self.hasCompletedOnboarding = AppPreferences.shared.hasCompletedOnboarding
+        var onboarding = AppPreferences.shared.hasCompletedOnboarding
+        #if DEBUG
+        if let force = DevConfig.shared.forceShowOnboarding {
+            onboarding = !force
+        }
+        #endif
+        self.hasCompletedOnboarding = onboarding
     }
 }
 
