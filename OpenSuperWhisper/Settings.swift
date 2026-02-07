@@ -1078,7 +1078,7 @@ struct SettingsView: View {
                                 .background(Color(.textBackgroundColor).opacity(0.5))
                                 .cornerRadius(8)
                                 
-                                Text("Double-tap to toggle recording")
+                                Text("One-tap to toggle recording")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
