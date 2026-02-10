@@ -100,8 +100,7 @@ class ShortcutManager {
         holdWorkItem?.cancel()
         holdMode = false
         
-        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
-        let holdToRecordEnabled = AppPreferences.shared.holdToRecord && !modifierKey.isCommandOrOption
+        let holdToRecordEnabled = AppPreferences.shared.holdToRecord
         
         Task { @MainActor in
             if self.activeVm == nil {
@@ -134,8 +133,7 @@ class ShortcutManager {
         holdWorkItem?.cancel()
         holdWorkItem = nil
         
-        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
-        let holdToRecordEnabled = AppPreferences.shared.holdToRecord && !modifierKey.isCommandOrOption
+        let holdToRecordEnabled = AppPreferences.shared.holdToRecord
         
         Task { @MainActor in
             if holdToRecordEnabled && self.holdMode {

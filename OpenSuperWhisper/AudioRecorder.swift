@@ -9,6 +9,7 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var isPlaying = false
     @Published var currentlyPlayingURL: URL?
     @Published var canRecord = false
+    @Published var isConnecting = false
     
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
@@ -17,6 +18,8 @@ class AudioRecorder: NSObject, ObservableObject {
     private var currentRecordingURL: URL?
     private var notificationObserver: Any?
     private var microphoneChangeObserver: Any?
+    private var connectionCheckTimer: DispatchSourceTimer?
+    private var recordingDeviceID: AudioDeviceID?
 
     // MARK: - Singleton Instance
 
@@ -107,7 +110,7 @@ class AudioRecorder: NSObject, ObservableObject {
             return
         }
         
-        if isRecording {
+        if isRecording || isConnecting {
             print("stop recording while recording")
             _ = stopRecording()
         }
@@ -127,38 +130,49 @@ class AudioRecorder: NSObject, ObservableObject {
         if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
             _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
             print("Set system default input to: \(activeMic.displayName)")
+            
+            if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
+                recordingDeviceID = deviceID
+            }
         }
         #endif
         
-        startRecordingWithRecorder(fileURL: fileURL)
+        let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
+        updateRecordingState(isRecording: false, isConnecting: requiresConnection)
+        startRecordingWithRecorder(fileURL: fileURL, monitorConnection: requiresConnection)
     }
     
-    private func startRecordingWithRecorder(fileURL: URL) {
+    private func startRecordingWithRecorder(fileURL: URL, monitorConnection: Bool) {
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true
         ]
         
         do {
             audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
             audioRecorder?.delegate = self
+            audioRecorder?.isMeteringEnabled = monitorConnection
             audioRecorder?.record()
-            isRecording = true
-            
+            if monitorConnection {
+                startConnectionMonitoring()
+            } else {
+                updateRecordingState(isRecording: true, isConnecting: false)
+            }
             print("Recording started successfully")
         } catch {
             print("Failed to start recording: \(error)")
             currentRecordingURL = nil
+            updateRecordingState(isRecording: false, isConnecting: false)
         }
     }
     
     func stopRecording() -> URL? {
         audioRecorder?.stop()
-        isRecording = false
+        updateRecordingState(isRecording: false, isConnecting: false)
+        stopConnectionMonitoring()
         
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
@@ -176,13 +190,15 @@ class AudioRecorder: NSObject, ObservableObject {
     
     func cancelRecording() {
         audioRecorder?.stop()
-        isRecording = false
+        updateRecordingState(isRecording: false, isConnecting: false)
+        stopConnectionMonitoring()
         
         if let url = currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
         }
         currentRecordingURL = nil
     }
+    
     
     func moveTemporaryRecording(from tempURL: URL, to finalURL: URL) throws {
 
@@ -219,6 +235,45 @@ class AudioRecorder: NSObject, ObservableObject {
         audioPlayer = nil
         isPlaying = false
         currentlyPlayingURL = nil
+    }
+    
+    private func updateRecordingState(isRecording: Bool, isConnecting: Bool) {
+        DispatchQueue.main.async {
+            self.isRecording = isRecording
+            self.isConnecting = isConnecting
+        }
+    }
+    
+    private func startConnectionMonitoring() {
+        stopConnectionMonitoring()
+        
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInitiated))
+        timer.schedule(deadline: .now() + 0.05, repeating: 0.05)
+        let initialFileSize: Int64 = 4096
+        var growthCount = 0
+        
+        timer.setEventHandler { [weak self] in
+            guard let self = self, let _ = self.audioRecorder, let url = self.currentRecordingURL else { return }
+            
+            let currentFileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+            let totalGrowth = currentFileSize - initialFileSize
+            
+            if totalGrowth > 8000 {
+                growthCount += 1
+            }
+            
+            if growthCount >= 2 {
+                self.stopConnectionMonitoring()
+                self.updateRecordingState(isRecording: true, isConnecting: false)
+            }
+        }
+        connectionCheckTimer = timer
+        timer.resume()
+    }
+    
+    private func stopConnectionMonitoring() {
+        connectionCheckTimer?.cancel()
+        connectionCheckTimer = nil
     }
 }
 
