@@ -24,12 +24,13 @@ struct OpenSuperWhisperApp: App {
                     ContentView()
                 }
             }
-            .frame(width: 450, height: 650)
+            .frame(width: 450)
+            .frame(minHeight: 400, maxHeight: 900)
             .environmentObject(appState)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 450, height: 650)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
@@ -59,7 +60,13 @@ class AppState: ObservableObject {
     }
 
     init() {
-        self.hasCompletedOnboarding = AppPreferences.shared.hasCompletedOnboarding
+        var onboarding = AppPreferences.shared.hasCompletedOnboarding
+        #if DEBUG
+        if let force = DevConfig.shared.forceShowOnboarding {
+            onboarding = !force
+        }
+        #endif
+        self.hasCompletedOnboarding = onboarding
     }
 }
 
@@ -76,8 +83,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         if let window = NSApplication.shared.windows.first {
             self.mainWindow = window
-            
             window.delegate = self
+            
+            window.minSize = NSSize(width: 450, height: 400)
+            window.maxSize = NSSize(width: 450, height: 900)
         }
         
         OpenSuperWhisperApp.startTranscriptionQueue()
@@ -269,5 +278,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
+    }
+    
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        return NSSize(width: 450, height: frameSize.height)
     }
 }

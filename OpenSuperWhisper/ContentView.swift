@@ -24,6 +24,7 @@ class ContentViewModel: ObservableObject {
     @Published var canLoadMore = true
     @Published var recordingDuration: TimeInterval = 0
     @Published var microphoneService = MicrophoneService.shared
+    @Published var shouldClearSearch = false
     
     private var currentPage = 0
     private let pageSize = 100
@@ -31,6 +32,34 @@ class ContentViewModel: ObservableObject {
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        recorder.$isConnecting
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isConnecting in
+                guard let self = self else { return }
+                if isConnecting && self.state != .decoding {
+                    self.state = .connecting
+                    self.stopBlinking()
+                    self.stopDurationTimer()
+                    self.recordingDuration = 0
+                }
+            }
+            .store(in: &cancellables)
+        
+        recorder.$isRecording
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isRecording in
+                guard let self = self else { return }
+                if isRecording && self.state != .decoding {
+                    self.state = .recording
+                    self.startBlinking()
+                    self.startDurationTimerIfNeeded()
+                }
+            }
+            .store(in: &cancellables)
+    }
     
     func loadInitialData() {
         currentSearchQuery = ""
@@ -123,28 +152,22 @@ class ContentViewModel: ObservableObject {
     }
     
     func startRecording() {
-        state = .recording
-        startBlinking()
-        recordingStartTime = Date()
-        recordingDuration = 0
-        
-        // Start timer to track recording duration
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            // Capture the start time in a local variable to avoid actor isolation issues
-            let startTime = Date()
-            
-            // Update duration on the main thread
-            Task { @MainActor in
-                if let recordingStartTime = self.recordingStartTime {
-                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
-                }
-            }
+        if microphoneService.isActiveMicrophoneRequiresConnection() {
+            state = .connecting
+            stopBlinking()
+            stopDurationTimer()
+            recordingDuration = 0
+        } else {
+            state = .recording
+            startBlinking()
+            recordingStartTime = Date()
+            recordingDuration = 0
+            startDurationTimerIfNeeded()
         }
-        RunLoop.current.add(durationTimer!, forMode: .common)
         
-        recorder.startRecording()
+        Task.detached { [recorder] in
+            recorder.startRecording()
+        }
     }
 
     func startDecoding() {
@@ -196,10 +219,13 @@ class ContentViewModel: ObservableObject {
                             sourceFileURL: nil
                         )
                         self.recordingStore.addRecording(newRecording)
-                        // Prepend to the list if not searching or if it matches (simplification: just prepend)
-                        if self.currentSearchQuery.isEmpty {
-                            self.recordings.insert(newRecording, at: 0)
+                        
+                        // Clear search and show the new recording
+                        if !self.currentSearchQuery.isEmpty {
+                            self.shouldClearSearch = true
+                            self.currentSearchQuery = ""
                         }
+                        self.recordings.insert(newRecording, at: 0)
                     }
 
                     print("Transcription result: \(text)")
@@ -224,14 +250,33 @@ class ContentViewModel: ObservableObject {
         durationTimer = nil
         recordingStartTime = nil
     }
+    
+    private func startDurationTimerIfNeeded() {
+        guard durationTimer == nil else { return }
+        if recordingStartTime == nil {
+            recordingStartTime = Date()
+            recordingDuration = 0
+        }
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let startTime = Date()
+            Task { @MainActor in
+                if let recordingStartTime = self.recordingStartTime {
+                    self.recordingDuration = startTime.timeIntervalSince(recordingStartTime)
+                }
+            }
+        }
+        RunLoop.main.add(durationTimer!, forMode: .common)
+    }
 
     private func startBlinking() {
+        blinkTimer?.invalidate()
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.isBlinking.toggle()
             }
         }
-        RunLoop.current.add(blinkTimer!, forMode: .common)
+        RunLoop.main.add(blinkTimer!, forMode: .common)
     }
 
     private func stopBlinking() {
@@ -251,6 +296,16 @@ struct ContentView: View {
     @State private var showDeleteConfirmation = false
     @State private var searchTask: Task<Void, Never>? = nil
 
+    private var currentShortcutDescription: String {
+        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
+        if modifierKey != .none {
+            return modifierKey.shortSymbol
+        } else if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
+            return shortcut.description
+        }
+        return ""
+    }
+    
     private func performSearch(_ query: String) {
         searchTask?.cancel()
         
@@ -383,13 +438,18 @@ struct ContentView: View {
                         } else {
                             LazyVStack(spacing: 8) {
                                 ForEach(viewModel.recordings) { recording in
-                                    RecordingRow(recording: recording, onDelete: {
-                                        viewModel.deleteRecording(recording)
-                                    }, onRegenerate: {
-                                        Task {
-                                            await TranscriptionQueue.shared.requeueRecording(recording)
+                                    RecordingRow(
+                                        recording: recording,
+                                        searchQuery: debouncedSearchText,
+                                        onDelete: {
+                                            viewModel.deleteRecording(recording)
+                                        },
+                                        onRegenerate: {
+                                            Task {
+                                                await TranscriptionQueue.shared.requeueRecording(recording)
+                                            }
                                         }
-                                    })
+                                    )
                                     .id(recording.id)
                                     .onAppear {
                                         if recording.id == viewModel.recordings.last?.id {
@@ -433,7 +493,7 @@ struct ContentView: View {
                                 viewModel.startRecording()
                             }
                         }) {
-                            if viewModel.state == .decoding {
+                            if viewModel.state == .decoding || viewModel.state == .connecting {
                                 ProgressView()
                                     .scaleEffect(1.0)
                                     .frame(width: 48, height: 48)
@@ -454,11 +514,9 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 // Подсказка о шорткате
                                 HStack(spacing: 6) {
-                                    if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
-                                        Text(shortcut.description)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
+                                    Text(currentShortcutDescription)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                     Text("to show mini recorder")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -584,6 +642,14 @@ struct ContentView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
         }
+        .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
+            if shouldClear {
+                searchText = ""
+                debouncedSearchText = ""
+                searchTask?.cancel()
+                viewModel.shouldClearSearch = false
+            }
+        }
     }
 }
 
@@ -656,6 +722,7 @@ struct PermissionRow: View {
 
 struct RecordingRow: View {
     let recording: Recording
+    let searchQuery: String
     let onDelete: () -> Void
     let onRegenerate: () -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
@@ -724,12 +791,15 @@ struct RecordingRow: View {
                                     .trim(from: 0, to: CGFloat(recording.progress))
                                     .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 0.1), value: recording.progress)
                             }
                             .frame(width: 16, height: 16)
 
-                             Text("\(Int(recording.progress * 100))%")
+                            Text("\(Int(recording.progress * 100))%")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
+                                .contentTransition(.numericText())
+                                .animation(.linear(duration: 0.1), value: recording.progress)
                         }
                         
                         Text(statusText)
@@ -768,7 +838,9 @@ struct RecordingRow: View {
             } else if !displayText.isEmpty {
                 ZStack(alignment: .topLeading) {
                     TranscriptionView(
-                        transcribedText: displayText, isExpanded: $showTranscription
+                        transcribedText: displayText,
+                        searchQuery: searchQuery,
+                        isExpanded: $showTranscription
                     )
                     
                     if isRegenerating {
@@ -818,12 +890,15 @@ struct RecordingRow: View {
                                     .trim(from: 0, to: CGFloat(recording.progress))
                                     .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 0.1), value: recording.progress)
                             }
                             .frame(width: 16, height: 16)
 
                             Text("\(Int(recording.progress * 100))%")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
+                                .contentTransition(.numericText())
+                                .animation(.linear(duration: 0.1), value: recording.progress)
                         }
                         
                         Text(statusText)
@@ -955,11 +1030,58 @@ struct ShimmerOverlay: View {
 
 struct TranscriptionView: View {
     let transcribedText: String
+    let searchQuery: String
     @Binding var isExpanded: Bool
     @Environment(\.colorScheme) private var colorScheme
     
+    @State private var highlightedAttributedString: AttributedString?
+    @State private var computeTask: Task<Void, Never>?
+    
     private var hasMoreLines: Bool {
         !transcribedText.isEmpty && transcribedText.count > 150
+    }
+    
+    private var highlightedText: Text {
+        guard !searchQuery.isEmpty else {
+            return Text(transcribedText)
+        }
+        if let attributed = highlightedAttributedString {
+            return Text(attributed)
+        }
+        return Text(transcribedText)
+    }
+    
+    private func computeHighlighting() {
+        computeTask?.cancel()
+        
+        guard !searchQuery.isEmpty else {
+            highlightedAttributedString = nil
+            return
+        }
+        
+        let text = transcribedText
+        let query = searchQuery
+        
+        computeTask = Task.detached(priority: .userInitiated) {
+            var attributedString = AttributedString(text)
+            let searchOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+            
+            var searchStartIndex = text.startIndex
+            while let range = text.range(of: query, options: searchOptions, range: searchStartIndex..<text.endIndex) {
+                guard !Task.isCancelled else { return }
+                if let attributedRange = Range(range, in: attributedString) {
+                    attributedString[attributedRange].backgroundColor = .yellow
+                    attributedString[attributedRange].foregroundColor = .black
+                }
+                searchStartIndex = range.upperBound
+            }
+            
+            guard !Task.isCancelled else { return }
+            
+            await MainActor.run {
+                self.highlightedAttributedString = attributedString
+            }
+        }
     }
 
     var body: some View {
@@ -967,7 +1089,7 @@ struct TranscriptionView: View {
             Group {
                 if isExpanded {
                     ScrollView {
-                        Text(transcribedText)
+                        highlightedText
                             .font(.body)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
@@ -985,7 +1107,7 @@ struct TranscriptionView: View {
                 } else {
                     if hasMoreLines {
                         Button(action: { isExpanded.toggle() }) {
-                            Text(transcribedText)
+                            highlightedText
                                 .font(.body)
                                 .lineLimit(3)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -994,7 +1116,7 @@ struct TranscriptionView: View {
                         }
                         .buttonStyle(.plain)
                     } else {
-                        Text(transcribedText)
+                        highlightedText
                             .font(.body)
                             .lineLimit(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1016,6 +1138,18 @@ struct TranscriptionView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
             }
+        }
+        .onAppear {
+            computeHighlighting()
+        }
+        .onChange(of: searchQuery) { _, _ in
+            computeHighlighting()
+        }
+        .onChange(of: transcribedText) { _, _ in
+            computeHighlighting()
+        }
+        .onDisappear {
+            computeTask?.cancel()
         }
     }
 }
