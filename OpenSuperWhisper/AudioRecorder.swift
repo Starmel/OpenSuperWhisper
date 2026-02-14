@@ -143,10 +143,16 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     private func startRecordingWithRecorder(fileURL: URL, monitorConnection: Bool) {
+        var channelCount = 1
+        if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
+            channelCount = MicrophoneService.shared.getInputChannelCount(for: activeMic)
+            print("Recording with \(channelCount) input channel(s) from \(activeMic.displayName)")
+        }
+        
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
-            AVNumberOfChannelsKey: 1,
+            AVNumberOfChannelsKey: channelCount,
             AVLinearPCMBitDepthKey: 32,
             AVLinearPCMIsFloatKey: true
         ]
