@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudioTypes
 
 private class ProgressContext {
     var onProgress: ((Float) -> Void)?
@@ -223,10 +224,9 @@ class WhisperEngine: TranscriptionEngine {
             let sourceFormat = audioFile.processingFormat
             let totalFrames = audioFile.length
             
-            let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                             sampleRate: 16000,
-                                             channels: 1,
-                                             interleaved: false)!
+            guard let targetFormat = self.makeTargetFormat(channelCount: sourceFormat.channelCount) else {
+                return nil
+            }
             
             let sourceRate = sourceFormat.sampleRate
             let targetRate = targetFormat.sampleRate
@@ -331,10 +331,7 @@ class WhisperEngine: TranscriptionEngine {
                         outputBuffer.frameLength = 0
                         converter.convert(to: outputBuffer, error: &convError, withInputFrom: inputBlock)
                         
-                        if outputBuffer.frameLength > 0, let channelData = outputBuffer.floatChannelData {
-                            let ptr = UnsafeBufferPointer(start: channelData[0], count: Int(outputBuffer.frameLength))
-                            segmentResult.append(contentsOf: ptr)
-                        }
+                        self.appendMixedSamples(from: outputBuffer, to: &segmentResult)
                     }
                     
                     // Calculate output position for this segment
@@ -420,13 +417,67 @@ class WhisperEngine: TranscriptionEngine {
                 break
             }
             
-            if chunkOutputBuffer.frameLength > 0, let channelData = chunkOutputBuffer.floatChannelData {
-                let ptr = UnsafeBufferPointer(start: channelData[0], count: Int(chunkOutputBuffer.frameLength))
-                result.append(contentsOf: ptr)
-            }
+            appendMixedSamples(from: chunkOutputBuffer, to: &result)
         }
         
         return result.isEmpty ? nil : result
+    }
+    
+    private nonisolated func appendMixedSamples(from buffer: AVAudioPCMBuffer, to output: inout [Float]) {
+        let frameCount = Int(buffer.frameLength)
+        guard frameCount > 0, let channelData = buffer.floatChannelData else { return }
+        
+        let channelCount = Int(buffer.format.channelCount)
+        if channelCount == 1 {
+            let mono = UnsafeBufferPointer(start: channelData[0], count: frameCount)
+            output.append(contentsOf: mono)
+            return
+        }
+        
+        let activityThreshold: Float = 0.0001
+        var activeChannels: [Int] = []
+        activeChannels.reserveCapacity(channelCount)
+        
+        for channel in 0..<channelCount {
+            let channelSamples = UnsafeBufferPointer(start: channelData[channel], count: frameCount)
+            var energy: Float = 0
+            for sample in channelSamples {
+                energy += sample * sample
+            }
+            let rms = sqrtf(energy / Float(frameCount))
+            if rms > activityThreshold {
+                activeChannels.append(channel)
+            }
+        }
+        
+        if activeChannels.isEmpty {
+            activeChannels = Array(0..<channelCount)
+        }
+        
+        let normalization = 1.0 / Float(activeChannels.count)
+        output.reserveCapacity(output.count + frameCount)
+        
+        for frame in 0..<frameCount {
+            var mixed: Float = 0
+            for channel in activeChannels {
+                mixed += channelData[channel][frame]
+            }
+            output.append(mixed * normalization)
+        }
+    }
+    
+    nonisolated func makeTargetFormat(channelCount: AVAudioChannelCount) -> AVAudioFormat? {
+        guard channelCount > 0 else { return nil }
+        
+        let layoutTag = AudioChannelLayoutTag(kAudioChannelLayoutTag_DiscreteInOrder | UInt32(channelCount))
+        guard let channelLayout = AVAudioChannelLayout(layoutTag: layoutTag) else { return nil }
+        
+        return AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            interleaved: false,
+            channelLayout: channelLayout
+        )
     }
 }
 
