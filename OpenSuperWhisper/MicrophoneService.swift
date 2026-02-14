@@ -445,6 +445,39 @@ class MicrophoneService: ObservableObject {
         }
         return setInputVolume(volume, for: deviceID)
     }
+    
+    func getInputChannelCount(for device: AudioDevice) -> Int {
+        guard let deviceID = getCoreAudioDeviceID(for: device) else { return 1 }
+        
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var propertySize: UInt32 = 0
+        let sizeStatus = AudioObjectGetPropertyDataSize(deviceID, &propertyAddress, 0, nil, &propertySize)
+        guard sizeStatus == noErr, propertySize > 0 else { return 1 }
+        
+        let bufferListRawPointer = UnsafeMutableRawPointer.allocate(byteCount: Int(propertySize), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { bufferListRawPointer.deallocate() }
+        
+        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, bufferListRawPointer)
+        guard status == noErr else { return 1 }
+        
+        let bufferList = bufferListRawPointer.assumingMemoryBound(to: AudioBufferList.self)
+        let bufferCount = Int(bufferList.pointee.mNumberBuffers)
+        
+        var totalChannels = 0
+        withUnsafeMutablePointer(to: &bufferList.pointee.mBuffers) { firstBufferPtr in
+            let buffers = UnsafeMutableBufferPointer<AudioBuffer>(start: firstBufferPtr, count: bufferCount)
+            for buffer in buffers {
+                totalChannels += Int(buffer.mNumberChannels)
+            }
+        }
+        
+        return max(totalChannels, 1)
+    }
     #endif
 }
 
