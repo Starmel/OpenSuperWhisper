@@ -107,4 +107,17 @@ final class AppPreferences {
     
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
+
+    // LLM post-processing settings
+    @UserDefault(key: "llmProcessingMode", defaultValue: "raw")
+    var llmProcessingMode: String
+
+    @UserDefault(key: "llmModelId", defaultValue: "mlx-community/Llama-3.2-3B-Instruct-4bit")
+    var llmModelId: String
+
+    @UserDefault(key: "llmTemperature", defaultValue: 0.3)
+    var llmTemperature: Double
+
+    @UserDefault(key: "installedLLMModelIds", defaultValue: [])
+    var installedLLMModelIds: [String]
 }

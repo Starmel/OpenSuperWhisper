@@ -25,6 +25,7 @@ class ContentViewModel: ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     @Published var microphoneService = MicrophoneService.shared
     @Published var shouldClearSearch = false
+    @Published var llmProcessingRecordingIds: Set<UUID> = []
     
     private var currentPage = 0
     private let pageSize = 100
@@ -122,10 +123,20 @@ class ContentViewModel: ObservableObject {
         loadMore()
     }
     
-    func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?) {
+    func handleProgressUpdate(
+        id: UUID,
+        transcription: String?,
+        rawTranscription: String?,
+        progress: Float,
+        status: RecordingStatus,
+        isRegeneration: Bool?
+    ) {
         if let index = recordings.firstIndex(where: { $0.id == id }) {
             if let transcription = transcription {
                 recordings[index].transcription = transcription
+            }
+            if let rawTranscription = rawTranscription {
+                recordings[index].rawTranscription = rawTranscription
             }
             recordings[index].progress = progress
             recordings[index].status = status
@@ -197,6 +208,7 @@ class ContentViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
+                        rawTranscription: text,
                         duration: duration,
                         status: .completed,
                         progress: 1.0,
@@ -213,6 +225,7 @@ class ContentViewModel: ObservableObject {
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
+                            rawTranscription: text,
                             duration: self.recordingDuration,
                             status: .completed,
                             progress: 1.0,
@@ -242,6 +255,55 @@ class ContentViewModel: ObservableObject {
         } else {
             state = .idle
             recordingDuration = 0
+        }
+    }
+
+    func processRecordingText(_ recording: Recording, mode: LLMProcessingMode) {
+        guard LLMPostProcessor.shared.isAvailable else { return }
+        guard recording.status == .completed else { return }
+        let normalizedRaw = recording.rawTranscription?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseInput = (normalizedRaw?.isEmpty == false ? normalizedRaw! : recording.transcription.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard !baseInput.isEmpty else { return }
+        guard !llmProcessingRecordingIds.contains(recording.id) else { return }
+
+        llmProcessingRecordingIds.insert(recording.id)
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.llmProcessingRecordingIds.remove(recording.id) }
+
+            do {
+                let text = try await LLMPostProcessor.shared.processText(baseInput, mode: mode)
+                await self.recordingStore.updateRecordingProgressOnlySync(
+                    recording.id,
+                    transcription: text,
+                    progress: 1.0,
+                    status: .completed,
+                    rawTranscription: baseInput
+                )
+            } catch {
+                await MainActor.run {
+                    LLMPostProcessor.shared.lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func revertRecordingToRaw(_ recording: Recording) {
+        guard recording.status == .completed else { return }
+        guard let raw = recording.rawTranscription?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
+        guard raw != recording.transcription else { return }
+        guard !llmProcessingRecordingIds.contains(recording.id) else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.recordingStore.updateRecordingProgressOnlySync(
+                recording.id,
+                transcription: raw,
+                progress: 1.0,
+                status: .completed,
+                rawTranscription: raw
+            )
         }
     }
 
@@ -441,6 +503,7 @@ struct ContentView: View {
                                     RecordingRow(
                                         recording: recording,
                                         searchQuery: debouncedSearchText,
+                                        isPostProcessing: viewModel.llmProcessingRecordingIds.contains(recording.id),
                                         onDelete: {
                                             viewModel.deleteRecording(recording)
                                         },
@@ -448,6 +511,12 @@ struct ContentView: View {
                                             Task {
                                                 await TranscriptionQueue.shared.requeueRecording(recording)
                                             }
+                                        },
+                                        onProcessText: { mode in
+                                            viewModel.processRecordingText(recording, mode: mode)
+                                        },
+                                        onRevertToRaw: {
+                                            viewModel.revertRecordingToRaw(recording)
                                         }
                                     )
                                     .id(recording.id)
@@ -503,7 +572,10 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding)
+                        .disabled(viewModel.transcriptionService.isLoading
+                            || viewModel.transcriptionService.isTranscribing
+                            || viewModel.transcriptionQueue.isProcessing
+                            || viewModel.state == .decoding)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
@@ -607,11 +679,13 @@ struct ContentView: View {
                   let status = userInfo["status"] as? RecordingStatus else { return }
             
             let transcription = userInfo["transcription"] as? String
+            let rawTranscription = userInfo["rawTranscription"] as? String
             let isRegeneration = userInfo["isRegeneration"] as? Bool
             
             viewModel.handleProgressUpdate(
                 id: id,
                 transcription: transcription,
+                rawTranscription: rawTranscription,
                 progress: progress,
                 status: status,
                 isRegeneration: isRegeneration
@@ -723,8 +797,11 @@ struct PermissionRow: View {
 struct RecordingRow: View {
     let recording: Recording
     let searchQuery: String
+    let isPostProcessing: Bool
     let onDelete: () -> Void
     let onRegenerate: () -> Void
+    let onProcessText: (LLMProcessingMode) -> Void
+    let onRevertToRaw: () -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
     @State private var showTranscription = false
     @State private var isHovered = false
@@ -762,6 +839,17 @@ struct RecordingRow: View {
             return ""
         }
         return recording.transcription
+    }
+
+    private var hasProcessedOutput: Bool {
+        guard let raw = recording.rawTranscription?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return false
+        }
+        return raw != recording.transcription
+    }
+
+    private var canUseTextProcessingModel: Bool {
+        LLMPostProcessor.shared.isAvailable
     }
 
     var body: some View {
@@ -843,7 +931,7 @@ struct RecordingRow: View {
                         isExpanded: $showTranscription
                     )
                     
-                    if isRegenerating {
+                    if isRegenerating || isPostProcessing {
                         ShimmerOverlay()
                             .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                     }
@@ -873,39 +961,51 @@ struct RecordingRow: View {
                         .foregroundColor(.secondary)
                 }
                 
-                if isRegenerating {
+                if isRegenerating || isPostProcessing {
                     Spacer()
                         .frame(width: 2)
-                    HStack(spacing: 6) {
-                        if recording.status == .pending {
-                            Image(systemName: "clock")
+                    if isPostProcessing {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 12, height: 12)
+                            Text("Enhancing...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                        } else {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
-                                
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(recording.progress))
-                                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
+                        }
+                        .transition(.opacity)
+                    } else {
+                        HStack(spacing: 6) {
+                            if recording.status == .pending {
+                                Image(systemName: "clock")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
+                                    
+                                    Circle()
+                                        .trim(from: 0, to: CGFloat(recording.progress))
+                                        .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                        .rotationEffect(.degrees(-90))
+                                        .animation(.linear(duration: 0.1), value: recording.progress)
+                                }
+                                .frame(width: 16, height: 16)
+
+                                Text("\(Int(recording.progress * 100))%")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundColor(.secondary)
+                                    .contentTransition(.numericText())
                                     .animation(.linear(duration: 0.1), value: recording.progress)
                             }
-                            .frame(width: 16, height: 16)
-
-                            Text("\(Int(recording.progress * 100))%")
-                                .font(.caption.monospacedDigit())
+                            
+                            Text(statusText)
+                                .font(.caption)
                                 .foregroundColor(.secondary)
-                                .contentTransition(.numericText())
-                                .animation(.linear(duration: 0.1), value: recording.progress)
                         }
-                        
-                        Text(statusText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        .transition(.opacity)
                     }
-                    .transition(.opacity)
                 
                 }
 
@@ -940,6 +1040,31 @@ struct RecordingRow: View {
                         }
                         .buttonStyle(.plain)
                         .help("Copy entire text")
+                        .transition(.opacity)
+
+                        Menu {
+                            Button("Clean") { onProcessText(.clean) }
+                                .disabled(!canUseTextProcessingModel)
+                            Button("Dev Prompt") { onProcessText(.dev) }
+                                .disabled(!canUseTextProcessingModel)
+                            Button("Structured Markdown") { onProcessText(.markdown) }
+                                .disabled(!canUseTextProcessingModel)
+                            if hasProcessedOutput {
+                                Divider()
+                                Button("Raw") { onRevertToRaw() }
+                            }
+                        } label: {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 18))
+                                .foregroundColor(.secondary)
+                        }
+                        .disabled(
+                            isPostProcessing
+                            || recording.status != .completed
+                            || (!canUseTextProcessingModel && !hasProcessedOutput)
+                        )
+                        .buttonStyle(.plain)
+                        .help("Text Processing")
                         .transition(.opacity)
                     }
 

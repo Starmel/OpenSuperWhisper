@@ -14,6 +14,7 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
     let timestamp: Date
     let fileName: String
     var transcription: String
+    var rawTranscription: String? = nil
     let duration: TimeInterval
     var status: RecordingStatus
     var progress: Float
@@ -22,7 +23,7 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
     var isRegeneration: Bool = false
     
     enum CodingKeys: String, CodingKey {
-        case id, timestamp, fileName, transcription, duration, status, progress, sourceFileURL
+        case id, timestamp, fileName, transcription, rawTranscription, duration, status, progress, sourceFileURL
     }
 
     static func == (lhs: Recording, rhs: Recording) -> Bool {
@@ -30,6 +31,7 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
                lhs.status == rhs.status &&
                lhs.progress == rhs.progress &&
                lhs.transcription == rhs.transcription &&
+               lhs.rawTranscription == rhs.rawTranscription &&
                lhs.isRegeneration == rhs.isRegeneration
     }
 
@@ -61,6 +63,7 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         static let timestamp = Column(CodingKeys.timestamp)
         static let fileName = Column(CodingKeys.fileName)
         static let transcription = Column(CodingKeys.transcription)
+        static let rawTranscription = Column(CodingKeys.rawTranscription)
         static let duration = Column(CodingKeys.duration)
         static let status = Column(CodingKeys.status)
         static let progress = Column(CodingKeys.progress)
@@ -126,6 +129,23 @@ class RecordingStore: ObservableObject {
                     t.add(column: "sourceFileURL", .text)
                 }
             }
+        }
+
+        migrator.registerMigration("v3_add_raw_transcription") { db in
+            let columns = try db.columns(in: Recording.databaseTableName)
+            let columnNames = columns.map { $0.name }
+
+            if !columnNames.contains("rawTranscription") {
+                try db.alter(table: Recording.databaseTableName) { t in
+                    t.add(column: "rawTranscription", .text)
+                }
+            }
+
+            try db.execute(sql: """
+                UPDATE \(Recording.databaseTableName)
+                SET rawTranscription = transcription
+                WHERE rawTranscription IS NULL
+                """)
         }
         
         try migrator.migrate(dbQueue)
@@ -225,30 +245,50 @@ class RecordingStore: ObservableObject {
         }
     }
     
-    func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
+    func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, rawTranscription: String? = nil) {
         Task {
-            await updateRecordingProgressOnlySync(id, transcription: transcription, progress: progress, status: status)
+            await updateRecordingProgressOnlySync(
+                id,
+                transcription: transcription,
+                progress: progress,
+                status: status,
+                rawTranscription: rawTranscription
+            )
         }
     }
     
     static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
     
-    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
+    func updateRecordingProgressOnlySync(
+        _ id: UUID,
+        transcription: String,
+        progress: Float,
+        status: RecordingStatus,
+        rawTranscription: String? = nil,
+        isRegeneration: Bool? = nil
+    ) async {
         do {
             _ = try await dbQueue.write { db -> Int in
-                try Recording
+                var updates: [ColumnAssignment] = [
+                    Recording.Columns.transcription.set(to: transcription),
+                    Recording.Columns.progress.set(to: progress),
+                    Recording.Columns.status.set(to: status.rawValue)
+                ]
+                if let rawTranscription = rawTranscription {
+                    updates.append(Recording.Columns.rawTranscription.set(to: rawTranscription))
+                }
+                return try Recording
                     .filter(Recording.Columns.id == id)
-                    .updateAll(db, [
-                        Recording.Columns.transcription.set(to: transcription),
-                        Recording.Columns.progress.set(to: progress),
-                        Recording.Columns.status.set(to: status.rawValue)
-                    ])
+                    .updateAll(db, updates)
             }
             if let index = recordings.firstIndex(where: { $0.id == id }) {
                 var updated = recordings[index]
                 updated.transcription = transcription
                 updated.progress = progress
                 updated.status = status
+                if let rawTranscription = rawTranscription {
+                    updated.rawTranscription = rawTranscription
+                }
                 if let isRegeneration = isRegeneration {
                     updated.isRegeneration = isRegeneration
                 }
@@ -261,6 +301,9 @@ class RecordingStore: ObservableObject {
                 "progress": progress,
                 "status": status
             ]
+            if let rawTranscription = rawTranscription {
+                userInfo["rawTranscription"] = rawTranscription
+            }
             if let isRegeneration = isRegeneration {
                 userInfo["isRegeneration"] = isRegeneration
             }

@@ -50,6 +50,7 @@ To build locally, you'll need:
     git submodule update --init --recursive
     brew install cmake libomp rust ruby
     gem install xcpretty
+    xcodebuild -downloadComponent MetalToolchain # one-time, needed for MLX packages
     ./run.sh build
 
 In case of problems, consult `.github/workflows/build.yml` which is our CI workflow

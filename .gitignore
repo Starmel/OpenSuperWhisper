@@ -121,4 +121,4 @@ default.profraw
 *.dmg
 .cursorrules
 OpenSuperWhisper.dmg.sha256
-dev_config.json
+dev_config.jsonrun.log
