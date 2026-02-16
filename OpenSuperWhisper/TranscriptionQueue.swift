@@ -262,6 +262,7 @@ class TranscriptionQueue: ObservableObject {
                     transcription: text,
                     progress: 1.0,
                     status: .completed,
+                    rawTranscription: text,
                     isRegeneration: false
                 )
 
