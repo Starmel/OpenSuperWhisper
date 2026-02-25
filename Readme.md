@@ -6,10 +6,16 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 <img src="docs/image.png" width="400" /> <img src="docs/image_indicator.png" width="400" />
 </p>
 
-Free alternative to paid services like:
-* https://tryvoiceink.com
-* https://goodsnooze.gumroad.com/l/macwhisper
-* and etc..
+## Features
+
+- 🎙️ Real-time audio recording and transcription
+- 🧠 Two transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp) and [Parakeet](https://github.com/AntinomyCollective/FluidAudio) — download models directly from the app
+- ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
+- ✊ Hold-to-record mode — hold the shortcut to record, release to stop
+- 📁 Drag & drop audio files for transcription with queue processing
+- 🎤 Microphone selection — switch between built-in, external, Bluetooth and iPhone (Apple Continuity) mics from the menu bar
+- 🌍 Support for multiple languages with auto-detection
+- 🇯🇵🇨🇳🇰🇷 Asian language autocorrect ([autocorrect](https://github.com/huacnlee/autocorrect))
 
 ## Installation
 
@@ -18,17 +24,7 @@ brew update # Optional
 brew install opensuperwhisper
 ```
 
-Or from [github releases page](https://github.com/Starmel/OpenSuperWhisper/releases).
-
-## Features
-
-- 🎙️ Real-time audio recording and transcription
-- ⌨️ Global keyboard shortcuts for quick recording (use ```cmd + ` ```)
-- 🌍 Support for multiple languages with auto-detection (not tested, but probably works)
-- 🔄 Optional translation to English (for better translation add initial prompt with english sentences)
-- 💾 Local storage of recordings with transcriptions
-- 🎛️ Advanced transcription settings (not tested)
-- 🇯🇵🇨🇳🇰🇷 Support for Asian languages with [auto-correct](https://github.com/huacnlee/autocorrect)
+Or from [GitHub releases page](https://github.com/Starmel/OpenSuperWhisper/releases).
 
 ## Requirements
 
@@ -41,7 +37,7 @@ If you encounter any issues or have questions, please:
 2. Create a new issue with detailed information about your problem
 3. Include system information and logs when reporting bugs
 
-# Building locally
+## Building locally
 
 To build locally, you'll need:
 
