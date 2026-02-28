@@ -189,6 +189,13 @@ class IndicatorViewModel: ObservableObject {
         isBlinking = false
     }
 
+    func cleanup() {
+        stopBlinking()
+        hideTimer?.invalidate()
+        hideTimer = nil
+        cancellables.removeAll()
+    }
+
     func cancelRecording() {
         hideTimer?.invalidate()
         hideTimer = nil
