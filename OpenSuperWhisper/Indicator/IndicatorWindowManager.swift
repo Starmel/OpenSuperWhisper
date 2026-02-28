@@ -79,6 +79,7 @@ class IndicatorWindowManager: IndicatorViewDelegate {
     
     func stopForce() {
         viewModel?.cancelRecording()
+        viewModel?.cleanup()
         hide()
     }
 
@@ -89,7 +90,9 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             guard let viewModel = self.viewModel else { return }
             
             await viewModel.hideWithAnimation()
+            viewModel.cleanup()
             
+            self.window?.contentView = nil
             self.window?.orderOut(nil)
             self.viewModel = nil
             

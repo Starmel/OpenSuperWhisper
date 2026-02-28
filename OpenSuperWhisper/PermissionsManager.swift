@@ -12,12 +12,12 @@ class PermissionsManager: ObservableObject {
     @Published var isAccessibilityPermissionGranted = false
 
     private var permissionCheckTimer: Timer?
+    private var windowObservers: [NSObjectProtocol] = []
 
     init() {
         checkMicrophonePermission()
         checkAccessibilityPermission()
 
-        // Monitor accessibility permission changes using NSWorkspace's notification center
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(accessibilityPermissionChanged),
@@ -25,18 +25,52 @@ class PermissionsManager: ObservableObject {
             object: nil
         )
 
-        // Start continuous permission checking
-        startPermissionChecking()
+        setupWindowObservers()
     }
 
     deinit {
         stopPermissionChecking()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        for observer in windowObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func setupWindowObservers() {
+        let showObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.startPermissionChecking()
+        }
+
+        let closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stopPermissionChecking()
+        }
+
+        let hideObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stopPermissionChecking()
+        }
+
+        windowObservers = [showObserver, closeObserver, hideObserver]
+
+        if let window = NSApplication.shared.mainWindow, window.isKeyWindow {
+            startPermissionChecking()
+        }
     }
 
     private func startPermissionChecking() {
-        // Timer is scheduled on the main run loop
-        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        guard permissionCheckTimer == nil else { return }
+        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.checkMicrophonePermission()
             self?.checkAccessibilityPermission()
         }
