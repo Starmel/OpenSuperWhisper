@@ -98,11 +98,11 @@ class TranscriptionQueue: ObservableObject {
 
     func addFileToQueue(url: URL) async {
         do {
-            let durationInSeconds = try await Task.detached(priority: .userInitiated) {
+            let durationInSeconds = await (try? Task.detached(priority: .userInitiated) {
                 let asset = AVAsset(url: url)
                 let duration = try await asset.load(.duration)
                 return CMTimeGetSeconds(duration)
-            }.value
+            }.value) ?? 0.0
 
             let timestamp = Date()
             let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
