@@ -56,6 +56,11 @@ class ContentViewModel: ObservableObject {
                     self.state = .recording
                     self.startBlinking()
                     self.startDurationTimerIfNeeded()
+                } else if !isRecording && self.state == .recording {
+                    self.state = .idle
+                    self.stopBlinking()
+                    self.stopDurationTimer()
+                    self.recordingDuration = 0
                 }
             }
             .store(in: &cancellables)

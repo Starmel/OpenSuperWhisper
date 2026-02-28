@@ -60,10 +60,6 @@ class MicrophoneService: ObservableObject {
             self?.refreshAvailableMicrophones()
             self?.updateCurrentMicrophone()
         }
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.updateCurrentMicrophone()
-        }
     }
     
     func refreshAvailableMicrophones() {
