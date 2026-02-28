@@ -121,7 +121,7 @@ class WhisperEngine: TranscriptionEngine {
         params.translate = settings.translateToEnglish
         let isAutoDetect = settings.selectedLanguage == "auto"
         params.language = isAutoDetect ? nil : settings.selectedLanguage
-        params.detectLanguage = isAutoDetect
+        params.detectLanguage = false // means that it only detects the language and does not process the transcription
         params.temperature = Float(settings.temperature)
         params.noSpeechThold = Float(settings.noSpeechThreshold)
         params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
