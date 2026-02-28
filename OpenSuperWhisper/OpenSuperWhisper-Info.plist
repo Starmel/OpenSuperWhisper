@@ -4,6 +4,19 @@
 <dict>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon.icns</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Audio Files</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSMicrophoneUsageDescription</key>

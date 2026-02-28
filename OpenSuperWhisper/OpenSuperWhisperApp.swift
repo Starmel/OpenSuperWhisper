@@ -9,6 +9,7 @@ import AVFoundation
 import SwiftUI
 import AppKit
 import Combine
+import UniformTypeIdentifiers
 
 @main
 struct OpenSuperWhisperApp: App {
@@ -91,6 +92,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         OpenSuperWhisperApp.startTranscriptionQueue()
         observeMicrophoneChanges()
+    }
+
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        let url = URL(fileURLWithPath: filename)
+        guard isAudioFile(url) else {
+            return false
+        }
+
+        queueAudioURLs([url])
+        return true
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        let audioURLs = filenames
+            .map { URL(fileURLWithPath: $0) }
+            .filter { isAudioFile($0) }
+
+        sender.reply(toOpenOrPrint: audioURLs.isEmpty ? .failure : .success)
+        queueAudioURLs(audioURLs)
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let audioURLs = urls.filter { isAudioFile($0) }
+        queueAudioURLs(audioURLs)
+    }
+
+    private func queueAudioURLs(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+
+        Task { @MainActor in
+            showMainWindow()
+
+            for url in urls {
+                await TranscriptionQueue.shared.addFileToQueue(url: url)
+            }
+        }
+    }
+
+    private func isAudioFile(_ url: URL) -> Bool {
+        if let contentType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType {
+            return contentType.conforms(to: .audio)
+        }
+        return UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) ?? false
     }
     
     private func observeMicrophoneChanges() {
