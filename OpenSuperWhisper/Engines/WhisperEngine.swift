@@ -218,9 +218,31 @@ class WhisperEngine: TranscriptionEngine {
         return LanguageUtil.availableLanguages
     }
     
+    private nonisolated func resolveFileURL(_ fileURL: URL) throws -> (URL, Bool) {
+        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+        guard data.count >= 12 else { return (fileURL, false) }
+
+        let ext = fileURL.pathExtension.lowercased()
+
+        let isMP4Header = data[4...7].elementsEqual([0x66, 0x74, 0x79, 0x70]) // "ftyp"
+        if isMP4Header && ext != "m4a" && ext != "mp4" && ext != "m4b" && ext != "aac" {
+            let tmpURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("m4a")
+            try FileManager.default.copyItem(at: fileURL, to: tmpURL)
+            return (tmpURL, true)
+        }
+
+        return (fileURL, false)
+    }
+
     nonisolated func convertAudioToPCM(fileURL: URL) async throws -> [Float]? {
         return try await Task.detached(priority: .userInitiated) {
-            let audioFile = try AVAudioFile(forReading: fileURL)
+            let (resolvedURL, isTempFile) = try self.resolveFileURL(fileURL)
+            defer {
+                if isTempFile { try? FileManager.default.removeItem(at: resolvedURL) }
+            }
+            let audioFile = try AVAudioFile(forReading: resolvedURL)
             let sourceFormat = audioFile.processingFormat
             let totalFrames = audioFile.length
             
@@ -240,7 +262,7 @@ class WhisperEngine: TranscriptionEngine {
             if workerCount == 1 {
                 // Sequential processing for small files
                 return try self.convertSequential(
-                    fileURL: fileURL,
+                    fileURL: resolvedURL,
                     sourceFormat: sourceFormat,
                     targetFormat: targetFormat,
                     ratio: ratio,
@@ -272,7 +294,7 @@ class WhisperEngine: TranscriptionEngine {
                     let endFrame = workerIndex == workerCount - 1 ? totalFrames : startFrame + framesPerWorker
                     let segmentFrames = endFrame - startFrame
                     
-                    guard let workerFile = try? AVAudioFile(forReading: fileURL) else {
+                    guard let workerFile = try? AVAudioFile(forReading: resolvedURL) else {
                         hasError = true
                         return
                     }
