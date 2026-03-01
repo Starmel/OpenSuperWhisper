@@ -112,7 +112,7 @@ class IndicatorViewModel: ObservableObject {
                 do {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
-                    
+
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -122,15 +122,16 @@ class IndicatorViewModel: ObservableObject {
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
+                        rawTranscription: text,
                         duration: 0,
                         status: .completed,
                         progress: 1.0,
                         sourceFileURL: nil
                     ).url
-                    
+
                     // Move the temporary recording to final location
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-                    
+
                     // Save the recording to store
                     await MainActor.run {
                         self.recordingStore.addRecording(Recording(
@@ -138,13 +139,14 @@ class IndicatorViewModel: ObservableObject {
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
+                            rawTranscription: text,
                             duration: 0,
                             status: .completed,
                             progress: 1.0,
                             sourceFileURL: nil
                         ))
                     }
-                    
+
                     insertText(text)
                     print("Transcription result: \(text)")
                 } catch {
@@ -289,7 +291,7 @@ struct IndicatorWindow: View {
                     Image(systemName: "hourglass")
                         .foregroundColor(.orange)
                         .frame(width: 24)
-                    
+
                     Text("Processing...")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.orange)

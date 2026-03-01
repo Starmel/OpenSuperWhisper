@@ -95,7 +95,8 @@ class PermissionsManager: ObservableObject {
     }
 
     func checkAccessibilityPermission() {
-        let granted = AXIsProcessTrusted()
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary
+        let granted = AXIsProcessTrustedWithOptions(options)
         DispatchQueue.main.async { [weak self] in
             self?.isAccessibilityPermissionGranted = granted
         }

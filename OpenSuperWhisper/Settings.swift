@@ -6,6 +6,7 @@ import KeyboardShortcuts
 import SwiftUI
 import FluidAudio
 
+@MainActor
 class SettingsViewModel: ObservableObject {
     @Published var selectedEngine: String {
         didSet {
@@ -135,7 +136,36 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.holdToRecord = holdToRecord
         }
     }
-    
+
+    // LLM post-processing
+    @Published var llmProcessingMode: LLMProcessingMode {
+        didSet {
+            if llmProcessingMode != .raw && !LLMPostProcessor.shared.isAvailable {
+                llmProcessingMode = .raw
+                return
+            }
+            AppPreferences.shared.llmProcessingMode = llmProcessingMode.rawValue
+        }
+    }
+
+    @Published var llmModelId: String {
+        didSet {
+            AppPreferences.shared.llmModelId = llmModelId
+            LLMPostProcessor.shared.unloadModel()
+        }
+    }
+
+    @Published var llmTemperature: Double {
+        didSet {
+            AppPreferences.shared.llmTemperature = llmTemperature
+        }
+    }
+
+    @Published var customLLMModelId: String = ""
+    @Published var isInstallingLLMModel: Bool = false
+    @Published var installingLLMModelId: String?
+    private var preInstallLLMModelId: String?
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -154,7 +184,16 @@ class SettingsViewModel: ObservableObject {
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
-        
+        let savedLLMMode = LLMProcessingMode(rawValue: prefs.llmProcessingMode) ?? .raw
+        if !LLMPostProcessor.shared.isAvailable && savedLLMMode != .raw {
+            self.llmProcessingMode = .raw
+            AppPreferences.shared.llmProcessingMode = LLMProcessingMode.raw.rawValue
+        } else {
+            self.llmProcessingMode = savedLLMMode
+        }
+        self.llmModelId = prefs.llmModelId
+        self.llmTemperature = prefs.llmTemperature
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -419,6 +458,74 @@ class SettingsViewModel: ObservableObject {
             try await downloadFluidAudioModel(model)
         }
     }
+
+    func isLLMModelInstalled(_ modelId: String) -> Bool {
+        LLMPostProcessor.shared.isModelInstalled(modelId)
+    }
+
+    @MainActor
+    func installLLMModel(_ modelId: String) async {
+        guard LLMPostProcessor.shared.isAvailable else {
+            LLMPostProcessor.shared.lastError = LLMError.unavailable.localizedDescription
+            return
+        }
+        guard !isInstallingLLMModel else { return }
+
+        preInstallLLMModelId = llmModelId
+        isInstallingLLMModel = true
+        installingLLMModelId = modelId
+        llmModelId = modelId
+
+        defer {
+            if installingLLMModelId == modelId {
+                isInstallingLLMModel = false
+                installingLLMModelId = nil
+                preInstallLLMModelId = nil
+            }
+        }
+
+        do {
+            try await LLMPostProcessor.shared.installModel(modelId: modelId)
+            if installingLLMModelId == modelId {
+                preInstallLLMModelId = nil
+            }
+        } catch {
+            if installingLLMModelId == modelId || installingLLMModelId == nil {
+                if let prev = preInstallLLMModelId {
+                    llmModelId = prev
+                }
+                preInstallLLMModelId = nil
+            }
+            if !(error is CancellationError) {
+                LLMPostProcessor.shared.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func cancelLLMInstall() {
+        guard isInstallingLLMModel else { return }
+        let prev = preInstallLLMModelId
+        preInstallLLMModelId = nil
+        LLMPostProcessor.shared.unloadModel()
+        isInstallingLLMModel = false
+        installingLLMModelId = nil
+        if let prev {
+            llmModelId = prev
+        }
+    }
+
+    var llmModelsDirectory: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent("models")
+    }
+
+    func openLLMModelsDirectory() {
+        let directory = llmModelsDirectory
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        NSWorkspace.shared.open(directory)
+    }
 }
 
 struct SettingsDownloadableModel: Identifiable {
@@ -511,11 +618,29 @@ struct Settings {
     }
 }
 
+private enum ModelSettingsSubTab: String, CaseIterable, Identifiable {
+    case speech
+    case llm
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .speech:
+            return "Speech Models"
+        case .llm:
+            return "LLM Models"
+        }
+    }
+}
+
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
+    @ObservedObject private var llmPostProcessor = LLMPostProcessor.shared
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
+    @State private var selectedModelSubTab: ModelSettingsSubTab = .speech
     @State private var previousModelURL: URL?
     
     var body: some View {
@@ -609,144 +734,337 @@ struct SettingsView: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Speech Recognition Engine")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    Picker("Engine", selection: $viewModel.selectedEngine) {
-                        Text("Parakeet").tag("fluidaudio")
-                        Text("Whisper").tag("whisper")
+                    Picker("", selection: $selectedModelSubTab) {
+                        ForEach(ModelSettingsSubTab.allCases) { subTab in
+                            Text(subTab.title).tag(subTab)
+                        }
                     }
                     .pickerStyle(.segmented)
-                    .padding(.bottom, 8)
-                    
-                    if viewModel.selectedEngine == "whisper" {
+
+                    if selectedModelSubTab == .speech {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Whisper Model")
+                            Text("Speech Recognition Engine")
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
-                            
-                            ScrollView {
-                                VStack(spacing: 12) {
-                                    ForEach($viewModel.downloadableModels) { $model in
-                                        ModelDownloadItemView(model: $model, viewModel: viewModel)
-                                    }
-                                }
+
+                            Picker("Engine", selection: $viewModel.selectedEngine) {
+                                Text("Parakeet").tag("fluidaudio")
+                                Text("Whisper").tag("whisper")
                             }
-                            .frame(maxHeight: 200)
-                            
-                            if viewModel.isDownloading {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        if viewModel.downloadProgress > 0 {
-                                            ProgressView(value: viewModel.downloadProgress)
-                                                .progressViewStyle(LinearProgressViewStyle())
-                                        } else {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle())
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Button("Cancel") {
-                                            viewModel.cancelDownload()
-                                        }
-                                        .buttonStyle(.bordered)
-                                    }
-                                    
-                                    if let downloadingName = viewModel.downloadingModelName {
-                                        Text("Downloading: \(downloadingName)")
+                            .pickerStyle(.segmented)
+                            .padding(.bottom, 8)
+
+                            if viewModel.selectedEngine == "whisper" {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    Text("Whisper Model")
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+
+                                    Text("Download Models")
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                        .padding(.top, 8)
+
+                                    if viewModel.downloadableModels.isEmpty {
+                                        Text("No Whisper models found. Click refresh.")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
+                                        Button("Refresh") {
+                                            viewModel.loadAvailableModels()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    } else {
+                                        ScrollView {
+                                            VStack(spacing: 12) {
+                                                ForEach($viewModel.downloadableModels) { $model in
+                                                    ModelDownloadItemView(model: $model, viewModel: viewModel)
+                                                }
+                                            }
+                                        }
+                                        .frame(maxHeight: 260)
                                     }
-                                }
-                                .padding(.top, 8)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Models Directory:")
-                                        .font(.subheadline)
-                                    Button(action: {
-                                        NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
-                                    }) {
-                                        Label("Open Folder", systemImage: "folder")
-                                            .font(.subheadline)
+
+                                    if viewModel.isDownloading {
+                                        VStack(spacing: 8) {
+                                            HStack {
+                                                if viewModel.downloadProgress > 0 {
+                                                    ProgressView(value: viewModel.downloadProgress)
+                                                        .progressViewStyle(LinearProgressViewStyle())
+                                                } else {
+                                                    ProgressView()
+                                                        .progressViewStyle(CircularProgressViewStyle())
+                                                }
+
+                                                Spacer()
+
+                                                Button("Cancel") {
+                                                    viewModel.cancelDownload()
+                                                }
+                                                .buttonStyle(.bordered)
+                                            }
+
+                                            if let downloadingName = viewModel.downloadingModelName {
+                                                Text("Downloading: \(downloadingName)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        .padding(.top, 8)
                                     }
-                                    .buttonStyle(.borderless)
-                                    .help("Open models directory")
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Text("Models Directory:")
+                                                .font(.subheadline)
+                                            Button(action: {
+                                                NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
+                                            }) {
+                                                Label("Open Folder", systemImage: "folder")
+                                                    .font(.subheadline)
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .help("Open models directory")
+                                        }
+                                        Text(WhisperModelManager.shared.modelsDirectory.path)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                            .padding(8)
+                                            .background(Color(.textBackgroundColor).opacity(0.5))
+                                            .cornerRadius(6)
+                                    }
+                                    .padding(.top, 8)
                                 }
-                                Text(WhisperModelManager.shared.modelsDirectory.path)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textSelection(.enabled)
-                                    .padding(8)
-                                    .background(Color(.textBackgroundColor).opacity(0.5))
-                                    .cornerRadius(6)
+                            } else {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    Text("Parakeet Model")
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+
+                                    Text("Download Models")
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                        .padding(.top, 8)
+
+                                    if viewModel.downloadableFluidAudioModels.isEmpty {
+                                        Text("No Parakeet models found. Click refresh.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Button("Refresh") {
+                                            viewModel.initializeFluidAudioModels()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    } else {
+                                        ScrollView {
+                                            VStack(spacing: 12) {
+                                                ForEach($viewModel.downloadableFluidAudioModels) { $model in
+                                                    FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
+                                                }
+                                            }
+                                        }
+                                        .frame(maxHeight: 260)
+                                    }
+
+                                    if viewModel.isDownloading {
+                                        VStack(spacing: 8) {
+                                            HStack {
+                                                if viewModel.downloadProgress > 0 {
+                                                    ProgressView(value: viewModel.downloadProgress)
+                                                        .progressViewStyle(LinearProgressViewStyle())
+                                                } else {
+                                                    ProgressView()
+                                                        .progressViewStyle(CircularProgressViewStyle())
+                                                }
+
+                                                Spacer()
+
+                                                Button("Cancel") {
+                                                    viewModel.cancelDownload()
+                                                }
+                                                .buttonStyle(.bordered)
+                                            }
+
+                                            if let downloadingName = viewModel.downloadingModelName {
+                                                Text("Downloading: \(downloadingName)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        .padding(.top, 8)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Text("Models Directory:")
+                                                .font(.subheadline)
+                                            Button(action: {
+                                                let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
+                                                let parentDir = cacheDir.deletingLastPathComponent()
+                                                NSWorkspace.shared.open(parentDir)
+                                            }) {
+                                                Label("Open Folder", systemImage: "folder")
+                                                    .font(.subheadline)
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .help("Open models directory")
+                                        }
+                                        Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                            .padding(8)
+                                            .background(Color(.textBackgroundColor).opacity(0.5))
+                                            .cornerRadius(6)
+                                    }
+                                    .padding(.top, 8)
+                                }
                             }
-                            .padding(.top, 8)
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Parakeet Model")
+                            Text("LLM Models (MLX)")
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
-                            
-                            ScrollView {
-                                VStack(spacing: 12) {
-                                    ForEach($viewModel.downloadableFluidAudioModels) { $model in
-                                        FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
-                                    }
+
+                            if !llmPostProcessor.isAvailable {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(.secondary)
+                                        .imageScale(.small)
+                                    Text("LLM runtime is unavailable in this build. Rebuild with MLX enabled to install LLM models.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
-                            }
-                            .frame(maxHeight: 200)
-                            
-                            if viewModel.isDownloading {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        if viewModel.downloadProgress > 0 {
-                                            ProgressView(value: viewModel.downloadProgress)
-                                                .progressViewStyle(LinearProgressViewStyle())
-                                        } else {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Text("Install models here, then select which one to use for manual LLM transforms.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ScrollView(.vertical) {
+                                    LazyVStack(alignment: .leading, spacing: 12) {
+                                        Text("General Purpose")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+
+                                        ForEach(LLMModelRegistry.generalModels) { model in
+                                            LLMModelItemView(
+                                                model: model,
+                                                isSelected: viewModel.llmModelId == model.huggingFaceId,
+                                                isInstalled: viewModel.isLLMModelInstalled(model.huggingFaceId),
+                                                isInstalling: viewModel.isInstallingLLMModel && viewModel.installingLLMModelId == model.huggingFaceId,
+                                                installProgress: llmPostProcessor.loadingProgress,
+                                                onInstall: {
+                                                    Task { @MainActor in
+                                                        await viewModel.installLLMModel(model.huggingFaceId)
+                                                    }
+                                                },
+                                                onSelect: {
+                                                    viewModel.llmModelId = model.huggingFaceId
+                                                }
+                                            )
                                         }
-                                        
-                                        Spacer()
-                                        
-                                        Button("Cancel") {
-                                            viewModel.cancelDownload()
+
+                                        Text("Code-Specialized")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .padding(.top, 4)
+
+                                        ForEach(LLMModelRegistry.codeModels) { model in
+                                            LLMModelItemView(
+                                                model: model,
+                                                isSelected: viewModel.llmModelId == model.huggingFaceId,
+                                                isInstalled: viewModel.isLLMModelInstalled(model.huggingFaceId),
+                                                isInstalling: viewModel.isInstallingLLMModel && viewModel.installingLLMModelId == model.huggingFaceId,
+                                                installProgress: llmPostProcessor.loadingProgress,
+                                                onInstall: {
+                                                    Task { @MainActor in
+                                                        await viewModel.installLLMModel(model.huggingFaceId)
+                                                    }
+                                                },
+                                                onSelect: {
+                                                    viewModel.llmModelId = model.huggingFaceId
+                                                }
+                                            )
                                         }
-                                        .buttonStyle(.bordered)
                                     }
-                                    
-                                    if let downloadingName = viewModel.downloadingModelName {
-                                        Text("Downloading: \(downloadingName)")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(minHeight: 220, maxHeight: 360)
+
+                                if viewModel.isInstallingLLMModel {
+                                    VStack(spacing: 6) {
+                                        HStack {
+                                            if llmPostProcessor.loadingProgress > 0 && llmPostProcessor.loadingProgress < 1.0 {
+                                                ProgressView(value: llmPostProcessor.loadingProgress)
+                                                    .progressViewStyle(LinearProgressViewStyle())
+                                            } else {
+                                                ProgressView()
+                                            }
+
+                                            Spacer()
+
+                                            Button("Cancel") {
+                                                viewModel.cancelLLMInstall()
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                        }
+
+                                        Text("Installing model... \(Int(llmPostProcessor.loadingProgress * 100))%")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
                                 }
-                                .padding(.top, 8)
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Custom HuggingFace Model")
+                                        .font(.subheadline)
+                                    HStack {
+                                        TextField("e.g. mlx-community/Model-Name", text: $viewModel.customLLMModelId)
+                                            .textFieldStyle(.roundedBorder)
+                                        Button("Install & Select") {
+                                            let id = viewModel.customLLMModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            guard !id.isEmpty else { return }
+                                            Task { @MainActor in
+                                                await viewModel.installLLMModel(id)
+                                            }
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .disabled(
+                                            viewModel.customLLMModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                            || viewModel.isInstallingLLMModel
+                                        )
+                                    }
+                                    Text("Custom model downloads on first install and then appears as selected.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                if LLMModelRegistry.model(forHuggingFaceId: viewModel.llmModelId) == nil {
+                                    Text("Selected custom model: \(viewModel.llmModelId)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .textSelection(.enabled)
+                                }
+
+                                if let error = llmPostProcessor.lastError {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                            .imageScale(.small)
+                                        Text("Last error: \(error)")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                }
                             }
-                            
+
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text("Models Directory:")
                                         .font(.subheadline)
                                     Button(action: {
-                                        let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
-                                        let parentDir = cacheDir.deletingLastPathComponent()
-                                        NSWorkspace.shared.open(parentDir)
+                                        viewModel.openLLMModelsDirectory()
                                     }) {
                                         Label("Open Folder", systemImage: "folder")
                                             .font(.subheadline)
@@ -754,7 +1072,7 @@ struct SettingsView: View {
                                     .buttonStyle(.borderless)
                                     .help("Open models directory")
                                 }
-                                Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
+                                Text(viewModel.llmModelsDirectory.path)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .textSelection(.enabled)
@@ -762,7 +1080,6 @@ struct SettingsView: View {
                                     .background(Color(.textBackgroundColor).opacity(0.5))
                                     .cornerRadius(6)
                             }
-                            .padding(.top, 8)
                         }
                     }
                 }
@@ -1004,6 +1321,60 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Text Processing")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Text("Choose Clean, Dev Prompt, or Structured Markdown from each recording's Text Processing menu in the main window.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if !llmPostProcessor.isAvailable {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.secondary)
+                                .imageScale(.small)
+                            Text("Text processing runtime is unavailable in this build.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Text("Install and select LLM models in Model > LLM Models.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Text Processing Temperature:")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text(String(format: "%.2f", viewModel.llmTemperature))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Slider(value: $viewModel.llmTemperature, in: 0.0...1.0, step: 0.05)
+                                .help("Lower = more deterministic, higher = more creative")
+                        }
+                    }
+
+                    if let error = llmPostProcessor.lastError {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .imageScale(.small)
+                            Text("Last error: \(error)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
                 
                 // Debug Options
                 VStack(alignment: .leading, spacing: 16) {
@@ -1148,6 +1519,101 @@ struct SettingsView: View {
                 .cornerRadius(12)
             }
             .padding()
+        }
+    }
+}
+
+struct LLMModelItemView: View {
+    let model: LLMModelInfo
+    let isSelected: Bool
+    let isInstalled: Bool
+    let isInstalling: Bool
+    let installProgress: Double
+    let onInstall: () -> Void
+    let onSelect: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(model.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    if model.recommended {
+                        Text("Recommended")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                    }
+
+                    Text(model.sizeLabel)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if isInstalling {
+                    if installProgress > 0 && installProgress < 1.0 {
+                        ProgressView(value: installProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .frame(height: 6)
+                            .padding(.top, 4)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(0.7)
+                            .padding(.top, 4)
+                    }
+                }
+            }
+
+            Spacer()
+
+            if isInstalling {
+                Text("Installing...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if isInstalled {
+                if isSelected {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .imageScale(.large)
+                        Text("Selected")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                } else {
+                    Button("Select") {
+                        onSelect()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Button("Install") {
+                    onInstall()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(isSelected ? Color(.controlBackgroundColor).opacity(0.7) : Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isInstalled && !isSelected && !isInstalling {
+                onSelect()
+            }
         }
     }
 }
@@ -1438,4 +1904,3 @@ struct ModelDownloadItemView: View {
         }
     }
 }
-

@@ -5,6 +5,103 @@ if [[ "$1" == "build" ]]; then
     JUST_BUILD=true
 fi
 
+LIBOMP_DYLIB=""
+
+find_libomp_dylib() {
+    local candidates=()
+
+    if command -v brew >/dev/null 2>&1; then
+        local libomp_prefix
+        libomp_prefix=$(brew --prefix libomp 2>/dev/null || true)
+        if [[ -n "$libomp_prefix" ]]; then
+            candidates+=("$libomp_prefix/lib/libomp.dylib")
+        fi
+
+        local brew_prefix
+        brew_prefix=$(brew --prefix 2>/dev/null || true)
+        if [[ -n "$brew_prefix" ]]; then
+            candidates+=("$brew_prefix/opt/libomp/lib/libomp.dylib")
+        fi
+    fi
+
+    candidates+=(
+        "/opt/homebrew/opt/libomp/lib/libomp.dylib"
+        "/usr/local/opt/libomp/lib/libomp.dylib"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [[ -f "$candidate" ]]; then
+            LIBOMP_DYLIB="$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+ensure_libomp() {
+    if find_libomp_dylib; then
+        return
+    fi
+
+    if [[ "${OWS_INSTALL_LIBOMP:-0}" == "1" ]]; then
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew is required to install libomp automatically."
+            exit 1
+        fi
+
+        echo "libomp not found. Installing via Homebrew..."
+        brew install libomp
+        if find_libomp_dylib; then
+            return
+        fi
+    fi
+
+    echo "libomp is required but was not found."
+    echo "Install with:"
+    echo "  brew install libomp"
+    echo "Or rerun with:"
+    echo "  OWS_INSTALL_LIBOMP=1 ./run.sh build"
+    exit 1
+}
+
+ensure_metal_toolchain() {
+    if xcrun metal -v >/dev/null 2>&1; then
+        return
+    fi
+
+    if ls /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-*/Metal.xctoolchain/usr/bin/metal >/dev/null 2>&1; then
+        return
+    fi
+
+    if ls /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain/*.asset >/dev/null 2>&1; then
+        return
+    fi
+
+    if [[ "${OWS_INSTALL_METAL_TOOLCHAIN:-0}" == "1" ]]; then
+        echo "Metal Toolchain not found. Installing component..."
+        xcodebuild -downloadComponent MetalToolchain
+        if ! ls /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain/*.asset >/dev/null 2>&1; then
+            echo "Metal Toolchain installation failed."
+            exit 1
+        fi
+        return
+    fi
+
+    echo "Metal Toolchain is required for MLX-based LLM post-processing."
+    echo "Install once with:"
+    echo "  xcodebuild -downloadComponent MetalToolchain"
+    echo "Or rerun with:"
+    echo "  OWS_INSTALL_METAL_TOOLCHAIN=1 ./run.sh build"
+    exit 1
+}
+
+echo "Checking Metal Toolchain..."
+ensure_metal_toolchain
+
+echo "Checking libomp..."
+ensure_libomp
+
 # Configure libwhisper
 echo "Configuring libwhisper..."
 cmake -G Xcode -B libwhisper/build -S libwhisper
@@ -25,7 +122,13 @@ if [[ $? -ne 0 ]]; then
 fi
 
 echo "Copying libomp.dylib..."
-cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
+rm -f ./build/libomp.dylib
+cp "$LIBOMP_DYLIB" ./build/libomp.dylib
+if [[ $? -ne 0 ]]; then
+    echo "Failed to copy libomp from $LIBOMP_DYLIB"
+    exit 1
+fi
+chmod u+w ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign - ./build/libomp.dylib
 

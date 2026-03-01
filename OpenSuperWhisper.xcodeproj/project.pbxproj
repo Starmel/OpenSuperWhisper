@@ -31,6 +31,8 @@
 		CE84DF722D55778000C54EA6 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF702D55778000C54EA6 /* MetalKit.framework */; };
 		CE84DF762D5577D200C54EA6 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE84DF752D5577D200C54EA6 /* Accelerate.framework */; };
 		CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */; };
+		CE9DA56B2EA8DB0000EB417E /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = CE9DA5692EA8DB0000EB417E /* MLXLLM */; };
+		CE9DA56C2EA8DB0000EB417E /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = CE9DA56A2EA8DB0000EB417E /* MLXLMCommon */; };
 		CEAC00032D82F00200000000 /* libautocorrect_swift.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; };
 		CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00072D82F40000000000 /* libomp.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -219,6 +221,8 @@
 				CE84DF6E2D55777800C54EA6 /* libc++.tbd in Frameworks */,
 				840156D12D79EDA900FB5FFE /* libggml.a in Frameworks */,
 				CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */,
+				CE9DA56B2EA8DB0000EB417E /* MLXLLM in Frameworks */,
+				CE9DA56C2EA8DB0000EB417E /* MLXLMCommon in Frameworks */,
 				CEAC00032D82F00200000000 /* libautocorrect_swift.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -429,6 +433,8 @@
 				CE84E17C2D56550B00C54EA6 /* KeyboardShortcuts */,
 				CE0EAD6D2D56ACA80067FDEE /* GRDB */,
 				CE84E17E2D56550B00C54EA7 /* FluidAudio */,
+				CE9DA5692EA8DB0000EB417E /* MLXLLM */,
+				CE9DA56A2EA8DB0000EB417E /* MLXLMCommon */,
 			);
 			productName = OpenSuperWhisper;
 			productReference = CE57B0282D52C7BB00929AF3 /* OpenSuperWhisper.app */;
@@ -516,6 +522,7 @@
 				CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				CE9DA5682EA8DB0000EB417E /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CE57B0292D52C7BB00929AF3 /* Products */;
@@ -820,6 +827,7 @@
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/build",
 					/opt/homebrew/opt/libomp/lib,
+					/usr/local/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.0.7;
@@ -882,6 +890,7 @@
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/build",
 					/opt/homebrew/opt/libomp/lib,
+					/usr/local/opt/libomp/lib,
 				);
 				LLVM_LTO = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -1050,6 +1059,14 @@
 				minimumVersion = 0.7.9;
 			};
 		};
+		CE9DA5682EA8DB0000EB417E /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.30.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1067,6 +1084,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		CE9DA5692EA8DB0000EB417E /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE9DA5682EA8DB0000EB417E /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		CE9DA56A2EA8DB0000EB417E /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE9DA5682EA8DB0000EB417E /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
