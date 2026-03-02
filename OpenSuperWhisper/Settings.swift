@@ -10,9 +10,12 @@ class SettingsViewModel: ObservableObject {
     @Published var selectedEngine: String {
         didSet {
             AppPreferences.shared.selectedEngine = selectedEngine
-            if selectedEngine == "whisper" {
+            switch selectedEngine {
+            case "whisper":
                 loadAvailableModels()
-            } else {
+            case "moonshine":
+                initializeMoonshineModels()
+            default:
                 initializeFluidAudioModels()
             }
             Task { @MainActor in
@@ -45,6 +48,22 @@ class SettingsViewModel: ObservableObject {
     
     @Published var downloadableModels: [SettingsDownloadableModel] = []
     @Published var downloadableFluidAudioModels: [SettingsFluidAudioModel] = []
+    @Published var downloadableMoonshineModels: [SettingsMoonshineModel] = []
+    @Published var selectedMoonshineModelName: String {
+        didSet {
+            AppPreferences.shared.selectedMoonshineModelName = selectedMoonshineModelName
+            if let info = MoonshineModelManager.availableModels.first(where: { $0.name == selectedMoonshineModelName }) {
+                let dir = MoonshineModelManager.shared.modelDirectory(for: info)
+                AppPreferences.shared.selectedMoonshineModelPath = dir.path
+                AppPreferences.shared.moonshineModelArch = Int(info.archRawValue)
+                if selectedEngine == "moonshine" {
+                    Task { @MainActor in
+                        TranscriptionService.shared.reloadEngine()
+                    }
+                }
+            }
+        }
+    }
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
@@ -140,6 +159,7 @@ class SettingsViewModel: ObservableObject {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
+        self.selectedMoonshineModelName = prefs.selectedMoonshineModelName
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -161,6 +181,7 @@ class SettingsViewModel: ObservableObject {
         loadAvailableModels()
         initializeDownloadableModels()
         initializeFluidAudioModels()
+        initializeMoonshineModels()
     }
     
     func initializeFluidAudioModels() {
@@ -180,6 +201,14 @@ class SettingsViewModel: ObservableObject {
         
         // Проверяем наличие всех необходимых файлов модели
         return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
+    }
+    
+    func initializeMoonshineModels() {
+        downloadableMoonshineModels = SettingsMoonshineModels.availableModels.map { model in
+            var updatedModel = model
+            updatedModel.isDownloaded = MoonshineModelManager.shared.isModelDownloaded(name: model.modelName)
+            return updatedModel
+        }
     }
     
     func initializeDownloadableModels() {
@@ -287,12 +316,17 @@ class SettingsViewModel: ObservableObject {
                 let filename = model.url.lastPathComponent
                 WhisperModelManager.shared.cancelDownload(name: filename)
             }
-            // Reset progress for the downloading model
+            if selectedEngine == "moonshine", let model = downloadableMoonshineModels.first(where: { $0.name == modelName }) {
+                MoonshineModelManager.shared.cancelDownload(name: model.modelName)
+            }
             if let index = downloadableModels.firstIndex(where: { $0.name == modelName }) {
                 downloadableModels[index].downloadProgress = 0.0
             }
             if let index = downloadableFluidAudioModels.firstIndex(where: { $0.name == modelName }) {
                 downloadableFluidAudioModels[index].downloadProgress = 0.0
+            }
+            if let index = downloadableMoonshineModels.firstIndex(where: { $0.name == modelName }) {
+                downloadableMoonshineModels[index].downloadProgress = 0.0
             }
         }
         isDownloading = false
@@ -417,6 +451,71 @@ class SettingsViewModel: ObservableObject {
         let versionString = AppPreferences.shared.fluidAudioModelVersion
         if let model = downloadableFluidAudioModels.first(where: { $0.version == versionString }) {
             try await downloadFluidAudioModel(model)
+        }
+    }
+    
+    @MainActor
+    func downloadMoonshineModel(_ model: SettingsMoonshineModel) async throws {
+        guard !isDownloading else { return }
+        guard let info = MoonshineModelManager.availableModels.first(where: { $0.name == model.modelName }) else { return }
+        
+        isDownloading = true
+        downloadingModelName = model.name
+        downloadProgress = 0.0
+        
+        if let index = downloadableMoonshineModels.firstIndex(where: { $0.id == model.id }) {
+            downloadableMoonshineModels[index].downloadProgress = 0.0
+        }
+        
+        downloadTask = Task {
+            do {
+                try await MoonshineModelManager.shared.downloadModel(info) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        self.downloadProgress = progress
+                        if let index = self.downloadableMoonshineModels.firstIndex(where: { $0.id == model.id }) {
+                            self.downloadableMoonshineModels[index].downloadProgress = progress
+                            if progress >= 1.0 {
+                                self.downloadableMoonshineModels[index].isDownloaded = true
+                            }
+                        }
+                    }
+                }
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.resetMoonshineDownloadState(model)
+                    }
+                    return
+                }
+                
+                await MainActor.run {
+                    if let index = downloadableMoonshineModels.firstIndex(where: { $0.id == model.id }) {
+                        downloadableMoonshineModels[index].isDownloaded = true
+                        downloadableMoonshineModels[index].downloadProgress = 0.0
+                    }
+                    selectedMoonshineModelName = model.modelName
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                }
+            } catch is CancellationError {
+                await MainActor.run { self.resetMoonshineDownloadState(model) }
+            } catch {
+                await MainActor.run { self.resetMoonshineDownloadState(model) }
+                throw error
+            }
+        }
+        
+        try await downloadTask?.value
+    }
+    
+    private func resetMoonshineDownloadState(_ model: SettingsMoonshineModel) {
+        isDownloading = false
+        downloadingModelName = nil
+        downloadProgress = 0.0
+        if let index = downloadableMoonshineModels.firstIndex(where: { $0.id == model.id }) {
+            downloadableMoonshineModels[index].downloadProgress = 0.0
         }
     }
 }
@@ -582,13 +681,23 @@ struct SettingsView: View {
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
-            if viewModel.selectedEngine == "fluidaudio" {
+            switch viewModel.selectedEngine {
+            case "fluidaudio":
                 viewModel.initializeFluidAudioModels()
+            case "moonshine":
+                viewModel.initializeMoonshineModels()
+            default:
+                break
             }
         }
         .onChange(of: viewModel.selectedEngine) { _, newEngine in
-            if newEngine == "fluidaudio" {
+            switch newEngine {
+            case "fluidaudio":
                 viewModel.initializeFluidAudioModels()
+            case "moonshine":
+                viewModel.initializeMoonshineModels()
+            default:
+                break
             }
         }
         .onChange(of: viewModel.fluidAudioModelVersion) { _, _ in
@@ -616,6 +725,7 @@ struct SettingsView: View {
                     Picker("Engine", selection: $viewModel.selectedEngine) {
                         Text("Parakeet").tag("fluidaudio")
                         Text("Whisper").tag("whisper")
+                        Text("Moonshine").tag("moonshine")
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
@@ -682,6 +792,77 @@ struct SettingsView: View {
                                     .help("Open models directory")
                                 }
                                 Text(WhisperModelManager.shared.modelsDirectory.path)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .textSelection(.enabled)
+                                    .padding(8)
+                                    .background(Color(.textBackgroundColor).opacity(0.5))
+                                    .cornerRadius(6)
+                            }
+                            .padding(.top, 8)
+                        }
+                    } else if viewModel.selectedEngine == "moonshine" {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Moonshine Model")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text("Download Models")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                                .padding(.top, 8)
+                            
+                            ScrollView {
+                                VStack(spacing: 12) {
+                                    ForEach($viewModel.downloadableMoonshineModels) { $model in
+                                        MoonshineModelDownloadItemView(model: $model, viewModel: viewModel)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 300)
+                            
+                            if viewModel.isDownloading {
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        if viewModel.downloadProgress > 0 {
+                                            ProgressView(value: viewModel.downloadProgress)
+                                                .progressViewStyle(LinearProgressViewStyle())
+                                        } else {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle())
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Button("Cancel") {
+                                            viewModel.cancelDownload()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                    
+                                    if let downloadingName = viewModel.downloadingModelName {
+                                        Text("Downloading: \(downloadingName)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Models Directory:")
+                                        .font(.subheadline)
+                                    Button(action: {
+                                        NSWorkspace.shared.open(MoonshineModelManager.shared.modelsDirectory)
+                                    }) {
+                                        Label("Open Folder", systemImage: "folder")
+                                            .font(.subheadline)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Open models directory")
+                                }
+                                Text(MoonshineModelManager.shared.modelsDirectory.path)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .textSelection(.enabled)
@@ -1178,9 +1359,88 @@ struct SettingsFluidAudioModels {
     ]
 }
 
+struct SettingsMoonshineModel: Identifiable {
+    let id = UUID()
+    let name: String
+    let modelName: String
+    let language: String
+    var isDownloaded: Bool
+    let description: String
+    var downloadProgress: Double = 0.0
+}
+
+struct SettingsMoonshineModels {
+    static let availableModels = [
+        SettingsMoonshineModel(
+            name: "Moonshine Base EN",
+            modelName: "base-en",
+            language: "en",
+            isDownloaded: false,
+            description: "English, best quality"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Tiny EN",
+            modelName: "tiny-en",
+            language: "en",
+            isDownloaded: false,
+            description: "English, fastest"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base ES",
+            modelName: "base-es",
+            language: "es",
+            isDownloaded: false,
+            description: "Spanish"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base JA",
+            modelName: "base-ja",
+            language: "ja",
+            isDownloaded: false,
+            description: "Japanese"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base AR",
+            modelName: "base-ar",
+            language: "ar",
+            isDownloaded: false,
+            description: "Arabic"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base UK",
+            modelName: "base-uk",
+            language: "uk",
+            isDownloaded: false,
+            description: "Ukrainian"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base ZH",
+            modelName: "base-zh",
+            language: "zh",
+            isDownloaded: false,
+            description: "Chinese"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base VI",
+            modelName: "base-vi",
+            language: "vi",
+            isDownloaded: false,
+            description: "Vietnamese"
+        ),
+        SettingsMoonshineModel(
+            name: "Moonshine Base KO",
+            modelName: "base-ko",
+            language: "ko",
+            isDownloaded: false,
+            description: "Korean"
+        ),
+    ]
+}
+
 enum OnboardingModelType {
     case whisper(url: URL, size: Int)
     case parakeet(version: String)
+    case moonshine(modelName: String)
 }
 
 struct OnboardingUnifiedModel: Identifiable {
@@ -1232,7 +1492,13 @@ struct OnboardingUnifiedModels {
                 url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
                 size: 574
             )
-        )
+        ),
+        OnboardingUnifiedModel(
+            name: "Moonshine Base",
+            isDownloaded: false,
+            description: "On-device, low latency, English",
+            type: .moonshine(modelName: "base-en")
+        ),
     ]
 }
 
@@ -1429,6 +1695,101 @@ struct ModelDownloadItemView: View {
             if model.isDownloaded && !isSelected {
                 let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
                 viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+            }
+        }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
+struct MoonshineModelDownloadItemView: View {
+    @Binding var model: SettingsMoonshineModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+    
+    var isSelected: Bool {
+        viewModel.selectedMoonshineModelName == model.modelName
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    if model.isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                            .imageScale(.small)
+                    }
+                }
+                
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+            
+            Spacer()
+            
+            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                Button("Cancel") {
+                    viewModel.cancelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .imageScale(.large)
+                } else {
+                    Button(action: {
+                        viewModel.selectedMoonshineModelName = model.modelName
+                    }) {
+                        Text("Select")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else {
+                Button(action: {
+                    Task {
+                        do {
+                            try await viewModel.downloadMoonshineModel(model)
+                        } catch is CancellationError {
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
+                }) {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.isDownloading)
+            }
+        }
+        .padding(12)
+        .background(isSelected ? Color(.controlBackgroundColor).opacity(0.7) : Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.isDownloaded && !isSelected {
+                viewModel.selectedMoonshineModelName = model.modelName
             }
         }
         .alert("Download Error", isPresented: $showError) {

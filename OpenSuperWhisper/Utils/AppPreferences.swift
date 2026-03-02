@@ -41,14 +41,23 @@ final class AppPreferences {
     // Model settings
     var selectedModelPath: String? {
         get {
-            if selectedEngine == "whisper" {
+            switch selectedEngine {
+            case "whisper":
                 return selectedWhisperModelPath
+            case "moonshine":
+                return selectedMoonshineModelPath
+            default:
+                return nil
             }
-            return nil
         }
         set {
-            if selectedEngine == "whisper" {
+            switch selectedEngine {
+            case "whisper":
                 selectedWhisperModelPath = newValue
+            case "moonshine":
+                selectedMoonshineModelPath = newValue
+            default:
+                break
             }
         }
     }
@@ -58,6 +67,15 @@ final class AppPreferences {
     
     @UserDefault(key: "fluidAudioModelVersion", defaultValue: "v3")
     var fluidAudioModelVersion: String
+    
+    @OptionalUserDefault(key: "selectedMoonshineModelPath")
+    var selectedMoonshineModelPath: String?
+    
+    @UserDefault(key: "moonshineModelArch", defaultValue: 1)
+    var moonshineModelArch: Int
+    
+    @UserDefault(key: "selectedMoonshineModelName", defaultValue: "base-en")
+    var selectedMoonshineModelName: String
     
     @UserDefault(key: "whisperLanguage", defaultValue: "en")
     var whisperLanguage: String

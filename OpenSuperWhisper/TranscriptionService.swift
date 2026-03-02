@@ -43,9 +43,12 @@ class TranscriptionService: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let engine: TranscriptionEngine?
             
-            if selectedEngine == "fluidaudio" {
+            switch selectedEngine {
+            case "fluidaudio":
                 engine = await FluidAudioEngine()
-            } else {
+            case "moonshine":
+                engine = await MoonshineEngine()
+            default:
                 engine = await WhisperEngine()
             }
             
@@ -71,10 +74,15 @@ class TranscriptionService: ObservableObject {
     }
     
     func reloadModel(with path: String) {
-        if AppPreferences.shared.selectedEngine == "whisper" {
+        switch AppPreferences.shared.selectedEngine {
+        case "whisper":
             AppPreferences.shared.selectedWhisperModelPath = path
-            reloadEngine()
+        case "moonshine":
+            AppPreferences.shared.selectedMoonshineModelPath = path
+        default:
+            return
         }
+        reloadEngine()
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
@@ -124,6 +132,13 @@ class TranscriptionService: ObservableObject {
             }
         } else if let fluidEngine = engine as? FluidAudioEngine {
             fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self = self, !self.isCancelled else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let moonshineEngine = engine as? MoonshineEngine {
+            moonshineEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self = self, !self.isCancelled else { return }
                     self.progress = newProgress

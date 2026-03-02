@@ -75,6 +75,8 @@ class OnboardingViewModel: ObservableObject {
                 updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             case .parakeet(let version):
                 updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: version)
+            case .moonshine(let modelName):
+                updatedModel.isDownloaded = MoonshineModelManager.shared.isModelDownloaded(name: modelName)
             }
             return updatedModel
         }
@@ -106,6 +108,14 @@ class OnboardingViewModel: ObservableObject {
         case .parakeet(let version):
             AppPreferences.shared.selectedEngine = "fluidaudio"
             AppPreferences.shared.fluidAudioModelVersion = version
+        case .moonshine(let modelName):
+            AppPreferences.shared.selectedEngine = "moonshine"
+            AppPreferences.shared.selectedMoonshineModelName = modelName
+            if let info = MoonshineModelManager.availableModels.first(where: { $0.name == modelName }) {
+                let dir = MoonshineModelManager.shared.modelDirectory(for: info)
+                AppPreferences.shared.selectedMoonshineModelPath = dir.path
+                AppPreferences.shared.moonshineModelArch = Int(info.archRawValue)
+            }
         }
     }
 
@@ -126,6 +136,8 @@ class OnboardingViewModel: ObservableObject {
             try await downloadWhisperModel(model: model, url: url)
         case .parakeet(let version):
             try await downloadParakeetModel(model: model, version: version)
+        case .moonshine(let modelName):
+            try await downloadMoonshineModel(model: model, modelName: modelName)
         }
     }
     
@@ -290,13 +302,91 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
+    @MainActor
+    private func downloadMoonshineModel(model: OnboardingUnifiedModel, modelName: String) async throws {
+        guard let info = MoonshineModelManager.availableModels.first(where: { $0.name == modelName }) else {
+            await MainActor.run {
+                isDownloading = false
+                downloadingModelName = nil
+                downloadProgress = 0.0
+            }
+            return
+        }
+        
+        downloadTask = Task {
+            do {
+                try await MoonshineModelManager.shared.downloadModel(info) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        self.downloadProgress = progress
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = progress
+                            if progress >= 1.0 {
+                                self.unifiedModels[index].isDownloaded = true
+                            }
+                        }
+                    }
+                }
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.isDownloading = false
+                        self.downloadingModelName = nil
+                        self.downloadProgress = 0.0
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = 0.0
+                        }
+                    }
+                    return
+                }
+                
+                await MainActor.run {
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].isDownloaded = true
+                        unifiedModels[index].downloadProgress = 0.0
+                    }
+                    selectModel(model)
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].downloadProgress = 0.0
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].downloadProgress = 0.0
+                    }
+                }
+                throw error
+            }
+        }
+        
+        try await downloadTask?.value
+    }
+    
     func cancelDownload() {
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if let model = unifiedModels.first(where: { $0.name == modelName }) {
-                if case .whisper(let url, _) = model.type {
+                switch model.type {
+                case .whisper(let url, _):
                     let filename = url.lastPathComponent
                     modelManager.cancelDownload(name: filename)
+                case .moonshine(let name):
+                    MoonshineModelManager.shared.cancelDownload(name: name)
+                case .parakeet:
+                    break
                 }
             }
             if let index = unifiedModels.firstIndex(where: { $0.name == modelName }) {

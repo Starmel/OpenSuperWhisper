@@ -635,7 +635,7 @@ struct ContentView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                        Text("Loading Whisper Model...")
+                        Text("Loading Model...")
                             .foregroundColor(.white)
                             .font(.headline)
                     }
