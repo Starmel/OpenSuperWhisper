@@ -169,7 +169,17 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func insertText(_ text: String) {
-        ClipboardUtil.insertText(text)
+        let finalText = Self.applyPostProcessing(text)
+        ClipboardUtil.insertText(finalText)
+    }
+    
+    static func applyPostProcessing(_ text: String) -> String {
+        guard AppPreferences.shared.addSpaceAfterSentence,
+              let lastChar = text.last,
+              lastChar.isPunctuation else {
+            return text
+        }
+        return text + " "
     }
     
     private func startBlinking() {
