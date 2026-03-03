@@ -647,6 +647,9 @@ struct ContentView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            isSettingsPresented = true
+        }
         .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
             if shouldClear {
                 searchText = ""

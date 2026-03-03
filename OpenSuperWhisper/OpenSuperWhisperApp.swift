@@ -34,6 +34,15 @@ struct OpenSuperWhisperApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    if let delegate = NSApplication.shared.delegate as? AppDelegate {
+                        delegate.showMainWindow()
+                    }
+                    NotificationCenter.default.post(name: .openSettings, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
         .handlesExternalEvents(matching: Set(arrayLiteral: "openMainWindow"))
     }
