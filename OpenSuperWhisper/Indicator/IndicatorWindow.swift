@@ -111,8 +111,9 @@ class IndicatorViewModel: ObservableObject {
                 
                 do {
                     print("start decoding...")
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
-                    
+                    let rawText = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let text = AppPreferences.shared.cleanTranscription(rawText)
+
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -127,10 +128,10 @@ class IndicatorViewModel: ObservableObject {
                         progress: 1.0,
                         sourceFileURL: nil
                     ).url
-                    
+
                     // Move the temporary recording to final location
                     try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-                    
+
                     // Save the recording to store
                     await MainActor.run {
                         self.recordingStore.addRecording(Recording(

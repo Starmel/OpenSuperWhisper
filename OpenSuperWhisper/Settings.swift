@@ -141,7 +141,19 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
         }
     }
-    
+
+    @Published var removeFillerWords: Bool {
+        didSet {
+            AppPreferences.shared.removeFillerWords = removeFillerWords
+        }
+    }
+
+    @Published var fillerWordsPattern: String {
+        didSet {
+            AppPreferences.shared.fillerWordsPattern = fillerWordsPattern
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -161,7 +173,9 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        
+        self.removeFillerWords = prefs.removeFillerWords
+        self.fillerWordsPattern = prefs.fillerWordsPattern
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -907,7 +921,45 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Filler Word Removal
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Filler Word Removal")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Remove Filler Words")
+                                .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.removeFillerWords)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        if viewModel.removeFillerWords {
+                            TextEditor(text: $viewModel.fillerWordsPattern)
+                                .frame(height: 60)
+                                .padding(6)
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+
+                            Text("Regex pattern for filler words to remove from transcriptions. Uses case-insensitive matching.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Transcriptions Directory
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Transcriptions Directory")
