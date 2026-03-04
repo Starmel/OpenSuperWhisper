@@ -57,12 +57,12 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 
 ### Contribution TODO list
 
-- [ ] Streaming transcription ([#22](https://github.com/Starmel/OpenSuperWhisper/issues/22))
-- [ ] Custom dictionary ([#20](https://github.com/Starmel/OpenSuperWhisper/issues/35))
-- [ ] Intel macOS compatibility ([#16](https://github.com/Starmel/OpenSuperWhisper/issues/16))
+- [ ] Streaming transcription
+- [ ] Custom dictionary / keyword boosting ([#19](https://github.com/Starmel/OpenSuperWhisper/issues/19))
+- [ ] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15))
 - [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
-- [x] Background app ([#9](https://github.com/Starmel/OpenSuperWhisper/issues/9))
-- [x] Support long-press single key audio recording ([#19](https://github.com/Starmel/OpenSuperWhisper/issues/19))
+- [x] Background app ([#8](https://github.com/Starmel/OpenSuperWhisper/issues/8))
+- [x] Support long-press single key audio recording ([#18](https://github.com/Starmel/OpenSuperWhisper/issues/18))
 
 ## License
 
