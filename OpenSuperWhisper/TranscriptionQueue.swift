@@ -97,6 +97,11 @@ class TranscriptionQueue: ObservableObject {
     }
 
     func addFileToQueue(url: URL) async {
+        guard AppPreferences.shared.saveTranscriptionHistory else {
+            print("Transcription history disabled, skipping file queue")
+            return
+        }
+
         do {
             let durationInSeconds = await (try? Task.detached(priority: .userInitiated) {
                 let asset = AVAsset(url: url)

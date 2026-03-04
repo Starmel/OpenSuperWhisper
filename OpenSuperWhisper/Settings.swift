@@ -135,13 +135,20 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.holdToRecord = holdToRecord
         }
     }
-    
+
+
     @Published var addSpaceAfterSentence: Bool {
         didSet {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
         }
     }
-    
+
+    @Published var saveTranscriptionHistory: Bool {
+        didSet {
+            AppPreferences.shared.saveTranscriptionHistory = saveTranscriptionHistory
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -161,7 +168,8 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        
+        self.saveTranscriptionHistory = prefs.saveTranscriptionHistory
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -783,7 +791,7 @@ struct SettingsView: View {
     }
     
     private var transcriptionSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Language Settings
                 VStack(alignment: .leading, spacing: 16) {
@@ -907,7 +915,33 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Privacy
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Privacy")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Save Transcription History")
+                                .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.saveTranscriptionHistory)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        Text("When disabled, audio recordings and transcriptions are not saved to disk. Only the current transcription is kept in memory for pasting.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Transcriptions Directory
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Transcriptions Directory")
