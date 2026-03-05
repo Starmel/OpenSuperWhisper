@@ -110,4 +110,22 @@ final class AppPreferences {
     
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
+
+    @UserDefault(key: "removeFillerWords", defaultValue: false)
+    var removeFillerWords: Bool
+
+    @UserDefault(key: "fillerWordsPattern", defaultValue: "\\b(um|uh|uh huh|er|ah|hmm|mm)\\b,?\\s*")
+    var fillerWordsPattern: String
+
+    /// Applies filler word removal if enabled, then cleans up extra whitespace.
+    func cleanTranscription(_ text: String) -> String {
+        guard removeFillerWords, !fillerWordsPattern.isEmpty else { return text }
+        let cleaned = text.replacingOccurrences(
+            of: fillerWordsPattern,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        // Collapse multiple spaces and trim
+        return cleaned.replacingOccurrences(of: "\\s{2,}", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+    }
 }
