@@ -143,8 +143,13 @@ class TranscriptionService: ObservableObject {
                 throw CancellationError()
             }
             
-            let result = try await engine.transcribeAudio(url: url, settings: settings)
-            
+            var result = try await engine.transcribeAudio(url: url, settings: settings)
+
+            // Optional LLM post-processing via Ollama
+            if AppPreferences.shared.ollamaEnabled {
+                result = await OllamaService.shared.postProcess(text: result)
+            }
+
             try Task.checkCancellation()
             
             let finalCancelled = await MainActor.run {

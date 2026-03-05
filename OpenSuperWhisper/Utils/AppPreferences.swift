@@ -107,7 +107,20 @@ final class AppPreferences {
     
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
-    
+
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
+
+    // Ollama LLM post-processing settings
+    @UserDefault(key: "ollamaEnabled", defaultValue: false)
+    var ollamaEnabled: Bool
+
+    @UserDefault(key: "ollamaEndpoint", defaultValue: "http://localhost:11434")
+    var ollamaEndpoint: String
+
+    @UserDefault(key: "ollamaModel", defaultValue: "gemma3:4b")
+    var ollamaModel: String
+
+    @UserDefault(key: "ollamaPrompt", defaultValue: "")
+    var ollamaPrompt: String
 }
