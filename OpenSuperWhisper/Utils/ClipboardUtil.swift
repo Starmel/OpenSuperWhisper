@@ -6,20 +6,29 @@ class ClipboardUtil {
     
     static func insertText(_ text: String) {
         let pasteboard = NSPasteboard.general
-        
+
         // Save current pasteboard contents
         let savedContents = saveCurrentPasteboardContents()
-        
+
         // Set new text to pasteboard
         pasteboard.declareTypes([.string], owner: nil)
         pasteboard.setString(text, forType: .string)
-        
+
+        // Wait for all modifier keys to be released before simulating Cmd+V.
+        // If the user's hotkey includes modifiers (e.g. Option+Space), those keys
+        // may still be physically held when we get here. CGEvent with
+        // .combinedSessionState would pick them up, sending e.g. Option+Cmd+V
+        // instead of Cmd+V, which the target app ignores.
+        waitForModifierRelease(timeout: 1.0)
+
         // Simulate Cmd+V using layout-aware keycode resolution
         simulatePaste()
-        
-        // Add a small delay to ensure paste operation completes
-        Thread.sleep(forTimeInterval: 0.1)
-        
+
+        // Wait long enough for the target app to read the pasteboard.
+        // 100 ms was not enough — apps that are mid-context-switch or on a
+        // different desktop can be slower to process the synthetic Cmd+V.
+        Thread.sleep(forTimeInterval: 0.3)
+
         // Restore original contents
         if let contents = savedContents {
             restorePasteboardContents(contents)
@@ -33,10 +42,10 @@ class ClipboardUtil {
     private static func sendCmdV() {
         // QWERTY keycode for V
         let qwertyKeyCodeV: CGKeyCode = 9
-        
+
         // Determine the correct keycode for Cmd+V
         let keyCodeV: CGKeyCode
-        
+
         if isQwertyCommandLayout() {
             // For layouts like "Dvorak - QWERTY ⌘" that use QWERTY for Command shortcuts
             keyCodeV = qwertyKeyCodeV
@@ -47,17 +56,39 @@ class ClipboardUtil {
             // Fallback for non-Latin layouts (Russian, etc.) - use QWERTY keycode
             keyCodeV = qwertyKeyCodeV
         }
-        
-        guard let source = CGEventSource(stateID: .combinedSessionState),
+
+        // Use .hidSystemState instead of .combinedSessionState so the event
+        // is not polluted by modifier keys that the user is still holding.
+        guard let source = CGEventSource(stateID: .hidSystemState),
               let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCodeV, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCodeV, keyDown: false)
         else { return }
-        
+
+        // Explicitly set ONLY the Command flag — this ensures no stray
+        // modifiers (Option, Shift, Control) leak into the synthetic event.
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        
+
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
+    }
+
+    /// Polls the current hardware modifier-key state until all modifiers are
+    /// released or the timeout expires.  This prevents the synthetic Cmd+V from
+    /// including stray modifiers that the user's hotkey left behind.
+    private static func waitForModifierRelease(timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        let pollInterval: TimeInterval = 0.02 // 20 ms
+
+        while Date() < deadline {
+            guard let source = CGEventSource(stateID: .hidSystemState) else { break }
+            let flags = source.flagsState
+            let modifiers: CGEventFlags = [.maskShift, .maskControl, .maskAlternate, .maskCommand]
+            if flags.intersection(modifiers).isEmpty {
+                return
+            }
+            Thread.sleep(forTimeInterval: pollInterval)
+        }
     }
     
     static func isQwertyCommandLayout() -> Bool {
