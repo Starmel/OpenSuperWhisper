@@ -81,8 +81,7 @@ class ClipboardUtil {
         let pollInterval: TimeInterval = 0.02 // 20 ms
 
         while Date() < deadline {
-            guard let source = CGEventSource(stateID: .hidSystemState) else { break }
-            let flags = source.flagsState
+            let flags = CGEventSource.flagsState(.hidSystemState)
             let modifiers: CGEventFlags = [.maskShift, .maskControl, .maskAlternate, .maskCommand]
             if flags.intersection(modifiers).isEmpty {
                 return
