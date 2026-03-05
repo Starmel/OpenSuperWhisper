@@ -144,8 +144,11 @@ class IndicatorViewModel: ObservableObject {
                             sourceFileURL: nil
                         ))
                     }
-                    
-                    insertText(text)
+
+                    let isNoSpeech = text == "No speech detected in the audio"
+                    if !text.isEmpty && !(isNoSpeech && !AppPreferences.shared.insertNoSpeechMessage) {
+                        insertText(text)
+                    }
                     print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
