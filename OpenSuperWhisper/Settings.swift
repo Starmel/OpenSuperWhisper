@@ -135,13 +135,54 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.holdToRecord = holdToRecord
         }
     }
-    
+
     @Published var addSpaceAfterSentence: Bool {
         didSet {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
         }
     }
-    
+
+    // Ollama LLM post-processing
+    @Published var ollamaEnabled: Bool {
+        didSet {
+            AppPreferences.shared.ollamaEnabled = ollamaEnabled
+        }
+    }
+
+    @Published var ollamaEndpoint: String {
+        didSet {
+            AppPreferences.shared.ollamaEndpoint = ollamaEndpoint
+        }
+    }
+
+    @Published var ollamaModel: String {
+        didSet {
+            AppPreferences.shared.ollamaModel = ollamaModel
+        }
+    }
+
+    @Published var ollamaPrompt: String {
+        didSet {
+            AppPreferences.shared.ollamaPrompt = ollamaPrompt
+        }
+    }
+
+    enum OllamaConnectionStatus {
+        case unknown, checking, connected, disconnected
+    }
+
+    @Published var ollamaStatus: OllamaConnectionStatus = .unknown
+
+    func checkOllamaConnection() {
+        ollamaStatus = .checking
+        Task {
+            let available = await OllamaService.shared.isAvailable()
+            await MainActor.run {
+                self.ollamaStatus = available ? .connected : .disconnected
+            }
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -161,7 +202,11 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        
+        self.ollamaEnabled = prefs.ollamaEnabled
+        self.ollamaEndpoint = prefs.ollamaEndpoint
+        self.ollamaModel = prefs.ollamaModel
+        self.ollamaPrompt = prefs.ollamaPrompt
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -554,6 +599,13 @@ struct SettingsView: View {
                     Label("Advanced", systemImage: "gear")
                 }
                 .tag(3)
+
+            // LLM Post-Processing
+            ollamaSettings
+                .tabItem {
+                    Label("LLM", systemImage: "brain")
+                }
+                .tag(4)
             }
         .padding()
         .frame(width: 550)
@@ -1051,6 +1103,136 @@ struct SettingsView: View {
         }
     }
     
+    private var ollamaSettings: some View {
+        Form {
+            VStack(spacing: 20) {
+                // Enable/Disable
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("LLM Post-Processing")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Enable LLM Cleanup")
+                                .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.ollamaEnabled)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        Text("Send Whisper output through a local LLM (via Ollama) to fix punctuation, grammar, and remove filler words.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                if viewModel.ollamaEnabled {
+                    // Connection Settings
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Connection")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(ollamaStatusColor)
+                                    .frame(width: 8, height: 8)
+                                Text(ollamaStatusText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Endpoint URL")
+                                    .font(.subheadline)
+                                TextField("http://localhost:11434", text: $viewModel.ollamaEndpoint)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Model Name")
+                                    .font(.subheadline)
+                                TextField("gemma3:4b", text: $viewModel.ollamaModel)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            Button("Test Connection") {
+                                viewModel.checkOllamaConnection()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+
+                    // Custom Prompt
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Custom Prompt")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextEditor(text: $viewModel.ollamaPrompt)
+                                .frame(height: 80)
+                                .padding(6)
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+
+                            Text("Leave empty to use the default prompt: fix punctuation, grammar, and remove filler words.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+                }
+            }
+            .padding()
+        }
+        .onAppear {
+            if viewModel.ollamaEnabled {
+                viewModel.checkOllamaConnection()
+            }
+        }
+    }
+
+    private var ollamaStatusColor: Color {
+        switch viewModel.ollamaStatus {
+        case .unknown: return .gray
+        case .checking: return .yellow
+        case .connected: return .green
+        case .disconnected: return .red
+        }
+    }
+
+    private var ollamaStatusText: String {
+        switch viewModel.ollamaStatus {
+        case .unknown: return "Not checked"
+        case .checking: return "Checking..."
+        case .connected: return "Connected"
+        case .disconnected: return "Not connected"
+        }
+    }
+
     private var useModifierKey: Bool {
         viewModel.modifierOnlyHotkey != .none
     }
