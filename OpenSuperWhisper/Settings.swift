@@ -172,6 +172,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pauseMediaOnRecord: Bool {
+        didSet {
+            AppPreferences.shared.pauseMediaOnRecord = pauseMediaOnRecord
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -196,6 +202,7 @@ class SettingsViewModel: ObservableObject {
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
+        self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
 
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -1344,6 +1351,21 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                                 .help("Play a notification sound when recording begins")
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pause media during recording")
+                                    .font(.subheadline)
+                                Text("Pauses playback in other apps and resumes when done")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.pauseMediaOnRecord)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .help("Automatically pause media playback when recording starts")
                         }
                     }
                 }
