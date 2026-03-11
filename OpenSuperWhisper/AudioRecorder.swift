@@ -122,25 +122,25 @@ class AudioRecorder: NSObject, ObservableObject {
         if AppPreferences.shared.playSoundOnRecordStart {
             playNotificationSound()
         }
-        
+
         let timestamp = Int(Date().timeIntervalSince1970)
         let filename = "\(timestamp).wav"
         let fileURL = temporaryDirectory.appendingPathComponent(filename)
         currentRecordingURL = fileURL
-        
+
         print("start record file to \(fileURL)")
-        
+
         #if os(macOS)
         if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
             _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
             print("Set system default input to: \(activeMic.displayName)")
-            
+
             if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
                 recordingDeviceID = deviceID
             }
         }
         #endif
-        
+
         let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
         updateRecordingState(isRecording: false, isConnecting: requiresConnection)
         startRecordingWithRecorder(fileURL: fileURL, monitorConnection: requiresConnection)
