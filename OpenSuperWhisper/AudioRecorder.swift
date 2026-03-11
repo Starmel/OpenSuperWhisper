@@ -115,6 +115,10 @@ class AudioRecorder: NSObject, ObservableObject {
             _ = stopRecording()
         }
         
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.pauseMedia()
+        }
+
         if AppPreferences.shared.playSoundOnRecordStart {
             playNotificationSound()
         }
@@ -179,6 +183,10 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.resumeMedia()
+        }
         
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
@@ -198,6 +206,10 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.resumeMedia()
+        }
         
         if let url = currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
