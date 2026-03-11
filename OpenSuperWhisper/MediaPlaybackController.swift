@@ -13,23 +13,61 @@ final class MediaPlaybackController {
     private static let kMRPause: UInt32 = 1
 
     private let sendCommand: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool)?
+    private let getIsPlaying: (@convention(c) (DispatchQueue, @escaping (Bool) -> Void) -> Void)?
 
     private init() {
         guard let bundle = CFBundleCreate(
             kCFAllocatorDefault,
             NSURL(fileURLWithPath: "/System/Library/PrivateFrameworks/MediaRemote.framework")
-        ), let ptr = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteSendCommand" as CFString) else {
+        ) else {
             sendCommand = nil
+            getIsPlaying = nil
             return
         }
-        sendCommand = unsafeBitCast(ptr, to: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool).self)
+
+        if let ptr = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteSendCommand" as CFString) {
+            sendCommand = unsafeBitCast(ptr, to: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool).self)
+        } else {
+            sendCommand = nil
+        }
+
+        if let ptr = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying" as CFString) {
+            getIsPlaying = unsafeBitCast(ptr, to: (@convention(c) (DispatchQueue, @escaping (Bool) -> Void) -> Void).self)
+        } else {
+            getIsPlaying = nil
+        }
     }
 
-    /// Send an explicit pause command. Safe to call when nothing is playing.
+    /// Check if media is playing, then pause if so. The check runs on a
+    /// background thread to avoid deadlocking the main run loop.
     @discardableResult
     func pauseMedia() -> Bool {
         guard let sendCommand = sendCommand else { return false }
-        didPauseMedia = sendCommand(Self.kMRPause, nil)
+
+        guard let getIsPlaying = getIsPlaying else {
+            // No way to check — send pause anyway (safe, it's a no-op if nothing plays)
+            didPauseMedia = sendCommand(Self.kMRPause, nil)
+            return didPauseMedia
+        }
+
+        var wasPlaying = false
+        let semaphore = DispatchSemaphore(value: 0)
+
+        // Dispatch the check off the main thread so the callback can complete
+        DispatchQueue.global(qos: .userInteractive).async {
+            getIsPlaying(DispatchQueue.global()) { playing in
+                wasPlaying = playing
+                semaphore.signal()
+            }
+        }
+
+        _ = semaphore.wait(timeout: .now() + 0.5)
+
+        if wasPlaying {
+            didPauseMedia = sendCommand(Self.kMRPause, nil)
+        } else {
+            didPauseMedia = false
+        }
         return didPauseMedia
     }
 
