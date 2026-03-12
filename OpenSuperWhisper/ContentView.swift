@@ -881,7 +881,7 @@ struct RecordingRow: View {
                         Text("·")
                         Text(TextUtil.formatDuration(recording.duration))
                         Text("·")
-                        Text("\(TextUtil.wordCount(recording.transcription)) words")
+                        Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
