@@ -876,9 +876,15 @@ struct RecordingRow: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
 
-                    Text(recording.timestamp, style: .time)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        Text(recording.timestamp, style: .time)
+                        Text("·")
+                        Text(TextUtil.formatDuration(recording.duration))
+                        Text("·")
+                        Text("\(TextUtil.wordCount(recording.transcription)) words")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
                 
                 if isRegenerating {
