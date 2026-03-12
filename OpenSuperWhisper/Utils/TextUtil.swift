@@ -1,6 +1,6 @@
 import Foundation
 
-class TextUtil {
+enum TextUtil {
 
     /// Counts words in a string, handling leading/trailing whitespace,
     /// multiple consecutive spaces, and newlines.
@@ -9,6 +9,7 @@ class TextUtil {
     }
 
     /// Formats a TimeInterval as a human-readable duration string.
+    /// Sub-second precision is truncated.
     /// e.g. 65 → "1m 5s", 30 → "30s", 3661 → "1h 1m 1s"
     static func formatDuration(_ duration: TimeInterval) -> String {
         let total = Int(duration)
