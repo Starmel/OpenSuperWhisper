@@ -18,7 +18,7 @@ class ClipboardUtil {
         simulatePaste()
         
         // Add a small delay to ensure paste operation completes
-        Thread.sleep(forTimeInterval: 0.1)
+        Thread.sleep(forTimeInterval: 0.5)
         
         // Restore original contents
         if let contents = savedContents {
