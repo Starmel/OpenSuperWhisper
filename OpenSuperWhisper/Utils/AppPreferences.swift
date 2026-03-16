@@ -110,7 +110,4 @@ final class AppPreferences {
     
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
-
-    @UserDefault(key: "insertNoSpeechMessage", defaultValue: true)
-    var insertNoSpeechMessage: Bool
 }

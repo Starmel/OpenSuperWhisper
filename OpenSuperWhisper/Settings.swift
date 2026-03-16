@@ -142,12 +142,6 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    @Published var insertNoSpeechMessage: Bool {
-        didSet {
-            AppPreferences.shared.insertNoSpeechMessage = insertNoSpeechMessage
-        }
-    }
-
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -167,7 +161,6 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        self.insertNoSpeechMessage = prefs.insertNoSpeechMessage
 
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -882,14 +875,6 @@ struct SettingsView: View {
                                 .labelsHidden()
                         }
 
-                        HStack {
-                            Text("Insert \"No Speech\" Message")
-                                .font(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.insertNoSpeechMessage)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
-                        }
                     }
                 }
                 .padding()

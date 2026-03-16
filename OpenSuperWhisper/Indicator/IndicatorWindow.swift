@@ -145,8 +145,7 @@ class IndicatorViewModel: ObservableObject {
                         ))
                     }
 
-                    let isNoSpeech = text == "No speech detected in the audio"
-                    if !text.isEmpty && !(isNoSpeech && !AppPreferences.shared.insertNoSpeechMessage) {
+                    if !text.isEmpty && text != "No speech detected in the audio" {
                         insertText(text)
                     }
                     print("Transcription result: \(text)")
