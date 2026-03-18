@@ -547,6 +547,7 @@ struct ContentView: View {
                             }
                             .padding(.horizontal, 16)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                            .animation(.easeInOut, value: viewModel.transcriptionService.engineError)
                         }
 
                         if let errorMessage = viewModel.errorMessage {
@@ -558,7 +559,7 @@ struct ContentView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            .transition(.opacity)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                             .animation(.easeInOut, value: viewModel.errorMessage)
                         }
 

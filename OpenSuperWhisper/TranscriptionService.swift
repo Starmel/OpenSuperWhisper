@@ -61,7 +61,6 @@ class TranscriptionService: ObservableObject {
                 await MainActor.run {
                     self.currentEngine = engine
                     self.isLoading = false
-                    self.engineError = nil
                     print("Engine loaded: \(selectedEngine)")
                 }
             } catch {
