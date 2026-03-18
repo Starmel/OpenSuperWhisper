@@ -25,13 +25,15 @@ class ContentViewModel: ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     @Published var microphoneService = MicrophoneService.shared
     @Published var shouldClearSearch = false
-    
+    @Published var errorMessage: String?
+
     private var currentPage = 0
     private let pageSize = 100
     private var currentSearchQuery = ""
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
+    private var errorDismissTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     
     init() {
@@ -155,7 +157,17 @@ class ContentViewModel: ObservableObject {
     var isRecording: Bool {
         recorder.isRecording
     }
-    
+
+    func showError(_ message: String) {
+        errorMessage = message
+        errorDismissTimer?.invalidate()
+        errorDismissTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.errorMessage = nil
+            }
+        }
+    }
+
     func startRecording() {
         if microphoneService.isActiveMicrophoneRequiresConnection() {
             state = .connecting
@@ -236,7 +248,10 @@ class ContentViewModel: ObservableObject {
                     print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
-                    try? FileManager.default.removeItem(at: tempURL)
+                    // Preserve temp recording so user can retry
+                    await MainActor.run {
+                        self.showError("Transcription failed")
+                    }
                 }
 
                 await MainActor.run {
@@ -508,11 +523,44 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding || viewModel.transcriptionService.engineError != nil)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.state)
+
+                        if let engineError = viewModel.transcriptionService.engineError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.red)
+                                    .imageScale(.small)
+                                Text(engineError)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .lineLimit(2)
+                                Button("Retry") {
+                                    viewModel.transcriptionService.reloadEngine()
+                                }
+                                .font(.caption)
+                                .buttonStyle(.plain)
+                                .foregroundColor(.accentColor)
+                            }
+                            .padding(.horizontal, 16)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+
+                        if let errorMessage = viewModel.errorMessage {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .imageScale(.small)
+                                Text(errorMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .transition(.opacity)
+                            .animation(.easeInOut, value: viewModel.errorMessage)
+                        }
 
                         // Нижняя панель с подсказкой и кнопками управления
                         HStack(alignment: .bottom) {

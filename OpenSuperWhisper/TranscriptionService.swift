@@ -12,7 +12,12 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var progress: Float = 0.0
     @Published private(set) var isConverting = false
     @Published private(set) var conversionProgress: Float = 0.0
-    
+    @Published private(set) var engineError: String?
+
+    var isEngineReady: Bool {
+        currentEngine != nil && !isLoading
+    }
+
     private var currentEngine: TranscriptionEngine?
     private var totalDuration: Float = 0.0
     private var transcriptionTask: Task<String, Error>? = nil
@@ -39,7 +44,8 @@ class TranscriptionService: ObservableObject {
         print("Loading engine: \(selectedEngine)")
         
         isLoading = true
-        
+        engineError = nil
+
         Task.detached(priority: .userInitiated) {
             let engine: TranscriptionEngine?
             
@@ -55,11 +61,13 @@ class TranscriptionService: ObservableObject {
                 await MainActor.run {
                     self.currentEngine = engine
                     self.isLoading = false
+                    self.engineError = nil
                     print("Engine loaded: \(selectedEngine)")
                 }
             } catch {
                 await MainActor.run {
                     self.isLoading = false
+                    self.engineError = "Failed to load engine: \(error.localizedDescription)"
                     print("Failed to load engine: \(error)")
                 }
             }
