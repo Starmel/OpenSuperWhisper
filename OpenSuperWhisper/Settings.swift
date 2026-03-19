@@ -141,7 +141,19 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
         }
     }
-    
+
+    @Published var autoCopyToClipboard: Bool {
+        didSet {
+            AppPreferences.shared.autoCopyToClipboard = autoCopyToClipboard
+        }
+    }
+
+    @Published var autoPasteTranscription: Bool {
+        didSet {
+            AppPreferences.shared.autoPasteTranscription = autoPasteTranscription
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -161,7 +173,9 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        
+        self.autoCopyToClipboard = prefs.autoCopyToClipboard
+        self.autoPasteTranscription = prefs.autoPasteTranscription
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -880,7 +894,48 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Clipboard & Paste
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Clipboard & Paste")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Copy to Clipboard")
+                                    .font(.subheadline)
+                                Text("Keep transcription in clipboard after recording")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.autoCopyToClipboard)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Auto-paste Transcription")
+                                    .font(.subheadline)
+                                Text("Automatically paste into the focused app")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.autoPasteTranscription)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Initial Prompt
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Initial Prompt")
