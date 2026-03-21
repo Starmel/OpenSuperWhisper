@@ -122,3 +122,6 @@ default.profraw
 .cursorrules
 OpenSuperWhisper.dmg.sha256
 dev_config.json
+# llama.cpp build artifacts
+libllama/build/
+libllama/.cache/

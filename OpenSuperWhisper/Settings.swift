@@ -141,7 +141,26 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
         }
     }
-    
+
+    @Published var fixGrammar: Bool {
+        didSet {
+            AppPreferences.shared.fixGrammar = fixGrammar
+        }
+    }
+
+    @Published var grammarCustomPrompt: String {
+        didSet {
+            AppPreferences.shared.grammarCustomPrompt = grammarCustomPrompt
+        }
+    }
+
+    // Grammar model download state
+    @Published var grammarModelIsDownloaded: Bool = false
+    @Published var isDownloadingGrammarModel: Bool = false
+    @Published var grammarModelDownloadProgress: Double = 0.0
+    @Published var downloadableGrammarModels: [GrammarDownloadableModel] = GrammarDownloadableModels.availableModels
+    private var grammarDownloadTask: Task<Void, Error>?
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -161,7 +180,10 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
-        
+        self.fixGrammar = prefs.fixGrammar
+        self.grammarCustomPrompt = prefs.grammarCustomPrompt
+        self.grammarModelIsDownloaded = GrammarModelManager.shared.isModelDownloaded
+
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
         }
@@ -426,6 +448,84 @@ class SettingsViewModel: ObservableObject {
             try await downloadFluidAudioModel(model)
         }
     }
+
+    // MARK: - Grammar model download
+
+    func refreshGrammarModelStatus() {
+        grammarModelIsDownloaded = GrammarModelManager.shared.isModelDownloaded
+        downloadableGrammarModels = GrammarDownloadableModels.availableModels.map { model in
+            var m = model
+            m.isDownloaded = GrammarModelManager.shared.isDownloaded(model)
+            return m
+        }
+    }
+
+    @MainActor
+    func downloadGrammarModel(_ model: GrammarDownloadableModel) async {
+        guard !isDownloadingGrammarModel else { return }
+
+        isDownloadingGrammarModel = true
+        grammarModelDownloadProgress = 0.0
+
+        grammarDownloadTask = Task {
+            do {
+                try await GrammarModelManager.shared.downloadModel(model) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.grammarModelDownloadProgress = progress
+                        if let idx = self.downloadableGrammarModels.firstIndex(where: { $0.id == model.id }) {
+                            self.downloadableGrammarModels[idx].downloadProgress = progress
+                            if progress >= 1.0 {
+                                self.downloadableGrammarModels[idx].isDownloaded = true
+                            }
+                        }
+                    }
+                }
+                await MainActor.run {
+                    self.grammarModelIsDownloaded = true
+                    self.isDownloadingGrammarModel = false
+                    self.grammarModelDownloadProgress = 0.0
+                    // Reload model if it's currently loaded
+                    if self.fixGrammar { GrammarEngine.shared.unloadModel() }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.isDownloadingGrammarModel = false
+                    self.grammarModelDownloadProgress = 0.0
+                    if let idx = self.downloadableGrammarModels.firstIndex(where: { $0.id == model.id }) {
+                        self.downloadableGrammarModels[idx].downloadProgress = 0.0
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isDownloadingGrammarModel = false
+                    self.grammarModelDownloadProgress = 0.0
+                }
+                print("Grammar model download failed: \(error)")
+            }
+        }
+
+        _ = try? await grammarDownloadTask?.value
+    }
+
+    func cancelGrammarDownload() {
+        grammarDownloadTask?.cancel()
+        GrammarModelManager.shared.cancelDownload()
+        isDownloadingGrammarModel = false
+        grammarModelDownloadProgress = 0.0
+    }
+
+    @MainActor func deleteGrammarModel(_ model: GrammarDownloadableModel) {
+        GrammarModelManager.shared.deleteModel(model)
+        if let idx = downloadableGrammarModels.firstIndex(where: { $0.id == model.id }) {
+            downloadableGrammarModels[idx].isDownloaded = false
+        }
+        grammarModelIsDownloaded = GrammarModelManager.shared.isModelDownloaded
+        if !grammarModelIsDownloaded && fixGrammar {
+            fixGrammar = false
+            GrammarEngine.shared.unloadModel()
+        }
+    }
 }
 
 struct SettingsDownloadableModel: Identifiable {
@@ -548,12 +648,19 @@ struct SettingsView: View {
                 }
                 .tag(2)
             
+            // Grammar Model Settings
+            grammarModelSettings
+                .tabItem {
+                    Label("Grammar", systemImage: "text.badge.checkmark")
+                }
+                .tag(3)
+
             // Advanced Settings
             advancedSettings
                 .tabItem {
                     Label("Advanced", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
         .padding()
         .frame(width: 550)
@@ -948,6 +1055,175 @@ struct SettingsView: View {
         }
     }
     
+    private var grammarModelSettings: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+
+                // ── Model Download ────────────────────────────────────────
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Grammar Model")
+                            .font(.headline)
+                        Text("Download a model to automatically fix grammar and punctuation after transcription. Runs entirely on-device.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text("Choose a Model")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
+
+                    VStack(spacing: 8) {
+                        ForEach($viewModel.downloadableGrammarModels) { $model in
+                            GrammarModelDownloadItemView(model: $model, viewModel: viewModel)
+                        }
+                    }
+
+                    if viewModel.isDownloadingGrammarModel {
+                        VStack(spacing: 6) {
+                            HStack {
+                                if viewModel.grammarModelDownloadProgress > 0 {
+                                    ProgressView(value: viewModel.grammarModelDownloadProgress)
+                                        .progressViewStyle(LinearProgressViewStyle())
+                                } else {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                }
+                                Spacer()
+                                Button("Cancel") { viewModel.cancelGrammarDownload() }
+                                    .buttonStyle(.bordered)
+                            }
+                            if viewModel.grammarModelDownloadProgress > 0 {
+                                Text("Downloading… \(Int(viewModel.grammarModelDownloadProgress * 100))%")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Model loads once on first use (~15–30 s) and stays in memory while the app is open.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // ── Grammar Correction Toggle ─────────────────────────────
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Grammar Correction")
+                        .font(.headline)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Fix Grammar After Transcription")
+                                .font(.subheadline)
+                            Text("Automatically correct grammar, punctuation, and spelling before pasting")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.fixGrammar)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                            .disabled(!viewModel.grammarModelIsDownloaded)
+                    }
+
+                    if !viewModel.grammarModelIsDownloaded {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("Download a model above to enable grammar correction")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // ── Custom Prompt ─────────────────────────────────────────
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Custom System Prompt")
+                            .font(.headline)
+                        Text("Override the default grammar correction instructions. Leave blank to use the built-in prompt.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    TextEditor(text: $viewModel.grammarCustomPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 90, maxHeight: 150)
+                        .padding(6)
+                        .background(Color(.textBackgroundColor).opacity(0.6))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(.separatorColor), lineWidth: 1)
+                        )
+
+                    if viewModel.grammarCustomPrompt.isEmpty {
+                        Text("Default: Fix grammar, punctuation, capitalization, and spelling with minimal changes. Return only the corrected text.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .italic()
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // ── Models Directory ──────────────────────────────────────
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Models Directory")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Button(action: {
+                            NSWorkspace.shared.open(GrammarModelManager.shared.modelsDirectory)
+                        }) {
+                            Label("Open Folder", systemImage: "folder")
+                                .font(.subheadline)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Text(GrammarModelManager.shared.modelsDirectory.path)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .background(Color(.textBackgroundColor).opacity(0.5))
+                        .cornerRadius(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+            }
+            .padding()
+        }
+        .onAppear {
+            viewModel.refreshGrammarModelStatus()
+        }
+    }
+
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {
@@ -1452,6 +1728,90 @@ struct ModelDownloadItemView: View {
                 viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
             }
         }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
+struct GrammarModelDownloadItemView: View {
+    @Binding var model: GrammarDownloadableModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    if model.isDownloaded {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .imageScale(.small)
+                    }
+
+                    Text(model.sizeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+
+            Spacer()
+
+            if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                Button("Cancel") {
+                    viewModel.cancelGrammarDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                Button(role: .destructive) {
+                    viewModel.deleteGrammarModel(model)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else {
+                Button(action: {
+                    Task {
+                        do {
+                            try await viewModel.downloadGrammarModel(model)
+                        } catch is CancellationError {
+                            // Don't show error for manual cancellation
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
+                }) {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.isDownloadingGrammarModel)
+            }
+        }
+        .padding(12)
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
         .alert("Download Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
