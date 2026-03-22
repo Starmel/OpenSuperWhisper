@@ -1045,3 +1045,58 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
         XCTAssertEqual(result, "Test. ")
     }
 }
+
+final class TextUtilTests: XCTestCase {
+
+    // MARK: - wordCount
+
+    func testWordCount_simpleText() {
+        XCTAssertEqual(TextUtil.wordCount("hello world"), 2)
+    }
+
+    func testWordCount_emptyString() {
+        XCTAssertEqual(TextUtil.wordCount(""), 0)
+    }
+
+    func testWordCount_multipleSpaces() {
+        XCTAssertEqual(TextUtil.wordCount("hello   world"), 2)
+    }
+
+    func testWordCount_newlines() {
+        XCTAssertEqual(TextUtil.wordCount("hello\nworld"), 2)
+    }
+
+    func testWordCount_singleWord() {
+        XCTAssertEqual(TextUtil.wordCount("hello"), 1)
+    }
+
+    func testWordCount_leadingTrailingWhitespace() {
+        XCTAssertEqual(TextUtil.wordCount("  hi there  "), 2)
+    }
+
+    // MARK: - formatDuration
+
+    func testFormatDuration_zero() {
+        XCTAssertEqual(TextUtil.formatDuration(0), "0s")
+    }
+
+    func testFormatDuration_seconds() {
+        XCTAssertEqual(TextUtil.formatDuration(30), "30s")
+    }
+
+    func testFormatDuration_minutesAndSeconds() {
+        XCTAssertEqual(TextUtil.formatDuration(65), "1m 5s")
+    }
+
+    func testFormatDuration_exactMinutes() {
+        XCTAssertEqual(TextUtil.formatDuration(120), "2m 0s")
+    }
+
+    func testFormatDuration_hoursMinutesSeconds() {
+        XCTAssertEqual(TextUtil.formatDuration(3661), "1h 1m 1s")
+    }
+
+    func testFormatDuration_exactHours() {
+        XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
+    }
+}
