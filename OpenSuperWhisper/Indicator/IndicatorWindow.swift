@@ -2,12 +2,13 @@ import Cocoa
 import Combine
 import SwiftUI
 
-enum RecordingState {
+enum RecordingState: Equatable {
     case idle
     case connecting
     case recording
     case decoding
     case busy
+    case error(String)
 }
 
 @MainActor
@@ -66,9 +67,20 @@ class IndicatorViewModel: ObservableObject {
     
     func showBusyMessage() {
         state = .busy
-        
+
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.delegate?.didFinishDecoding()
+            }
+        }
+    }
+
+    func showError(_ message: String) {
+        state = .error(message)
+
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.delegate?.didFinishDecoding()
             }
@@ -149,9 +161,12 @@ class IndicatorViewModel: ObservableObject {
                     print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
-                    try? FileManager.default.removeItem(at: tempURL)
+                    await MainActor.run {
+                        self.showError("Transcription failed")
+                    }
+                    return
                 }
-                
+
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
                 }
@@ -306,6 +321,18 @@ struct IndicatorWindow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
+            case .error(let message):
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .frame(width: 24)
+
+                    Text(message)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             case .idle:
                 EmptyView()
             }
