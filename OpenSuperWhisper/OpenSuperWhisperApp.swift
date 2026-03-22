@@ -87,8 +87,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
     
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            GrammarEngine.shared.unloadModel()
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        
+
         setupStatusBarItem()
         
         if let window = NSApplication.shared.windows.first {

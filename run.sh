@@ -13,6 +13,50 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+# Build libllama_grammar.dylib (llama.cpp + grammar helper, built as dylib
+# to avoid ggml symbol conflicts with whisper.cpp's statically-linked ggml)
+if [[ -d "libllama/llama.cpp" ]]; then
+    echo "Building libllama_grammar..."
+    cmake -B libllama/build -S libllama \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+        -DBUILD_SHARED_LIBS=ON \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DLLAMA_BUILD_SERVER=OFF \
+        -DGGML_METAL=ON \
+        -DCMAKE_CXX_FLAGS="-fvisibility=hidden" \
+        -DCMAKE_C_FLAGS="-fvisibility=hidden"
+    if [[ $? -ne 0 ]]; then
+        echo "libllama CMake configuration failed!"
+        exit 1
+    fi
+    cmake --build libllama/build --config Release -j8
+    if [[ $? -ne 0 ]]; then
+        echo "libllama build failed!"
+        exit 1
+    fi
+
+    # Copy dylibs to build/ where the app can find them
+    mkdir -p build
+    LLAMA_DYLIB=$(find libllama/build -name "libllama_grammar*.dylib" | head -1)
+    LLAMA_CORE=$(find libllama/build -name "libllama*.dylib" | grep -v grammar | head -1)
+    LLAMA_GGML=$(find libllama/build -name "libggml*.dylib" | head -1)
+
+    for dylib in "$LLAMA_DYLIB" "$LLAMA_CORE" "$LLAMA_GGML"; do
+        [[ -z "$dylib" ]] && continue
+        name=$(basename "$dylib")
+        cp "$dylib" "build/$name"
+        install_name_tool -id "@rpath/$name" "build/$name"
+        codesign --force --sign - "build/$name"
+    done
+    echo "libllama_grammar built and copied to build/"
+else
+    echo "Skipping libllama build (libllama/llama.cpp not found)."
+    echo "Run: git submodule add https://github.com/ggerganov/llama.cpp.git libllama/llama.cpp"
+fi
+
 echo "Building autocorrect-swift..."
 mkdir -p build
 cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml

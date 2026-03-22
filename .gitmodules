@@ -4,3 +4,6 @@
 [submodule "asian-autocorrect"]
 	path = asian-autocorrect
 	url = https://github.com/huacnlee/autocorrect
+[submodule "libllama/llama.cpp"]
+	path = libllama/llama.cpp
+	url = https://github.com/ggerganov/llama.cpp.git

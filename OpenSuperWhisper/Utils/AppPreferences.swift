@@ -110,4 +110,10 @@ final class AppPreferences {
     
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
+
+    @UserDefault(key: "fixGrammar", defaultValue: false)
+    var fixGrammar: Bool
+
+    @UserDefault(key: "grammarCustomPrompt", defaultValue: "")
+    var grammarCustomPrompt: String
 }
