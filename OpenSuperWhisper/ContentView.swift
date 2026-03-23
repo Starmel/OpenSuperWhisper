@@ -190,47 +190,52 @@ class ContentViewModel: ObservableObject {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
-                    // Capture the current recording duration
-                    let duration = await MainActor.run { self.recordingDuration }
-                    
-                    // Create a new Recording instance
-                    let timestamp = Date()
-                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                    let recordingId = UUID()
-                    let finalURL = Recording(
-                        id: recordingId,
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: duration,
-                        status: .completed,
-                        progress: 1.0,
-                        sourceFileURL: nil
-                    ).url
+                    if AppPreferences.shared.saveTranscriptionHistory {
+                        // Capture the current recording duration
+                        let duration = await MainActor.run { self.recordingDuration }
 
-                    // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-
-                    // Save the recording to store
-                    await MainActor.run {
-                        let newRecording = Recording(
+                        // Create a new Recording instance
+                        let timestamp = Date()
+                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                        let recordingId = UUID()
+                        let finalURL = Recording(
                             id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
-                            duration: self.recordingDuration,
+                            duration: duration,
                             status: .completed,
                             progress: 1.0,
                             sourceFileURL: nil
-                        )
-                        self.recordingStore.addRecording(newRecording)
-                        
-                        // Clear search and show the new recording
-                        if !self.currentSearchQuery.isEmpty {
-                            self.shouldClearSearch = true
-                            self.currentSearchQuery = ""
+                        ).url
+
+                        // Move the temporary recording to final location
+                        try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+
+                        // Save the recording to store
+                        await MainActor.run {
+                            let newRecording = Recording(
+                                id: recordingId,
+                                timestamp: timestamp,
+                                fileName: fileName,
+                                transcription: text,
+                                duration: self.recordingDuration,
+                                status: .completed,
+                                progress: 1.0,
+                                sourceFileURL: nil
+                            )
+                            self.recordingStore.addRecording(newRecording)
+
+                            // Clear search and show the new recording
+                            if !self.currentSearchQuery.isEmpty {
+                                self.shouldClearSearch = true
+                                self.currentSearchQuery = ""
+                            }
+                            self.recordings.insert(newRecording, at: 0)
                         }
-                        self.recordings.insert(newRecording, at: 0)
+                    } else {
+                        // Delete the temporary recording immediately
+                        try? FileManager.default.removeItem(at: tempURL)
                     }
 
                     print("Transcription result: \(text)")
