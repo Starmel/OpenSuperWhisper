@@ -6,26 +6,47 @@ class ClipboardUtil {
     
     static func insertText(_ text: String) {
         let pasteboard = NSPasteboard.general
-        
+
         // Save current pasteboard contents
         let savedContents = saveCurrentPasteboardContents()
-        
+
         // Set new text to pasteboard
         pasteboard.declareTypes([.string], owner: nil)
         pasteboard.setString(text, forType: .string)
-        
+
         // Simulate Cmd+V using layout-aware keycode resolution
         simulatePaste()
-        
-        // Add a small delay to ensure paste operation completes
-        Thread.sleep(forTimeInterval: 0.1)
-        
+
+        // Adaptive delay based on CPU load before restoring clipboard
+        Thread.sleep(forTimeInterval: adaptiveRestoreDelay())
+
         // Restore original contents
         if let contents = savedContents {
             restorePasteboardContents(contents)
         }
     }
-    
+
+    /// Returns an adaptive delay based on current CPU load.
+    /// Uses the 1-minute load average normalized by processor count.
+    /// Low load (<50%) → 0.1s, moderate (50-80%) → 0.3s, high (>80%) → 0.5s
+    private static func adaptiveRestoreDelay() -> TimeInterval {
+        var loadAvg: [Double] = [0, 0, 0]
+        let count = getloadavg(&loadAvg, 3)
+
+        guard count > 0 else { return 0.3 }
+
+        let processorCount = Double(ProcessInfo.processInfo.activeProcessorCount)
+        let cpuLoad = loadAvg[0] / processorCount
+
+        if cpuLoad < 0.5 {
+            return 0.1
+        } else if cpuLoad < 0.8 {
+            return 0.3
+        } else {
+            return 0.5
+        }
+    }
+
     private static func simulatePaste() {
         sendCmdV()
     }
