@@ -144,8 +144,10 @@ class IndicatorViewModel: ObservableObject {
                             sourceFileURL: nil
                         ))
                     }
-                    
-                    insertText(text)
+
+                    if !text.isEmpty && text != "No speech detected in the audio" {
+                        insertText(text)
+                    }
                     print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
