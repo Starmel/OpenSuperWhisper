@@ -188,7 +188,8 @@ class ContentViewModel: ObservableObject {
 
                 do {
                     print("start decoding...")
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let rawText = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let text = AppPreferences.shared.cleanTranscription(rawText)
 
                     // Capture the current recording duration
                     let duration = await MainActor.run { self.recordingDuration }
