@@ -444,7 +444,7 @@ libtool -static -o "${COMBINED_SIM}" \
     build-ios-sim-fat/ggml/src/libggml-cpu.a \
     build-ios-sim-fat/ggml/src/ggml-metal/libggml-metal.a \
     build-ios-sim-fat/ggml/src/ggml-blas/libggml-blas.a \
-    2>/dev/null
+    2> >(grep -v "table of contents" >&2)
 create_dynamic_lib "${COMBINED_SIM}" "${FRAMEWORK_SIM}/whisper" "${BASE_DIR}/build-ios-sim-fat/dSYMs" "ios" "true" "arm64" "x86_64"
 rm -rf build-ios-sim-fat/temp
 
@@ -459,7 +459,7 @@ libtool -static -o "${COMBINED_DEV}" \
     build-ios-device/ggml/src/libggml-cpu.a \
     build-ios-device/ggml/src/ggml-metal/libggml-metal.a \
     build-ios-device/ggml/src/ggml-blas/libggml-blas.a \
-    2>/dev/null
+    2> >(grep -v "table of contents" >&2)
 create_dynamic_lib "${COMBINED_DEV}" "${FRAMEWORK_DEVICE}/whisper" "${BASE_DIR}/build-ios-device/dSYMs" "ios" "false" "arm64"
 rm -rf build-ios-device/temp
 
@@ -474,7 +474,7 @@ libtool -static -o "${COMBINED_MAC}" \
     build-macos/ggml/src/libggml-cpu.a \
     build-macos/ggml/src/ggml-metal/libggml-metal.a \
     build-macos/ggml/src/ggml-blas/libggml-blas.a \
-    2>/dev/null
+    2> >(grep -v "table of contents" >&2)
 create_dynamic_lib "${COMBINED_MAC}" "${FRAMEWORK_MACOS}/Versions/A/whisper" "${BASE_DIR}/build-macos/dSYMs" "macos" "false" "arm64"
 rm -rf build-macos/temp
 
