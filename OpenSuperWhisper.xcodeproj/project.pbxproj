@@ -1012,6 +1012,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper.ios;
 				PRODUCT_NAME = OpenSuperWhisper;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -1449,6 +1451,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper.ios;
 				PRODUCT_NAME = OpenSuperWhisper;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;

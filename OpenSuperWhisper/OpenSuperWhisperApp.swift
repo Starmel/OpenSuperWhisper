@@ -53,6 +53,7 @@ struct OpenSuperWhisperApp: App {
         _ = MicrophoneService.shared
         WhisperModelManager.shared.ensureDefaultModelPresent()
         TranscriptionService.shared.textPostProcessor = AutocorrectPostProcessor()
+        TranscriptionService.shared.alternateEngineFactory = { FluidAudioEngine() }
     }
 }
 

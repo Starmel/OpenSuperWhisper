@@ -16,6 +16,10 @@ public class TranscriptionService: ObservableObject {
     /// Platform provides a text post-processor (e.g., autocorrect on macOS)
     public var textPostProcessor: TextPostProcessor = NoOpTextPostProcessor()
 
+    /// Platform provides an alternative engine factory (e.g., FluidAudioEngine on macOS).
+    /// Returns nil if the platform engine is unavailable.
+    public var alternateEngineFactory: (() async -> TranscriptionEngine?)?
+
     private var currentEngine: TranscriptionEngine?
     private var totalDuration: Float = 0.0
     private var transcriptionTask: Task<String, Error>? = nil
@@ -47,13 +51,8 @@ public class TranscriptionService: ObservableObject {
             let engine: TranscriptionEngine?
             let postProcessor = await self.textPostProcessor
 
-            if selectedEngine == "fluidaudio" {
-                #if canImport(FluidAudio)
-                engine = await FluidAudioEngine()
-                #else
-                // FluidAudio not available on this platform — fall back to Whisper
-                engine = await WhisperEngine(textPostProcessor: postProcessor)
-                #endif
+            if selectedEngine == "fluidaudio", let factory = await self.alternateEngineFactory {
+                engine = await factory()
             } else {
                 engine = await WhisperEngine(textPostProcessor: postProcessor)
             }
