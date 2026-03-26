@@ -1,12 +1,13 @@
 import Foundation
-class LanguageUtil {
 
-    static let availableLanguages = [
+public class LanguageUtil {
+
+    public static let availableLanguages = [
         "auto", "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar",
         "sv", "it", "id", "hi", "fi",
     ]
 
-    static let languageNames = [
+    public static let languageNames = [
         "auto": "Auto-detect",
         "en": "English",
         "zh": "Chinese",
@@ -29,7 +30,7 @@ class LanguageUtil {
         "fi": "Finnish",
     ]
 
-    static func getSystemLanguage() -> String {
+    public static func getSystemLanguage() -> String {
         if let preferredLanguage = Locale.preferredLanguages.first {
             let preferredLanguage = preferredLanguage.prefix(2).lowercased()
             return availableLanguages.contains(preferredLanguage) ? preferredLanguage : "en"

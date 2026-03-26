@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public struct WhisperTokenData {
     public let id: WhisperToken

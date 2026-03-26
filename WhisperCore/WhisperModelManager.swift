@@ -40,14 +40,14 @@ class WhisperDownloadDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownl
     }
 }
 
-class WhisperModelManager {
-    static let shared = WhisperModelManager()
+public class WhisperModelManager {
+    public static let shared = WhisperModelManager()
     
     private let modelsDirectoryName = "whisper-models"
     private var activeDownloadTasks: [String: URLSessionDownloadTask] = [:]
     private let downloadTasksLock = NSLock()
     
-    var modelsDirectory: URL {
+    public var modelsDirectory: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let modelsDirectory = applicationSupport.appendingPathComponent(Bundle.main.bundleIdentifier!).appendingPathComponent(modelsDirectoryName)
         return modelsDirectory
@@ -95,7 +95,7 @@ class WhisperModelManager {
         }
     }
     
-    func getAvailableModels() -> [URL] {
+    public func getAvailableModels() -> [URL] {
         do {
             return try FileManager.default.contentsOfDirectory(at: modelsDirectory, includingPropertiesForKeys: nil)
                 .filter { $0.pathExtension == "bin" }
@@ -107,7 +107,7 @@ class WhisperModelManager {
     }
     
     // Download model with progress callback using delegate
-    func downloadModel(url: URL, name: String, progressCallback: @escaping (Double) -> Void) async throws {
+    public func downloadModel(url: URL, name: String, progressCallback: @escaping (Double) -> Void) async throws {
         let destinationURL = modelsDirectory.appendingPathComponent(name)
         
         // Check if model already exists
@@ -188,7 +188,7 @@ class WhisperModelManager {
     }
     
     // Cancel download task
-    func cancelDownload(name: String) {
+    public func cancelDownload(name: String) {
         downloadTasksLock.lock()
         defer { downloadTasksLock.unlock() }
         
@@ -200,7 +200,7 @@ class WhisperModelManager {
     }
     
     // Check if specific model is downloaded
-    func isModelDownloaded(name: String) -> Bool {
+    public func isModelDownloaded(name: String) -> Bool {
         let modelPath = modelsDirectory.appendingPathComponent(name).path
         return FileManager.default.fileExists(atPath: modelPath)
     }

@@ -1,8 +1,20 @@
 import Cocoa
 import ApplicationServices
 import Carbon
+import WhisperCore
 
-class ClipboardUtil {
+class ClipboardUtil: ClipboardService {
+
+    func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.declareTypes([.string], owner: nil)
+        pasteboard.setString(text, forType: .string)
+    }
+
+    func getClipboardText() -> String? {
+        NSPasteboard.general.string(forType: .string)
+    }
+
     
     static func insertText(_ text: String) {
         let pasteboard = NSPasteboard.general

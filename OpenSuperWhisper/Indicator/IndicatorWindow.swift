@@ -1,14 +1,7 @@
 import Cocoa
 import Combine
 import SwiftUI
-
-enum RecordingState {
-    case idle
-    case connecting
-    case recording
-    case decoding
-    case busy
-}
+import WhisperCore
 
 @MainActor
 protocol IndicatorViewDelegate: AnyObject {

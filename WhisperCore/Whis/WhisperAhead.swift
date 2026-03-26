@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public struct WhisperAhead {
     public let nTextLayer: Int32

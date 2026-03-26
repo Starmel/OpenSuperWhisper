@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import FluidAudio
+import WhisperCore
 
 class FluidAudioEngine: TranscriptionEngine {
     var engineName: String { "FluidAudio" }
@@ -29,7 +30,7 @@ class FluidAudioEngine: TranscriptionEngine {
         asrModels = models
     }
     
-    func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+    func transcribeAudio(url: URL, settings: TranscriptionSettings) async throws -> String {
         guard let asrManager = asrManager else {
             throw TranscriptionError.contextInitializationFailed
         }

@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public enum WhisperSamplingStrategy: Int32 {
     case greedy = 0

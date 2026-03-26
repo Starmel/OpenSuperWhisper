@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public enum WhisperAlignmentHeadsPreset: Int32 {
     case none

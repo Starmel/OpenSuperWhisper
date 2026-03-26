@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public struct WhisperGrammarElement {
     public let type: WhisperGrammarElementType

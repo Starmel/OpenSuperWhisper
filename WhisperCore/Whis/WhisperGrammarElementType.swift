@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public enum WhisperGrammarElementType: Int32 {
     case end = 0

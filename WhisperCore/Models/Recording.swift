@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-enum RecordingStatus: String, Codable {
+public enum RecordingStatus: String, Codable {
     case pending
     case converting
     case transcribing
@@ -9,23 +9,23 @@ enum RecordingStatus: String, Codable {
     case failed
 }
 
-struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equatable {
-    let id: UUID
-    let timestamp: Date
-    let fileName: String
-    var transcription: String
-    let duration: TimeInterval
-    var status: RecordingStatus
-    var progress: Float
-    var sourceFileURL: String?
-    
-    var isRegeneration: Bool = false
-    
+public struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equatable {
+    public let id: UUID
+    public let timestamp: Date
+    public let fileName: String
+    public var transcription: String
+    public let duration: TimeInterval
+    public var status: RecordingStatus
+    public var progress: Float
+    public var sourceFileURL: String?
+
+    public var isRegeneration: Bool = false
+
     enum CodingKeys: String, CodingKey {
         case id, timestamp, fileName, transcription, duration, status, progress, sourceFileURL
     }
 
-    static func == (lhs: Recording, rhs: Recording) -> Bool {
+    public static func == (lhs: Recording, rhs: Recording) -> Bool {
         return lhs.id == rhs.id &&
                lhs.status == rhs.status &&
                lhs.progress == rhs.progress &&
@@ -33,7 +33,7 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
                lhs.isRegeneration == rhs.isRegeneration
     }
 
-    static var recordingsDirectory: URL {
+    public static var recordingsDirectory: URL {
         let applicationSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!
@@ -41,38 +41,49 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         return appDirectory.appendingPathComponent("recordings")
     }
 
-    var url: URL {
+    public var url: URL {
         Self.recordingsDirectory.appendingPathComponent(fileName)
     }
-    
-    var isPending: Bool {
+
+    public var isPending: Bool {
         status == .pending || status == .converting || status == .transcribing
     }
-    
-    var sourceFileName: String? {
+
+    public var sourceFileName: String? {
         guard let sourceFileURL = sourceFileURL else { return nil }
         return URL(fileURLWithPath: sourceFileURL).lastPathComponent
     }
 
-    static let databaseTableName = "recordings"
+    public static let databaseTableName = "recordings"
 
-    enum Columns {
-        static let id = Column(CodingKeys.id)
-        static let timestamp = Column(CodingKeys.timestamp)
-        static let fileName = Column(CodingKeys.fileName)
-        static let transcription = Column(CodingKeys.transcription)
-        static let duration = Column(CodingKeys.duration)
-        static let status = Column(CodingKeys.status)
-        static let progress = Column(CodingKeys.progress)
-        static let sourceFileURL = Column(CodingKeys.sourceFileURL)
+    public enum Columns {
+        public static let id = Column(CodingKeys.id)
+        public static let timestamp = Column(CodingKeys.timestamp)
+        public static let fileName = Column(CodingKeys.fileName)
+        public static let transcription = Column(CodingKeys.transcription)
+        public static let duration = Column(CodingKeys.duration)
+        public static let status = Column(CodingKeys.status)
+        public static let progress = Column(CodingKeys.progress)
+        public static let sourceFileURL = Column(CodingKeys.sourceFileURL)
+    }
+
+    public init(id: UUID, timestamp: Date, fileName: String, transcription: String, duration: TimeInterval, status: RecordingStatus, progress: Float, sourceFileURL: String?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.fileName = fileName
+        self.transcription = transcription
+        self.duration = duration
+        self.status = status
+        self.progress = progress
+        self.sourceFileURL = sourceFileURL
     }
 }
 
 @MainActor
-class RecordingStore: ObservableObject {
-    static let shared = RecordingStore()
+public class RecordingStore: ObservableObject {
+    public static let shared = RecordingStore()
 
-    @Published private(set) var recordings: [Recording] = []
+    @Published public private(set) var recordings: [Recording] = []
     private let dbQueue: DatabaseQueue
 
     private init() {
@@ -96,7 +107,7 @@ class RecordingStore: ObservableObject {
 
     private nonisolated func setupDatabase() throws {
         var migrator = DatabaseMigrator()
-        
+
         migrator.registerMigration("v1") { db in
             try db.create(table: Recording.databaseTableName, ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -106,11 +117,11 @@ class RecordingStore: ObservableObject {
                 t.column("duration", .double).notNull()
             }
         }
-        
+
         migrator.registerMigration("v2_add_status") { db in
             let columns = try db.columns(in: Recording.databaseTableName)
             let columnNames = columns.map { $0.name }
-            
+
             if !columnNames.contains("status") {
                 try db.alter(table: Recording.databaseTableName) { t in
                     t.add(column: "status", .text).notNull().defaults(to: "completed")
@@ -127,10 +138,10 @@ class RecordingStore: ObservableObject {
                 }
             }
         }
-        
+
         try migrator.migrate(dbQueue)
     }
-    
+
     private nonisolated func fetchAllRecordings() async throws -> [Recording] {
         try await dbQueue.read { db in
             try Recording
@@ -138,8 +149,8 @@ class RecordingStore: ObservableObject {
                 .fetchAll(db)
         }
     }
-    
-    nonisolated func fetchRecordings(limit: Int, offset: Int) async throws -> [Recording] {
+
+    public nonisolated func fetchRecordings(limit: Int, offset: Int) async throws -> [Recording] {
         try await dbQueue.read { db in
             try Recording
                 .order(Recording.Columns.timestamp.desc)
@@ -148,7 +159,7 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func getPendingRecordings() -> [Recording] {
+    public func getPendingRecordings() -> [Recording] {
         do {
             return try dbQueue.read { db in
                 try Recording
@@ -162,7 +173,7 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func getNextPendingRecording() -> Recording? {
+    public func getNextPendingRecording() -> Recording? {
         do {
             return try dbQueue.read { db in
                 try Recording
@@ -177,9 +188,9 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
+    public static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
 
-    func addRecording(_ recording: Recording) {
+    public func addRecording(_ recording: Recording) {
         Task {
             do {
                 try await insertRecording(recording)
@@ -191,21 +202,21 @@ class RecordingStore: ObservableObject {
             }
         }
     }
-    
-    func addRecordingSync(_ recording: Recording) async throws {
+
+    public func addRecordingSync(_ recording: Recording) async throws {
         try await insertRecording(recording)
         await MainActor.run {
             NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
         }
     }
-    
+
     private nonisolated func insertRecording(_ recording: Recording) async throws {
         try await dbQueue.write { db in
             try recording.insert(db)
         }
     }
-    
-    func updateRecording(_ recording: Recording) {
+
+    public func updateRecording(_ recording: Recording) {
         Task {
             do {
                 try await updateRecordingInDB(recording)
@@ -217,23 +228,23 @@ class RecordingStore: ObservableObject {
             }
         }
     }
-    
-    func updateRecordingSync(_ recording: Recording) async throws {
+
+    public func updateRecordingSync(_ recording: Recording) async throws {
         try await updateRecordingInDB(recording)
         await MainActor.run {
             NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
         }
     }
-    
-    func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
+
+    public func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
         Task {
             await updateRecordingProgressOnlySync(id, transcription: transcription, progress: progress, status: status)
         }
     }
-    
-    static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
-    
-    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
+
+    public static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
+
+    public func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
         do {
             _ = try await dbQueue.write { db -> Int in
                 try Recording
@@ -254,7 +265,7 @@ class RecordingStore: ObservableObject {
                 }
                 recordings[index] = updated
             }
-            
+
             var userInfo: [String: Any] = [
                 "id": id,
                 "transcription": transcription,
@@ -264,7 +275,7 @@ class RecordingStore: ObservableObject {
             if let isRegeneration = isRegeneration {
                 userInfo["isRegeneration"] = isRegeneration
             }
-            
+
             await MainActor.run {
                 NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
             }
@@ -273,7 +284,7 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    nonisolated func updateSourceFileURL(_ id: UUID, sourceURL: String) async throws {
+    public nonisolated func updateSourceFileURL(_ id: UUID, sourceURL: String) async throws {
         try await dbQueue.write { db in
             try Recording
                 .filter(Recording.Columns.id == id)
@@ -283,7 +294,7 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func updateRecordingStatusOnly(_ id: UUID, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
+    public func updateRecordingStatusOnly(_ id: UUID, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
         do {
             _ = try await dbQueue.write { db -> Int in
                 try Recording
@@ -302,7 +313,7 @@ class RecordingStore: ObservableObject {
                 }
                 recordings[index] = updated
             }
-            
+
             var userInfo: [String: Any] = [
                 "id": id,
                 "progress": progress,
@@ -311,7 +322,7 @@ class RecordingStore: ObservableObject {
             if let isRegeneration = isRegeneration {
                 userInfo["isRegeneration"] = isRegeneration
             }
-            
+
             await MainActor.run {
                 NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
             }
@@ -326,11 +337,11 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func deleteRecording(_ recording: Recording) {
+    public func deleteRecording(_ recording: Recording) {
         if recording.isPending {
             TranscriptionQueue.shared.cancelRecording(recording.id)
         }
-        
+
         Task {
             do {
                 try await deleteRecordingFromDB(recording)
@@ -343,14 +354,14 @@ class RecordingStore: ObservableObject {
             }
         }
     }
-    
+
     private nonisolated func deleteRecordingFromDB(_ recording: Recording) async throws {
         try await dbQueue.write { db in
             _ = try recording.delete(db)
         }
     }
 
-    func deleteAllRecordings() {
+    public func deleteAllRecordings() {
         Task {
             do {
                 let allRecordings = try await fetchAllRecordings()
@@ -366,14 +377,14 @@ class RecordingStore: ObservableObject {
             }
         }
     }
-    
+
     private nonisolated func deleteAllRecordingsFromDB() async throws {
         try await dbQueue.write { db in
             _ = try Recording.deleteAll(db)
         }
     }
 
-    func searchRecordings(query: String) -> [Recording] {
+    public func searchRecordings(query: String) -> [Recording] {
         do {
             return try dbQueue.read { db in
                 try Recording
@@ -387,8 +398,8 @@ class RecordingStore: ObservableObject {
             return []
         }
     }
-    
-    nonisolated func searchRecordingsAsync(query: String, limit: Int = 100, offset: Int = 0) async -> [Recording] {
+
+    public nonisolated func searchRecordingsAsync(query: String, limit: Int = 100, offset: Int = 0) async -> [Recording] {
         do {
             return try await dbQueue.read { db in
                 try Recording

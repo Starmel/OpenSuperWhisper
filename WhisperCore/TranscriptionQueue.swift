@@ -3,11 +3,11 @@ import AVFoundation
 import Combine
 
 @MainActor
-class TranscriptionQueue: ObservableObject {
-    static let shared = TranscriptionQueue()
+public class TranscriptionQueue: ObservableObject {
+    public static let shared = TranscriptionQueue()
 
-    @Published private(set) var isProcessing = false
-    @Published private(set) var currentRecordingId: UUID?
+    @Published public private(set) var isProcessing = false
+    @Published public private(set) var currentRecordingId: UUID?
 
     private let transcriptionService: TranscriptionService
     private let recordingStore: RecordingStore
@@ -21,7 +21,7 @@ class TranscriptionQueue: ObservableObject {
         self.recordingStore = RecordingStore.shared
         setupProgressObserver()
     }
-    
+
     private func setupProgressObserver() {
         progressCancellable = transcriptionService.$progress
             .receive(on: DispatchQueue.main)
@@ -30,7 +30,7 @@ class TranscriptionQueue: ObservableObject {
                       let recordingId = self.currentRecordingId,
                       newProgress > 0,
                       newProgress < 1.0 else { return }
-                
+
                 Task {
                     await self.recordingStore.updateRecordingStatusOnly(
                         recordingId,
@@ -41,7 +41,7 @@ class TranscriptionQueue: ObservableObject {
             }
     }
 
-    func cancelRecording(_ recordingId: UUID) {
+    public func cancelRecording(_ recordingId: UUID) {
         cancelledRecordingIds.insert(recordingId)
 
         if currentRecordingId == recordingId {
@@ -58,7 +58,7 @@ class TranscriptionQueue: ObservableObject {
         cancelledRecordingIds.remove(recordingId)
     }
 
-    func startProcessingQueue() {
+    public func startProcessingQueue() {
         guard !isProcessing else { return }
 
         isProcessing = true
@@ -90,13 +90,13 @@ class TranscriptionQueue: ObservableObject {
             }
             return toDelete
         }.value
-        
+
         for recording in recordingsToDelete {
             recordingStore.deleteRecording(recording)
         }
     }
 
-    func addFileToQueue(url: URL) async {
+    public func addFileToQueue(url: URL) async {
         do {
             let durationInSeconds = await (try? Task.detached(priority: .userInitiated) {
                 let asset = AVAsset(url: url)
@@ -127,7 +127,7 @@ class TranscriptionQueue: ObservableObject {
         }
     }
 
-    func requeueRecording(_ recording: Recording) async {
+    public func requeueRecording(_ recording: Recording) async {
         let sourceURL: URL? = await Task.detached(priority: .userInitiated) {
             if let existingSource = recording.sourceFileURL,
                !existingSource.isEmpty,
@@ -138,7 +138,7 @@ class TranscriptionQueue: ObservableObject {
             }
             return nil
         }.value
-        
+
         guard let sourceURL = sourceURL else {
             await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
@@ -195,7 +195,7 @@ class TranscriptionQueue: ObservableObject {
         let sourceExists = await Task.detached(priority: .userInitiated) {
             FileManager.default.fileExists(atPath: sourceURL.path)
         }.value
-        
+
         guard sourceExists else {
             await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
@@ -206,8 +206,8 @@ class TranscriptionQueue: ObservableObject {
             return
         }
 
-        let isRegeneration = !recording.transcription.isEmpty && 
-            recording.transcription != "In queue..." && 
+        let isRegeneration = !recording.transcription.isEmpty &&
+            recording.transcription != "In queue..." &&
             recording.transcription != "Starting transcription..."
 
         if isRegeneration {
@@ -235,7 +235,7 @@ class TranscriptionQueue: ObservableObject {
                     return
                 }
 
-                let settings = Settings()
+                let settings = TranscriptionSettings()
                 let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings)
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {

@@ -1,45 +1,45 @@
 import Foundation
 
 @propertyWrapper
-struct UserDefault<T> {
+public struct UserDefault<T> {
     let key: String
     let defaultValue: T
-    
-    var wrappedValue: T {
+
+    public var wrappedValue: T {
         get { UserDefaults.standard.object(forKey: key) as? T ?? defaultValue }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
 
 @propertyWrapper
-struct OptionalUserDefault<T> {
+public struct OptionalUserDefault<T> {
     let key: String
-    
-    var wrappedValue: T? {
+
+    public var wrappedValue: T? {
         get { UserDefaults.standard.object(forKey: key) as? T }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
 
-final class AppPreferences {
-    static let shared = AppPreferences()
+public final class AppPreferences {
+    public static let shared = AppPreferences()
     private init() {
         migrateOldPreferences()
     }
-    
+
     private func migrateOldPreferences() {
         if let oldPath = UserDefaults.standard.string(forKey: "selectedModelPath"),
            UserDefaults.standard.string(forKey: "selectedWhisperModelPath") == nil {
             UserDefaults.standard.set(oldPath, forKey: "selectedWhisperModelPath")
         }
     }
-    
+
     // Engine settings
     @UserDefault(key: "selectedEngine", defaultValue: "whisper")
-    var selectedEngine: String
-    
+    public var selectedEngine: String
+
     // Model settings
-    var selectedModelPath: String? {
+    public var selectedModelPath: String? {
         get {
             if selectedEngine == "whisper" {
                 return selectedWhisperModelPath
@@ -52,62 +52,62 @@ final class AppPreferences {
             }
         }
     }
-    
+
     @OptionalUserDefault(key: "selectedWhisperModelPath")
-    var selectedWhisperModelPath: String?
-    
+    public var selectedWhisperModelPath: String?
+
     @UserDefault(key: "fluidAudioModelVersion", defaultValue: "v3")
-    var fluidAudioModelVersion: String
-    
+    public var fluidAudioModelVersion: String
+
     @UserDefault(key: "whisperLanguage", defaultValue: "en")
-    var whisperLanguage: String
-    
+    public var whisperLanguage: String
+
     // Transcription settings
     @UserDefault(key: "translateToEnglish", defaultValue: false)
-    var translateToEnglish: Bool
-    
+    public var translateToEnglish: Bool
+
     @UserDefault(key: "suppressBlankAudio", defaultValue: true)
-    var suppressBlankAudio: Bool
-    
+    public var suppressBlankAudio: Bool
+
     @UserDefault(key: "showTimestamps", defaultValue: false)
-    var showTimestamps: Bool
-    
+    public var showTimestamps: Bool
+
     @UserDefault(key: "temperature", defaultValue: 0.0)
-    var temperature: Double
-    
+    public var temperature: Double
+
     @UserDefault(key: "noSpeechThreshold", defaultValue: 0.6)
-    var noSpeechThreshold: Double
-    
+    public var noSpeechThreshold: Double
+
     @UserDefault(key: "initialPrompt", defaultValue: "")
-    var initialPrompt: String
-    
+    public var initialPrompt: String
+
     @UserDefault(key: "useBeamSearch", defaultValue: false)
-    var useBeamSearch: Bool
-    
+    public var useBeamSearch: Bool
+
     @UserDefault(key: "beamSize", defaultValue: 5)
-    var beamSize: Int
-    
+    public var beamSize: Int
+
     @UserDefault(key: "debugMode", defaultValue: false)
-    var debugMode: Bool
-    
+    public var debugMode: Bool
+
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
-    var playSoundOnRecordStart: Bool
-    
+    public var playSoundOnRecordStart: Bool
+
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
-    var hasCompletedOnboarding: Bool
-    
+    public var hasCompletedOnboarding: Bool
+
     @UserDefault(key: "useAsianAutocorrect", defaultValue: true)
-    var useAsianAutocorrect: Bool
-    
+    public var useAsianAutocorrect: Bool
+
     @OptionalUserDefault(key: "selectedMicrophoneData")
-    var selectedMicrophoneData: Data?
-    
+    public var selectedMicrophoneData: Data?
+
     @UserDefault(key: "modifierOnlyHotkey", defaultValue: "none")
-    var modifierOnlyHotkey: String
-    
+    public var modifierOnlyHotkey: String
+
     @UserDefault(key: "holdToRecord", defaultValue: true)
-    var holdToRecord: Bool
-    
+    public var holdToRecord: Bool
+
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
-    var addSpaceAfterSentence: Bool
+    public var addSpaceAfterSentence: Bool
 }

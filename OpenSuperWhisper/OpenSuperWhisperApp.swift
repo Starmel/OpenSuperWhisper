@@ -10,6 +10,7 @@ import SwiftUI
 import AppKit
 import Combine
 import UniformTypeIdentifiers
+import WhisperCore
 
 @main
 struct OpenSuperWhisperApp: App {
@@ -51,6 +52,7 @@ struct OpenSuperWhisperApp: App {
         _ = ShortcutManager.shared
         _ = MicrophoneService.shared
         WhisperModelManager.shared.ensureDefaultModelPresent()
+        TranscriptionService.shared.textPostProcessor = AutocorrectPostProcessor()
     }
 }
 

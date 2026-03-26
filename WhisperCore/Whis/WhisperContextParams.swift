@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import whisper
 
 public struct WhisperContextParams {
     public var useGPU: Bool = true

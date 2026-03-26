@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import Combine
 import CoreAudio
+import WhisperCore
 
 class MicrophoneService: ObservableObject {
     static let shared = MicrophoneService()

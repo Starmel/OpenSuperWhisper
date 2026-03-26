@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreAudioTypes
+import whisper
 
 private class ProgressContext {
     var onProgress: ((Float) -> Void)?
@@ -21,14 +22,15 @@ private class ProgressContext {
     }
 }
 
-class WhisperEngine: TranscriptionEngine {
-    var engineName: String { "Whisper" }
-    
+public class WhisperEngine: TranscriptionEngine {
+    public var engineName: String { "Whisper" }
+
     private var context: MyWhisperContext?
     private let stateLock = NSLock()
     private var _isCancelled = false
     private var _abortFlag: UnsafeMutablePointer<Bool>?
     private var progressContext: ProgressContext?
+    private let textPostProcessor: TextPostProcessor
     
     private var isCancelled: Bool {
         get {
@@ -56,13 +58,17 @@ class WhisperEngine: TranscriptionEngine {
         }
     }
     
-    var onProgressUpdate: ((Float) -> Void)?
-    
-    var isModelLoaded: Bool {
+    public var onProgressUpdate: ((Float) -> Void)?
+
+    public var isModelLoaded: Bool {
         context != nil
     }
-    
-    func initialize() async throws {
+
+    public init(textPostProcessor: TextPostProcessor = NoOpTextPostProcessor()) {
+        self.textPostProcessor = textPostProcessor
+    }
+
+    public func initialize() async throws {
         let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
         guard let modelPath = modelPath else {
             throw TranscriptionError.contextInitializationFailed
@@ -76,7 +82,7 @@ class WhisperEngine: TranscriptionEngine {
         }
     }
     
-    func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+    public func transcribeAudio(url: URL, settings: TranscriptionSettings) async throws -> String {
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
@@ -201,20 +207,20 @@ class WhisperEngine: TranscriptionEngine {
         
         var processedText = cleanedText
         if settings.shouldApplyAsianAutocorrect && !cleanedText.isEmpty {
-            processedText = AutocorrectWrapper.format(cleanedText)
+            processedText = textPostProcessor.process(cleanedText, language: settings.selectedLanguage)
         }
         
         return processedText.isEmpty ? "No speech detected in the audio" : processedText
     }
     
-    func cancelTranscription() {
+    public func cancelTranscription() {
         isCancelled = true
         if let abortFlag = abortFlag {
             abortFlag.pointee = true
         }
     }
     
-    func getSupportedLanguages() -> [String] {
+    public func getSupportedLanguages() -> [String] {
         return LanguageUtil.availableLanguages
     }
     

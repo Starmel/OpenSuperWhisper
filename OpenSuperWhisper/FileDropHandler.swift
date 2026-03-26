@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import AVFoundation
+import WhisperCore
 
 @MainActor
 class FileDropHandler: ObservableObject {

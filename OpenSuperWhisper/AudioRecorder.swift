@@ -3,14 +3,19 @@ import Foundation
 import SwiftUI
 import AppKit
 import CoreAudio
+import WhisperCore
 
-class AudioRecorder: NSObject, ObservableObject {
+class AudioRecorder: NSObject, ObservableObject, AudioRecording {
     @Published var isRecording = false
     @Published var isPlaying = false
     @Published var currentlyPlayingURL: URL?
     @Published var canRecord = false
     @Published var isConnecting = false
-    
+
+    var currentTime: TimeInterval {
+        audioRecorder?.currentTime ?? 0
+    }
+
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
     private var notificationSound: NSSound?
