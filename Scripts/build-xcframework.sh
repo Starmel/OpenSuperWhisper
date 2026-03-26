@@ -19,7 +19,7 @@
 #   - Separate per-arch builds with lipo for simulator fat binary
 #
 
-set -e
+set -eo pipefail
 
 # ----- Configuration -----
 IOS_MIN_OS_VERSION=17.0

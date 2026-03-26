@@ -121,4 +121,6 @@ default.profraw
 *.dmg
 .cursorrules
 OpenSuperWhisper.dmg.sha256
-dev_config.jsonbuild-wc/
+dev_config.json
+build-wc/
+build-ios/
