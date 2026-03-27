@@ -1101,3 +1101,137 @@ final class TextUtilTests: XCTestCase {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
     }
 }
+
+// MARK: - NoOpTextPostProcessor Tests
+
+final class NoOpTextPostProcessorTests: XCTestCase {
+    func testReturnsInputUnchanged() {
+        let processor = NoOpTextPostProcessor()
+        XCTAssertEqual(processor.process("hello world", language: "en"), "hello world")
+    }
+
+    func testReturnsEmptyStringUnchanged() {
+        let processor = NoOpTextPostProcessor()
+        XCTAssertEqual(processor.process("", language: "en"), "")
+    }
+
+    func testReturnsUnicodeUnchanged() {
+        let processor = NoOpTextPostProcessor()
+        XCTAssertEqual(processor.process("こんにちは世界", language: "ja"), "こんにちは世界")
+    }
+}
+
+// MARK: - TranscriptionSettings Computed Property Tests
+
+final class TranscriptionSettingsComputedPropertyTests: XCTestCase {
+    func testIsAsianLanguage_japanese() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "ja"
+        XCTAssertTrue(settings.isAsianLanguage)
+    }
+
+    func testIsAsianLanguage_chinese() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "zh"
+        XCTAssertTrue(settings.isAsianLanguage)
+    }
+
+    func testIsAsianLanguage_korean() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "ko"
+        XCTAssertTrue(settings.isAsianLanguage)
+    }
+
+    func testIsAsianLanguage_english() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "en"
+        XCTAssertFalse(settings.isAsianLanguage)
+    }
+
+    func testIsAsianLanguage_auto() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "auto"
+        XCTAssertFalse(settings.isAsianLanguage)
+    }
+
+    func testShouldApplyAsianAutocorrect_asianWithAutocorrectOn() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "ja"
+        settings.useAsianAutocorrect = true
+        XCTAssertTrue(settings.shouldApplyAsianAutocorrect)
+    }
+
+    func testShouldApplyAsianAutocorrect_asianWithAutocorrectOff() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "ja"
+        settings.useAsianAutocorrect = false
+        XCTAssertFalse(settings.shouldApplyAsianAutocorrect)
+    }
+
+    func testShouldApplyAsianAutocorrect_nonAsianWithAutocorrectOn() {
+        var settings = TranscriptionSettings()
+        settings.selectedLanguage = "en"
+        settings.useAsianAutocorrect = true
+        XCTAssertFalse(settings.shouldApplyAsianAutocorrect)
+    }
+
+    func testAsianLanguagesSet() {
+        XCTAssertEqual(TranscriptionSettings.asianLanguages, Set(["zh", "ja", "ko"]))
+    }
+}
+
+// MARK: - Protocol Conformance Tests
+
+final class ProtocolConformanceTests: XCTestCase {
+    func testAudioRecorderConformsToAudioRecording() {
+        let recorder = AudioRecorder.shared
+        XCTAssertTrue(recorder is AudioRecording, "AudioRecorder should conform to AudioRecording protocol")
+    }
+
+    func testClipboardUtilConformsToClipboardService() {
+        let clipboard = ClipboardUtil()
+        XCTAssertTrue(clipboard is ClipboardService, "ClipboardUtil should conform to ClipboardService protocol")
+    }
+
+    func testAutocorrectPostProcessorConformsToTextPostProcessor() {
+        let processor = AutocorrectPostProcessor()
+        XCTAssertTrue(processor is TextPostProcessor, "AutocorrectPostProcessor should conform to TextPostProcessor protocol")
+    }
+
+    func testNoOpTextPostProcessorConformsToTextPostProcessor() {
+        let processor = NoOpTextPostProcessor()
+        XCTAssertTrue(processor is TextPostProcessor, "NoOpTextPostProcessor should conform to TextPostProcessor protocol")
+    }
+}
+
+// MARK: - TranscriptionService DI Tests
+
+@MainActor
+final class TranscriptionServiceDITests: XCTestCase {
+    func testDefaultTextPostProcessorIsNoOp() {
+        let service = TranscriptionService()
+        let processor = service.textPostProcessor
+        // Default should be NoOpTextPostProcessor — verify by checking passthrough behavior
+        XCTAssertEqual(processor.process("test input", language: "en"), "test input")
+        XCTAssertEqual(processor.process("日本語テスト", language: "ja"), "日本語テスト")
+    }
+
+    func testDefaultAlternateEngineFactoryIsNil() {
+        let service = TranscriptionService()
+        XCTAssertNil(service.alternateEngineFactory)
+    }
+
+    func testTextPostProcessorCanBeSwapped() {
+        let service = TranscriptionService()
+        let customProcessor = AutocorrectPostProcessor()
+        service.textPostProcessor = customProcessor
+        XCTAssertTrue(service.textPostProcessor is AutocorrectPostProcessor)
+    }
+
+    func testAlternateEngineFactoryCanBeSet() {
+        let service = TranscriptionService()
+        XCTAssertNil(service.alternateEngineFactory)
+        service.alternateEngineFactory = { nil }
+        XCTAssertNotNil(service.alternateEngineFactory)
+    }
+}
