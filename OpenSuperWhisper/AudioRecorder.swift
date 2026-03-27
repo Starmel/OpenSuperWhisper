@@ -20,6 +20,8 @@ class AudioRecorder: NSObject, ObservableObject {
     private var microphoneChangeObserver: Any?
     private var connectionCheckTimer: DispatchSourceTimer?
     private var recordingDeviceID: AudioDeviceID?
+    // Keeps audio hardware warm so the first word is never cut off
+    private var primedRecorder: AVAudioRecorder?
 
     // MARK: - Singleton Instance
 
@@ -45,7 +47,8 @@ class AudioRecorder: NSObject, ObservableObject {
     
     private func setup() {
         updateCanRecordStatus()
-        
+        primeAudioHardware()
+
         notificationObserver = NotificationCenter.default.addObserver(
             forName: .AVCaptureDeviceWasConnected,
             object: nil,
@@ -73,6 +76,22 @@ class AudioRecorder: NSObject, ObservableObject {
     
     private func updateCanRecordStatus() {
         canRecord = MicrophoneService.shared.getActiveMicrophone() != nil
+    }
+
+    /// Pre-warms the audio hardware by creating a prepared (but not recording) AVAudioRecorder.
+    /// Keeping `primedRecorder` alive holds the audio engine in an initialized state,
+    /// eliminating the cold-start delay when the user triggers the first real recording.
+    private func primeAudioHardware() {
+        let primedURL = temporaryDirectory.appendingPathComponent("primed.wav")
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 16000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true
+        ]
+        primedRecorder = try? AVAudioRecorder(url: primedURL, settings: settings)
+        primedRecorder?.prepareToRecord()
     }
     
     private func createTemporaryDirectoryIfNeeded() {
@@ -158,6 +177,7 @@ class AudioRecorder: NSObject, ObservableObject {
         ]
         
         do {
+            primedRecorder = nil  // release primed recorder just before starting; hardware stays warm
             audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
             audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = monitorConnection
@@ -179,6 +199,9 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.primeAudioHardware()  // re-prime so the next recording starts instantly too
+        }
         
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
