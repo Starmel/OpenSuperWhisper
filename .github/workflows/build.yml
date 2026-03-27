@@ -7,6 +7,8 @@ on:
 jobs:
   build-xcframework:
     runs-on: macos-latest
+    outputs:
+      cache-key: ${{ steps.xcfw-key.outputs.key }}
     steps:
       - name: Checkout repository (with submodules)
         uses: actions/checkout@v6
@@ -17,7 +19,8 @@ jobs:
         run: |
           WHISPER_HASH=$(git submodule status libwhisper/whisper.cpp | awk '{print $1}' | tr -d '+-')
           SCRIPT_HASH=$(shasum -a 256 Scripts/build-xcframework.sh | awk '{print $1}')
-          echo "key=xcframework-${WHISPER_HASH}-${SCRIPT_HASH}" >> "$GITHUB_OUTPUT"
+          XCODE_HASH=$(xcodebuild -version | shasum -a 256 | awk '{print $1}')
+          echo "key=xcframework-${WHISPER_HASH}-${SCRIPT_HASH}-${XCODE_HASH}" >> "$GITHUB_OUTPUT"
       - name: Cache xcframework
         id: cache-xcframework
         uses: actions/cache@v4
@@ -41,17 +44,11 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
-      - name: Compute xcframework cache key
-        id: xcfw-key
-        run: |
-          WHISPER_HASH=$(git submodule status libwhisper/whisper.cpp | awk '{print $1}' | tr -d '+-')
-          SCRIPT_HASH=$(shasum -a 256 Scripts/build-xcframework.sh | awk '{print $1}')
-          echo "key=xcframework-${WHISPER_HASH}-${SCRIPT_HASH}" >> "$GITHUB_OUTPUT"
       - name: Restore xcframework cache
         uses: actions/cache@v4
         with:
           path: libwhisper/whisper.cpp/build-apple/whisper.xcframework
-          key: ${{ steps.xcfw-key.outputs.key }}
+          key: ${{ needs.build-xcframework.outputs.cache-key }}
           fail-on-cache-miss: true
       - name: Install dependencies
         run: brew install cmake rust
@@ -94,20 +91,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
-      - name: Compute xcframework cache key
-        id: xcfw-key
-        run: |
-          WHISPER_HASH=$(git submodule status libwhisper/whisper.cpp | awk '{print $1}' | tr -d '+-')
-          SCRIPT_HASH=$(shasum -a 256 Scripts/build-xcframework.sh | awk '{print $1}')
-          echo "key=xcframework-${WHISPER_HASH}-${SCRIPT_HASH}" >> "$GITHUB_OUTPUT"
       - name: Restore xcframework cache
         uses: actions/cache@v4
         with:
           path: libwhisper/whisper.cpp/build-apple/whisper.xcframework
-          key: ${{ steps.xcfw-key.outputs.key }}
+          key: ${{ needs.build-xcframework.outputs.cache-key }}
           fail-on-cache-miss: true
-      - name: Install CMake
-        run: brew install cmake
       - name: Build iOS app (simulator)
         run: |
           xcodebuild -scheme OpenSuperWhisper-iOS \
@@ -118,3 +107,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tail -20
           echo "iOS build successful!"
+      - name: Test iOS app (simulator)
+        run: |
+          xcodebuild test -scheme OpenSuperWhisper-iOS \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build-ios \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -30
+          echo "iOS tests passed!"

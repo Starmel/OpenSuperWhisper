@@ -115,12 +115,18 @@ build_arch() {
         extra_args+=(-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="${sdk_path}")
     fi
 
-    cmake -B "${build_dir}" \
+    local cmake_output
+    cmake_output=$(cmake -B "${build_dir}" \
         "${COMMON_CMAKE_ARGS[@]}" \
         "${extra_args[@]}" \
         -DCMAKE_OSX_DEPLOYMENT_TARGET="${deployment_target}" \
         -DCMAKE_OSX_ARCHITECTURES="${arch}" \
-        -S . 2>&1 | grep -E "(error|Error|Including|Configuring done)" || true
+        -S . 2>&1) || {
+        echo "Error: cmake configure failed for ${build_dir} (${arch})"
+        echo "$cmake_output"
+        exit 1
+    }
+    echo "$cmake_output" | grep -E "(error|Error|Including|Configuring done)" || true
 
     echo "  Building ${build_dir} (${arch})..."
     cmake --build "${build_dir}" -j "${JOBS}" 2>&1 | tail -3
@@ -328,7 +334,7 @@ create_dynamic_lib() {
 
     # Mark device builds with correct platform version
     if [[ "$is_simulator" == "false" && "$platform" == "ios" ]]; then
-        if xcrun -f vtool &>/dev/null 2>&1; then
+        if xcrun -f vtool &>/dev/null; then
             echo "  Marking binary for iOS device..."
             xcrun vtool -set-build-version ios ${IOS_MIN_OS_VERSION} ${IOS_MIN_OS_VERSION} -replace \
                 -output "${output_lib}" "${output_lib}"

@@ -52,6 +52,11 @@ if [[ "$BUILD_IOS" == true ]]; then
         -derivedDataPath build-ios \
         -skipPackagePluginValidation -skipMacroValidation \
         CODE_SIGNING_ALLOWED=NO build
+    if [[ $? -ne 0 ]]; then
+        echo "iOS build failed!"
+        exit 1
+    fi
+    echo "iOS build successful!"
 else
     echo "Building OpenSuperWhisper..."
     BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)
