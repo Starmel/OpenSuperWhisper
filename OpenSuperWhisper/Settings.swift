@@ -1102,6 +1102,11 @@ struct SettingsView: View {
                                 Text("One-tap to toggle recording")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+
+                                Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                    .padding(.top, 4)
                             }
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
