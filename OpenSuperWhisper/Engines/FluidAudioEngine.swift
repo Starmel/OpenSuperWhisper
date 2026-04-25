@@ -24,6 +24,7 @@ class FluidAudioEngine: TranscriptionEngine {
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
         try await manager.initialize(models: models)
+        await configureCustomVocabulary(on: manager)
         
         asrManager = manager
         asrModels = models
@@ -109,5 +110,40 @@ class FluidAudioEngine: TranscriptionEngine {
         }
         return ["en", "de", "es", "fr", "it", "pt", "ru", "pl", "nl", "tr", "cs", "ar", "zh", "ja", "hu", "fi", "hr", "sk", "sr", "sl", "uk", "ca", "da", "el", "bg"]
     }
-}
 
+    private func configureCustomVocabulary(on manager: AsrManager) async {
+        let vocabularyText = AppPreferences.shared.parakeetCustomVocabulary
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !vocabularyText.isEmpty else {
+            manager.disableVocabularyBoosting()
+            return
+        }
+
+        let vocabularyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenSuperWhisper-ParakeetVocabulary-\(UUID().uuidString)")
+            .appendingPathExtension("txt")
+
+        do {
+            try vocabularyText.write(to: vocabularyURL, atomically: true, encoding: .utf8)
+            defer { try? FileManager.default.removeItem(at: vocabularyURL) }
+
+            let vocabularyData = try await CustomVocabularyContext.loadWithCtcTokens(
+                from: vocabularyURL.path
+            )
+
+            guard !vocabularyData.vocab.terms.isEmpty else {
+                manager.disableVocabularyBoosting()
+                return
+            }
+
+            try await manager.configureVocabularyBoosting(
+                vocabulary: vocabularyData.vocab,
+                ctcModels: vocabularyData.models
+            )
+        } catch {
+            manager.disableVocabularyBoosting()
+            print("Parakeet custom vocabulary unavailable: \(error)")
+        }
+    }
+}

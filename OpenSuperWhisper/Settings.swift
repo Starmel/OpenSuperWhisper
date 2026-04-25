@@ -32,6 +32,12 @@ class SettingsViewModel: ObservableObject {
             initializeFluidAudioModels()
         }
     }
+
+    @Published var parakeetCustomVocabulary: String {
+        didSet {
+            AppPreferences.shared.parakeetCustomVocabulary = parakeetCustomVocabulary
+        }
+    }
     
     @Published var selectedModelURL: URL? {
         didSet {
@@ -146,6 +152,7 @@ class SettingsViewModel: ObservableObject {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
+        self.parakeetCustomVocabulary = prefs.parakeetCustomVocabulary
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -524,6 +531,7 @@ struct SettingsView: View {
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
+    @State private var previousParakeetCustomVocabulary = ""
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -565,6 +573,8 @@ struct SettingsView: View {
                         if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
                             TranscriptionService.shared.reloadModel(with: modelPath)
                         }
+                    } else if viewModel.parakeetCustomVocabulary != previousParakeetCustomVocabulary {
+                        TranscriptionService.shared.reloadEngine()
                     }
                     dismiss()
                 }
@@ -589,6 +599,7 @@ struct SettingsView: View {
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
+            previousParakeetCustomVocabulary = viewModel.parakeetCustomVocabulary
             if viewModel.selectedEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
             }
@@ -709,14 +720,11 @@ struct SettingsView: View {
                                 .foregroundColor(.primary)
                                 .padding(.top, 8)
                             
-                            ScrollView {
-                                VStack(spacing: 12) {
-                                    ForEach($viewModel.downloadableFluidAudioModels) { $model in
-                                        FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
-                                    }
+                            VStack(spacing: 12) {
+                                ForEach($viewModel.downloadableFluidAudioModels) { $model in
+                                    FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
                                 }
                             }
-                            .frame(maxHeight: 200)
                             
                             if viewModel.isDownloading {
                                 VStack(spacing: 8) {
@@ -768,6 +776,37 @@ struct SettingsView: View {
                                     .padding(8)
                                     .background(Color(.textBackgroundColor).opacity(0.5))
                                     .cornerRadius(6)
+                            }
+                            .padding(.top, 8)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Boosted Words")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    if !viewModel.parakeetCustomVocabulary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Button("Clear") {
+                                            viewModel.parakeetCustomVocabulary = ""
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                }
+
+                                TextEditor(text: $viewModel.parakeetCustomVocabulary)
+                                    .font(.body)
+                                    .frame(height: 90)
+                                    .padding(6)
+                                    .background(Color(.textBackgroundColor))
+                                    .cornerRadius(6)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .help("One output term per line. Use output: spoken alias, spoken alias for variants.")
+
+                                Text("One output term per line. Use output: spoken alias, spoken alias for variants.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                             .padding(.top, 8)
                         }
@@ -1459,4 +1498,3 @@ struct ModelDownloadItemView: View {
         }
     }
 }
-
