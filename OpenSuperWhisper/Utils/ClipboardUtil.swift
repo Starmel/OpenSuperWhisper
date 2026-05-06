@@ -3,23 +3,39 @@ import ApplicationServices
 import Carbon
 
 class ClipboardUtil {
-    
+
+    /// Copies text to clipboard without pasting or restoring
+    static func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.declareTypes([.string], owner: nil)
+        pasteboard.setString(text, forType: .string)
+    }
+
+    /// Pastes text and keeps it in clipboard (does not restore original clipboard)
+    static func insertTextAndKeepInClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.declareTypes([.string], owner: nil)
+        pasteboard.setString(text, forType: .string)
+        simulatePaste()
+    }
+
+    /// Pastes text and restores original clipboard (legacy behavior)
     static func insertText(_ text: String) {
         let pasteboard = NSPasteboard.general
-        
+
         // Save current pasteboard contents
         let savedContents = saveCurrentPasteboardContents()
-        
+
         // Set new text to pasteboard
         pasteboard.declareTypes([.string], owner: nil)
         pasteboard.setString(text, forType: .string)
-        
+
         // Simulate Cmd+V using layout-aware keycode resolution
         simulatePaste()
-        
+
         // Add a small delay to ensure paste operation completes
         Thread.sleep(forTimeInterval: 0.1)
-        
+
         // Restore original contents
         if let contents = savedContents {
             restorePasteboardContents(contents)
