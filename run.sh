@@ -1,9 +1,30 @@
 #!/bin/zsh
 
 JUST_BUILD=false
-if [[ "$1" == "build" ]]; then
-    JUST_BUILD=true
-fi
+SAVE_BUILD_LOG=""
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        build)
+            JUST_BUILD=true
+            ;;
+        --save-log=*)
+            SAVE_BUILD_LOG="${arg#*=}"
+            ;;
+        --save-log)
+            SAVE_BUILD_LOG="build/xcodebuild_raw_$(date +%Y%m%d_%H%M%S).log"
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [build] [--save-log[=filename]]"
+            echo "  build            : Only build, don't run the app"
+            echo "  --save-log       : Save raw xcodebuild output to timestamped file"
+            echo "  --save-log=FILE  : Save raw xcodebuild output to specific file"
+            exit 1
+            ;;
+    esac
+done
 
 # Configure libwhisper
 echo "Configuring libwhisper..."
@@ -31,18 +52,33 @@ codesign --force --sign - ./build/libomp.dylib
 
 # Build the app
 echo "Building OpenSuperWhisper..."
-BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)
 
-# sudo gem install xcpretty
-if command -v xcpretty &> /dev/null
-then
-    echo "$BUILD_OUTPUT" | xcpretty --simple --color
+# Run xcodebuild and capture output while showing it in real-time
+if [[ -n "$SAVE_BUILD_LOG" ]]; then
+    # Save raw output to file
+    echo "Saving raw build output to: $SAVE_BUILD_LOG"
+    mkdir -p "$(dirname "$SAVE_BUILD_LOG")"
+    
+    if command -v xcpretty &> /dev/null; then
+        BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1 | tee "$SAVE_BUILD_LOG" | tee >(xcpretty --simple --color >&2))
+        BUILD_EXIT_CODE=${PIPESTATUS[0]}
+    else
+        BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1 | tee "$SAVE_BUILD_LOG" | tee /dev/stderr)
+        BUILD_EXIT_CODE=${PIPESTATUS[0]}
+    fi
 else
-    echo "$BUILD_OUTPUT"
+    # Don't save to file, just show in console
+    if command -v xcpretty &> /dev/null; then
+        BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1 | tee >(xcpretty --simple --color >&2))
+        BUILD_EXIT_CODE=${PIPESTATUS[0]}
+    else
+        BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1 | tee /dev/stderr)
+        BUILD_EXIT_CODE=${PIPESTATUS[0]}
+    fi
 fi
 
 # Check if build output contains BUILD FAILED or if the command failed
-if [[ $? -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
+if [[ $BUILD_EXIT_CODE -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
     echo "Building successful!"
     if $JUST_BUILD; then
         exit 0
@@ -54,5 +90,13 @@ if [[ $? -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
     ./Build/Build/Products/Debug/OpenSuperWhisper.app/Contents/MacOS/OpenSuperWhisper
 else
     echo "Build failed!"
+    if [[ -n "$SAVE_BUILD_LOG" ]]; then
+        echo "Raw build output saved to: $SAVE_BUILD_LOG"
+        echo "Last 20 lines of build output:"
+        tail -20 "$SAVE_BUILD_LOG"
+    else
+        echo "Last part of build output:"
+        echo "$BUILD_OUTPUT" | tail -20
+    fi
     exit 1
 fi 
