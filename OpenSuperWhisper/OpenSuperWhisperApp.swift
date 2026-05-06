@@ -88,17 +88,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var microphoneObserver: AnyCancellable?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        
+
         setupStatusBarItem()
-        
+
         if let window = NSApplication.shared.windows.first {
             self.mainWindow = window
             window.delegate = self
-            
+
             window.minSize = NSSize(width: 450, height: 400)
             window.maxSize = NSSize(width: 450, height: 900)
         }
-        
+
         OpenSuperWhisperApp.startTranscriptionQueue()
         observeMicrophoneChanges()
     }
