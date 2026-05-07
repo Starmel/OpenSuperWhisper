@@ -9,6 +9,7 @@ import XCTest
 import Carbon
 import ApplicationServices
 import AVFoundation
+import FluidAudio
 @testable import OpenSuperWhisper
 
 final class OpenSuperWhisperTests: XCTestCase {
@@ -22,6 +23,43 @@ final class OpenSuperWhisperTests: XCTestCase {
     func testPerformanceExample() throws {
         self.measure {
         }
+    }
+}
+
+final class AppPreferencesParakeetVocabularyTests: XCTestCase {
+    func testParakeetCustomVocabularyPersistsMultilineTerms() {
+        let original = AppPreferences.shared.parakeetCustomVocabulary
+        defer {
+            AppPreferences.shared.parakeetCustomVocabulary = original
+        }
+
+        let vocabulary = """
+        mossformer2: moss former 2, moss former 2
+        squeue: S Q, SQ, es queue
+        """
+        AppPreferences.shared.parakeetCustomVocabulary = vocabulary
+
+        XCTAssertEqual(AppPreferences.shared.parakeetCustomVocabulary, vocabulary)
+    }
+
+    func testParakeetCustomVocabularyAcceptsCommaSeparatedAliases() throws {
+        let vocabulary = """
+        mossformer2: moss former 2, moss former 2
+        squeue: S Q, SQ, es queue
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenSuperWhisperTests-\(UUID().uuidString)")
+            .appendingPathExtension("txt")
+        try vocabulary.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let context = try CustomVocabularyContext.loadFromSimpleFormat(from: url)
+
+        XCTAssertEqual(context.terms.count, 2)
+        XCTAssertEqual(context.terms[0].text, "mossformer2")
+        XCTAssertEqual(context.terms[0].aliases, ["moss former 2", "moss former 2"])
+        XCTAssertEqual(context.terms[1].text, "squeue")
+        XCTAssertEqual(context.terms[1].aliases, ["S Q", "SQ", "es queue"])
     }
 }
 
