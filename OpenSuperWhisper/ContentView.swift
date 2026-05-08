@@ -498,7 +498,7 @@ struct ContentView: View {
                                 viewModel.startRecording()
                             }
                         }) {
-                            if viewModel.state == .decoding || viewModel.state == .connecting {
+                            if viewModel.state == .decoding || viewModel.state == .connecting || viewModel.transcriptionService.isLoading {
                                 ProgressView()
                                     .scaleEffect(1.0)
                                     .frame(width: 48, height: 48)
