@@ -77,6 +77,8 @@ class OnboardingViewModel: ObservableObject {
                 updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             case .parakeet(let version):
                 updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: version)
+            case .sensevoice(let variant):
+                updatedModel.isDownloaded = SenseVoiceModelManager.shared.isModelDownloaded(variant: variant)
             }
             return updatedModel
         }
@@ -108,6 +110,9 @@ class OnboardingViewModel: ObservableObject {
         case .parakeet(let version):
             AppPreferences.shared.selectedEngine = "fluidaudio"
             AppPreferences.shared.fluidAudioModelVersion = version
+        case .sensevoice(let variant):
+            AppPreferences.shared.selectedEngine = "sensevoice"
+            AppPreferences.shared.senseVoiceModelVariant = variant.rawValue
         }
     }
 
@@ -128,6 +133,69 @@ class OnboardingViewModel: ObservableObject {
             try await downloadWhisperModel(model: model, url: url)
         case .parakeet(let version):
             try await downloadParakeetModel(model: model, version: version)
+        case .sensevoice(let variant):
+            try await downloadSenseVoiceModel(model: model, variant: variant)
+        }
+    }
+    
+    @MainActor
+    private func downloadSenseVoiceModel(model: OnboardingUnifiedModel, variant: SenseVoiceVariant) async throws {
+        downloadTask = Task {
+            do {
+                try await SenseVoiceModelManager.shared.downloadModel(variant: variant) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+                        
+                        self.downloadProgress = progress
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = progress
+                            if progress >= 1.0 {
+                                self.unifiedModels[index].isDownloaded = true
+                            }
+                        }
+                    }
+                }
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.resetDownloadState(modelID: model.id)
+                    }
+                    throw CancellationError()
+                }
+                
+                await MainActor.run {
+                    if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                        unifiedModels[index].isDownloaded = true
+                        unifiedModels[index].downloadProgress = 0.0
+                    }
+                    selectModel(model)
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.resetDownloadState(modelID: model.id)
+                }
+            } catch {
+                await MainActor.run {
+                    self.resetDownloadState(modelID: model.id)
+                }
+                throw error
+            }
+        }
+        
+        try await downloadTask?.value
+    }
+    
+    @MainActor
+    private func resetDownloadState(modelID: UUID) {
+        isDownloading = false
+        downloadingModelName = nil
+        downloadProgress = 0.0
+        if let index = unifiedModels.firstIndex(where: { $0.id == modelID }) {
+            unifiedModels[index].downloadProgress = 0.0
         }
     }
     
@@ -234,7 +302,7 @@ class OnboardingViewModel: ObservableObject {
                 }
                 
                 let manager = AsrManager(config: .default)
-                try await manager.initialize(models: models)
+                try await manager.loadModels(models)
                 
                 await MainActor.run {
                     if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
@@ -299,6 +367,8 @@ class OnboardingViewModel: ObservableObject {
                 if case .whisper(let url, _) = model.type {
                     let filename = url.lastPathComponent
                     modelManager.cancelDownload(name: filename)
+                } else if case .sensevoice(let variant) = model.type {
+                    SenseVoiceModelManager.shared.cancelDownload(variant: variant)
                 }
             }
             if let index = unifiedModels.firstIndex(where: { $0.name == modelName }) {

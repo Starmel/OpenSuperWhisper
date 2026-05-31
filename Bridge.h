@@ -7,3 +7,4 @@
 
 #include "whisper.h"
 #include "asian-autocorrect/autocorrect-swift/autocorrect_swift.h"
+#include "sherpa-onnx/c-api/c-api.h"

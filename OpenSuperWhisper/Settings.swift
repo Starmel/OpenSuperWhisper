@@ -12,6 +12,8 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.selectedEngine = selectedEngine
             if selectedEngine == "whisper" {
                 loadAvailableModels()
+            } else if selectedEngine == "sensevoice" {
+                initializeSenseVoiceModels()
             } else {
                 initializeFluidAudioModels()
             }
@@ -33,6 +35,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var senseVoiceModelVariant: String {
+        didSet {
+            AppPreferences.shared.senseVoiceModelVariant = senseVoiceModelVariant
+            if selectedEngine == "sensevoice" {
+                Task { @MainActor in
+                    TranscriptionService.shared.reloadEngine()
+                }
+            }
+            initializeSenseVoiceModels()
+        }
+    }
+    
     @Published var selectedModelURL: URL? {
         didSet {
             if let url = selectedModelURL {
@@ -45,6 +59,7 @@ class SettingsViewModel: ObservableObject {
     
     @Published var downloadableModels: [SettingsDownloadableModel] = []
     @Published var downloadableFluidAudioModels: [SettingsFluidAudioModel] = []
+    @Published var downloadableSenseVoiceModels: [SettingsSenseVoiceModel] = []
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
@@ -158,6 +173,7 @@ class SettingsViewModel: ObservableObject {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
+        self.senseVoiceModelVariant = prefs.senseVoiceModelVariant
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -182,6 +198,15 @@ class SettingsViewModel: ObservableObject {
         loadAvailableModels()
         initializeDownloadableModels()
         initializeFluidAudioModels()
+        initializeSenseVoiceModels()
+    }
+    
+    func initializeSenseVoiceModels() {
+        downloadableSenseVoiceModels = SettingsSenseVoiceModels.availableModels.map { model in
+            var updatedModel = model
+            updatedModel.isDownloaded = SenseVoiceModelManager.shared.isModelDownloaded(variant: model.variant)
+            return updatedModel
+        }
     }
     
     func initializeFluidAudioModels() {
@@ -315,10 +340,98 @@ class SettingsViewModel: ObservableObject {
             if let index = downloadableFluidAudioModels.firstIndex(where: { $0.name == modelName }) {
                 downloadableFluidAudioModels[index].downloadProgress = 0.0
             }
+            if selectedEngine == "sensevoice", let model = downloadableSenseVoiceModels.first(where: { $0.name == modelName }) {
+                SenseVoiceModelManager.shared.cancelDownload(variant: model.variant)
+            }
+            if let index = downloadableSenseVoiceModels.firstIndex(where: { $0.name == modelName }) {
+                downloadableSenseVoiceModels[index].downloadProgress = 0.0
+            }
         }
         isDownloading = false
         downloadingModelName = nil
         downloadProgress = 0.0
+    }
+    
+    @MainActor
+    func downloadSenseVoiceModel(_ model: SettingsSenseVoiceModel) async throws {
+        guard !isDownloading else { return }
+        
+        isDownloading = true
+        downloadingModelName = model.name
+        downloadProgress = 0.0
+        
+        if let index = downloadableSenseVoiceModels.firstIndex(where: { $0.id == model.id }) {
+            downloadableSenseVoiceModels[index].downloadProgress = 0.0
+        }
+        
+        downloadTask = Task {
+            do {
+                try await SenseVoiceModelManager.shared.downloadModel(variant: model.variant) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+                        
+                        self.downloadProgress = progress
+                        if let index = self.downloadableSenseVoiceModels.firstIndex(where: { $0.id == model.id }) {
+                            self.downloadableSenseVoiceModels[index].downloadProgress = progress
+                        }
+                    }
+                }
+                
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.resetSenseVoiceDownloadState(modelID: model.id)
+                    }
+                    throw CancellationError()
+                }
+                
+                await MainActor.run {
+                    if let index = downloadableSenseVoiceModels.firstIndex(where: { $0.id == model.id }) {
+                        downloadableSenseVoiceModels[index].isDownloaded = true
+                        downloadableSenseVoiceModels[index].downloadProgress = 0.0
+                    }
+                    senseVoiceModelVariant = model.variant.rawValue
+                    isDownloading = false
+                    downloadingModelName = nil
+                    downloadProgress = 0.0
+                    
+                    Task { @MainActor in
+                        TranscriptionService.shared.reloadEngine()
+                    }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.resetSenseVoiceDownloadState(modelID: model.id)
+                }
+            } catch {
+                if Task.isCancelled {
+                    await MainActor.run {
+                        self.resetSenseVoiceDownloadState(modelID: model.id)
+                    }
+                } else {
+                    await MainActor.run {
+                        self.resetSenseVoiceDownloadState(modelID: model.id)
+                    }
+                    throw error
+                }
+            }
+        }
+        
+        do {
+            try await downloadTask?.value
+        } catch is CancellationError {
+            // Manual cancellation, ignore
+        }
+    }
+    
+    @MainActor
+    private func resetSenseVoiceDownloadState(modelID: UUID) {
+        isDownloading = false
+        downloadingModelName = nil
+        downloadProgress = 0.0
+        if let index = downloadableSenseVoiceModels.firstIndex(where: { $0.id == modelID }) {
+            downloadableSenseVoiceModels[index].downloadProgress = 0.0
+        }
     }
     
     @MainActor
@@ -366,7 +479,7 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 let manager = AsrManager(config: .default)
-                try await manager.initialize(models: models)
+                try await manager.loadModels(models)
                 
                 await MainActor.run {
                     if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
@@ -605,11 +718,15 @@ struct SettingsView: View {
             previousModelURL = viewModel.selectedModelURL
             if viewModel.selectedEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
+            } else if viewModel.selectedEngine == "sensevoice" {
+                viewModel.initializeSenseVoiceModels()
             }
         }
         .onChange(of: viewModel.selectedEngine) { _, newEngine in
             if newEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
+            } else if newEngine == "sensevoice" {
+                viewModel.initializeSenseVoiceModels()
             }
         }
         .onChange(of: viewModel.fluidAudioModelVersion) { _, _ in
@@ -637,11 +754,14 @@ struct SettingsView: View {
                     Picker("Engine", selection: $viewModel.selectedEngine) {
                         Text("Parakeet").tag("fluidaudio")
                         Text("Whisper").tag("whisper")
+                        Text("SenseVoice").tag("sensevoice")
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
                     
-                    if viewModel.selectedEngine == "whisper" {
+                    if viewModel.selectedEngine == "sensevoice" {
+                        senseVoiceModelSection
+                    } else if viewModel.selectedEngine == "whisper" {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Whisper Model")
                                 .font(.headline)
@@ -794,6 +914,83 @@ struct SettingsView: View {
             }
         }
         .padding()
+    }
+    
+    private var senseVoiceModelSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("SenseVoice Model")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            Text("5x faster than Whisper, multilingual (zh, en, ja, ko, yue)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Text("Download Models")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.top, 8)
+            
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach($viewModel.downloadableSenseVoiceModels) { $model in
+                        SenseVoiceModelDownloadItemView(model: $model, viewModel: viewModel)
+                    }
+                }
+            }
+            .frame(maxHeight: 200)
+            
+            if viewModel.isDownloading {
+                VStack(spacing: 8) {
+                    HStack {
+                        if viewModel.downloadProgress > 0 {
+                            ProgressView(value: viewModel.downloadProgress)
+                                .progressViewStyle(LinearProgressViewStyle())
+                        } else {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Cancel") {
+                            viewModel.cancelDownload()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    
+                    if let downloadingName = viewModel.downloadingModelName {
+                        Text("Downloading: \(downloadingName)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.top, 8)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Models Directory:")
+                        .font(.subheadline)
+                    Button(action: {
+                        NSWorkspace.shared.open(SenseVoiceModelManager.shared.modelsDirectory)
+                    }) {
+                        Label("Open Folder", systemImage: "folder")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Open models directory")
+                }
+                Text(SenseVoiceModelManager.shared.modelsDirectory.path)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .background(Color(.textBackgroundColor).opacity(0.5))
+                    .cornerRadius(6)
+            }
+            .padding(.top, 8)
+        }
     }
     
     private var transcriptionSettings: some View {
@@ -1259,9 +1456,36 @@ struct SettingsFluidAudioModels {
     ]
 }
 
+struct SettingsSenseVoiceModel: Identifiable {
+    let id = UUID()
+    let name: String
+    let variant: SenseVoiceVariant
+    var isDownloaded: Bool
+    let description: String
+    var downloadProgress: Double = 0.0
+}
+
+struct SettingsSenseVoiceModels {
+    static let availableModels = [
+        SettingsSenseVoiceModel(
+            name: SenseVoiceVariant.int8.displayName,
+            variant: .int8,
+            isDownloaded: false,
+            description: SenseVoiceVariant.int8.description
+        ),
+        SettingsSenseVoiceModel(
+            name: SenseVoiceVariant.fp32.displayName,
+            variant: .fp32,
+            isDownloaded: false,
+            description: SenseVoiceVariant.fp32.description
+        )
+    ]
+}
+
 enum OnboardingModelType {
     case whisper(url: URL, size: Int)
     case parakeet(version: String)
+    case sensevoice(variant: SenseVoiceVariant)
 }
 
 struct OnboardingUnifiedModel: Identifiable {
@@ -1295,6 +1519,18 @@ struct OnboardingUnifiedModels {
             isDownloaded: false,
             description: "Fastest processing and English-only, higher recall",
             type: .parakeet(version: "v2")
+        ),
+        OnboardingUnifiedModel(
+            name: "SenseVoice int8",
+            isDownloaded: false,
+            description: "5x faster, multilingual (zh, en, ja, ko, yue)",
+            type: .sensevoice(variant: .int8)
+        ),
+        OnboardingUnifiedModel(
+            name: "SenseVoice float32",
+            isDownloaded: false,
+            description: "Multilingual, higher accuracy, larger size",
+            type: .sensevoice(variant: .fp32)
         ),
         OnboardingUnifiedModel(
             name: "Whisper Medium",
@@ -1408,6 +1644,102 @@ struct FluidAudioModelDownloadItemView: View {
         .onTapGesture {
             if model.isDownloaded && !isSelected {
                 viewModel.fluidAudioModelVersion = model.version
+            }
+        }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
+struct SenseVoiceModelDownloadItemView: View {
+    @Binding var model: SettingsSenseVoiceModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+    
+    var isSelected: Bool {
+        viewModel.senseVoiceModelVariant == model.variant.rawValue
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    if model.isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                            .imageScale(.small)
+                    }
+                }
+                
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name && model.downloadProgress > 0 && model.downloadProgress < 1 {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+            
+            Spacer()
+            
+            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                Button("Cancel") {
+                    viewModel.cancelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .imageScale(.large)
+                } else {
+                    Button(action: {
+                        viewModel.senseVoiceModelVariant = model.variant.rawValue
+                    }) {
+                        Text("Select")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else {
+                Button(action: {
+                    Task {
+                        do {
+                            try await viewModel.downloadSenseVoiceModel(model)
+                        } catch is CancellationError {
+                            // Don't show error for manual cancellation
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
+                }) {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.isDownloading)
+            }
+        }
+        .padding(12)
+        .background(isSelected ? Color(.controlBackgroundColor).opacity(0.7) : Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.isDownloaded && !isSelected {
+                viewModel.senseVoiceModelVariant = model.variant.rawValue
             }
         }
         .alert("Download Error", isPresented: $showError) {

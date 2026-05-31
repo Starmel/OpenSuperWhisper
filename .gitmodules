@@ -4,3 +4,6 @@
 [submodule "asian-autocorrect"]
 	path = asian-autocorrect
 	url = https://github.com/huacnlee/autocorrect
+[submodule "libsherpa/sherpa-onnx"]
+	path = libsherpa/sherpa-onnx
+	url = https://github.com/k2-fsa/sherpa-onnx

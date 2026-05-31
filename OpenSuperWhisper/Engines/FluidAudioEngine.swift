@@ -7,6 +7,7 @@ class FluidAudioEngine: TranscriptionEngine {
     
     private var asrManager: AsrManager?
     private var asrModels: AsrModels?
+    private var decoderLayers: Int = 2
     private var isCancelled = false
     private var transcriptionTask: Task<String, Error>?
     private var progressTask: Task<Void, Never>?
@@ -23,10 +24,11 @@ class FluidAudioEngine: TranscriptionEngine {
         
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
-        try await manager.initialize(models: models)
+        try await manager.loadModels(models)
         
         asrManager = manager
         asrModels = models
+        decoderLayers = models.version.decoderLayers
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
@@ -74,7 +76,8 @@ class FluidAudioEngine: TranscriptionEngine {
         }
         
         // Perform actual transcription - FluidAudio will emit progress automatically
-        let result = try await asrManager.transcribe(url)
+        var decoderState = try TdtDecoderState(decoderLayers: decoderLayers)
+        let result = try await asrManager.transcribe(url, decoderState: &decoderState)
         
         guard !isCancelled else {
             throw CancellationError()

@@ -45,6 +45,8 @@ class TranscriptionService: ObservableObject {
             
             if selectedEngine == "fluidaudio" {
                 engine = await FluidAudioEngine()
+            } else if selectedEngine == "sensevoice" {
+                engine = await SenseVoiceEngine()
             } else {
                 engine = await WhisperEngine()
             }
@@ -124,6 +126,13 @@ class TranscriptionService: ObservableObject {
             }
         } else if let fluidEngine = engine as? FluidAudioEngine {
             fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self = self, !self.isCancelled else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let senseVoiceEngine = engine as? SenseVoiceEngine {
+            senseVoiceEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self = self, !self.isCancelled else { return }
                     self.progress = newProgress

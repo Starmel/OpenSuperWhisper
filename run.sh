@@ -13,6 +13,14 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+# Build sherpa-onnx static xcframework (used by the SenseVoice engine)
+echo "Building sherpa-onnx..."
+./Scripts/build-sherpa.sh
+if [[ $? -ne 0 ]]; then
+    echo "sherpa-onnx build failed!"
+    exit 1
+fi
+
 echo "Building autocorrect-swift..."
 mkdir -p build
 cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml

@@ -25,10 +25,77 @@ final class OpenSuperWhisperTests: XCTestCase {
     }
 }
 
-final class WhisperEngineMultiChannelTests: XCTestCase {
+final class SenseVoiceEngineTests: XCTestCase {
+
+    private let variant: SenseVoiceVariant = .int8
+
+    /// Ensures the int8 SenseVoice model is available, downloading it on demand.
+    /// Skips the test (rather than failing) if the network download fails.
+    private func ensureModelDownloaded() async throws {
+        let manager = SenseVoiceModelManager.shared
+        if manager.isModelDownloaded(variant: variant) { return }
+
+        do {
+            try await manager.downloadModel(variant: variant) { _ in }
+        } catch {
+            throw XCTSkip("Could not download SenseVoice model: \(error.localizedDescription)")
+        }
+
+        guard manager.isModelDownloaded(variant: variant) else {
+            throw XCTSkip("SenseVoice model not present after download")
+        }
+    }
+
+    /// Locates an English test wav. Prefers the wav shipped inside the model
+    /// archive (test_wavs/en.wav), which is present once the model is downloaded.
+    private func englishTestWavURL() -> URL? {
+        let testWav = SenseVoiceModelManager.shared
+            .directory(for: variant)
+            .appendingPathComponent("test_wavs")
+            .appendingPathComponent("en.wav")
+        return FileManager.default.fileExists(atPath: testWav.path) ? testWav : nil
+    }
+
+    func testTranscribeEnglishAudio() async throws {
+        try await ensureModelDownloaded()
+
+        guard let wavURL = englishTestWavURL() else {
+            throw XCTSkip("English test wav not available")
+        }
+
+        AppPreferences.shared.senseVoiceModelVariant = variant.rawValue
+
+        let engine = SenseVoiceEngine()
+        try await engine.initialize()
+        XCTAssertTrue(engine.isModelLoaded, "Recognizer should be loaded after initialize()")
+
+        let settings = await MainActor.run { Settings() }
+        let result = try await engine.transcribeAudio(url: wavURL, settings: settings)
+
+        print("SenseVoice transcription: \(result)")
+        XCTAssertFalse(result.isEmpty, "Transcription result should not be empty")
+        XCTAssertNotEqual(result, "No speech detected in the audio", "Should detect speech in en.wav")
+
+        // The en.wav sample contains the English phrase about the "Tower of London".
+        let lowered = result.lowercased()
+        XCTAssertTrue(
+            lowered.contains("tower") || lowered.contains("london") || lowered.contains("the"),
+            "Transcription should contain recognizable English words, got: \(result)"
+        )
+    }
+
+    func testSupportedLanguages() {
+        let engine = SenseVoiceEngine()
+        let langs = engine.getSupportedLanguages()
+        XCTAssertTrue(langs.contains("en"))
+        XCTAssertTrue(langs.contains("zh"))
+        XCTAssertTrue(langs.contains("auto"))
+    }
+}
+
+final class AudioPCMConverterMultiChannelTests: XCTestCase {
     func testMakeTargetFormat_withSixChannels_returnsFormat() {
-        let engine = WhisperEngine()
-        let format = engine.makeTargetFormat(channelCount: 6)
+        let format = AudioPCMConverter.makeTargetFormat(channelCount: 6)
         
         XCTAssertNotNil(format)
         XCTAssertEqual(format?.channelCount, 6)
@@ -36,8 +103,7 @@ final class WhisperEngineMultiChannelTests: XCTestCase {
     }
     
     func testMakeTargetFormat_withZeroChannels_returnsNil() {
-        let engine = WhisperEngine()
-        XCTAssertNil(engine.makeTargetFormat(channelCount: 0))
+        XCTAssertNil(AudioPCMConverter.makeTargetFormat(channelCount: 0))
     }
 }
 

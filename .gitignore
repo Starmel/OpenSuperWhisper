@@ -108,6 +108,9 @@ SourcePackages
 .build
 default.profraw
 
+# sherpa-onnx build artifacts (built by Scripts/build-sherpa.sh)
+libsherpa/sherpa-onnx/build-swift-macos/
+
 # Fastlane
 fastlane/.env
 fastlane/report.xml
