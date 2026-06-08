@@ -59,11 +59,23 @@ final class StreamingWhisperEngine {
     // concurrently on the same context, and must never run on the audio render thread.
     private let whisperQueue = DispatchQueue(label: "streaming.whisper", qos: .userInitiated)
 
+    // Touched only on whisperQueue (serialized) — no lock needed.
     private var settings = Settings()
     private var committedSegments = 0
     private var runningText = ""
-    private var isRunning = false
-    private var isCancelled = false
+
+    // Touched from multiple threads (caller, audio render thread, main) — lock-guarded.
+    private let stateLock = NSLock()
+    private var _isRunning = false
+    private var _isCancelled = false
+    private var isRunning: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _isRunning }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _isRunning = newValue }
+    }
+    private var isCancelled: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _isCancelled }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _isCancelled = newValue }
+    }
 
     private let tapBufferSize: AVAudioFrameCount = 4800 // ~100ms
     private var configObserver: NSObjectProtocol?
