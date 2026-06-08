@@ -93,6 +93,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var customDictionaryEnabled: Bool {
+        didSet {
+            AppPreferences.shared.customDictionaryEnabled = customDictionaryEnabled
+        }
+    }
+
+    @Published var customDictionaryEntries: [CustomDictionaryEntry] {
+        didSet {
+            AppPreferences.shared.customDictionaryEntries = customDictionaryEntries
+        }
+    }
+
     @Published var useBeamSearch: Bool {
         didSet {
             AppPreferences.shared.useBeamSearch = useBeamSearch
@@ -171,6 +183,8 @@ class SettingsViewModel: ObservableObject {
         self.temperature = prefs.temperature
         self.noSpeechThreshold = prefs.noSpeechThreshold
         self.initialPrompt = prefs.initialPrompt
+        self.customDictionaryEnabled = prefs.customDictionaryEnabled
+        self.customDictionaryEntries = prefs.customDictionaryEntries
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
@@ -515,15 +529,21 @@ struct Settings {
     var useBeamSearch: Bool
     var beamSize: Int
     var useAsianAutocorrect: Bool
-    
+    var customDictionaryEnabled: Bool
+    var customDictionaryEntries: [CustomDictionaryEntry]
+
     var isAsianLanguage: Bool {
         Settings.asianLanguages.contains(selectedLanguage)
     }
-    
+
     var shouldApplyAsianAutocorrect: Bool {
         isAsianLanguage && useAsianAutocorrect
     }
-    
+
+    var shouldApplyCustomDictionary: Bool {
+        customDictionaryEnabled && !customDictionaryEntries.isEmpty
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedLanguage = prefs.whisperLanguage
@@ -536,6 +556,8 @@ struct Settings {
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
+        self.customDictionaryEnabled = prefs.customDictionaryEnabled
+        self.customDictionaryEntries = prefs.customDictionaryEntries
     }
 }
 
@@ -983,7 +1005,10 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Custom Dictionary
+                customDictionarySection
+
                 // Transcriptions Directory
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Transcriptions Directory")
@@ -1024,6 +1049,82 @@ struct SettingsView: View {
         }
     }
     
+    private var customDictionarySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Custom Dictionary")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Spacer()
+                Toggle("", isOn: $viewModel.customDictionaryEnabled)
+                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                    .labelsHidden()
+            }
+
+            Text("Replace recognized words with a preferred spelling. Matching is case-insensitive and limited to whole words. With Whisper, the replacements are also used to bias recognition.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if viewModel.customDictionaryEnabled {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Heard")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Replace with")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Spacer matching the delete button width.
+                        Color.clear.frame(width: 24, height: 1)
+                    }
+
+                    if viewModel.customDictionaryEntries.isEmpty {
+                        Text("No words yet. Add one below.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 4)
+                    }
+
+                    ForEach($viewModel.customDictionaryEntries) { $entry in
+                        HStack(spacing: 8) {
+                            TextField("git hub", text: $entry.original)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: .infinity)
+                            TextField("GitHub", text: $entry.replacement)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: .infinity)
+                            Button(action: {
+                                viewModel.customDictionaryEntries.removeAll { $0.id == entry.id }
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Remove this entry")
+                            .frame(width: 24)
+                        }
+                    }
+
+                    Button(action: {
+                        viewModel.customDictionaryEntries.append(CustomDictionaryEntry())
+                    }) {
+                        Label("Add Word", systemImage: "plus.circle")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.top, 4)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.controlBackgroundColor).opacity(0.3))
+        .cornerRadius(12)
+    }
+
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {

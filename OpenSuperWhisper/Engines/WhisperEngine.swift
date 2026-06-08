@@ -124,7 +124,13 @@ class WhisperEngine: TranscriptionEngine {
         params.detectLanguage = false // means that it only detects the language and does not process the transcription
         params.temperature = Float(settings.temperature)
         params.noSpeechThold = Float(settings.noSpeechThreshold)
-        params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
+        let promptBoost = settings.shouldApplyCustomDictionary
+            ? CustomDictionary.promptBoost(entries: settings.customDictionaryEntries)
+            : ""
+        let combinedPrompt = [settings.initialPrompt, promptBoost]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        params.initialPrompt = combinedPrompt.isEmpty ? nil : combinedPrompt
         
         typealias GGMLAbortCallback = @convention(c) (UnsafeMutableRawPointer?) -> Bool
         let abortCallback: GGMLAbortCallback = { userData in
@@ -203,7 +209,11 @@ class WhisperEngine: TranscriptionEngine {
         if settings.shouldApplyAsianAutocorrect && !cleanedText.isEmpty {
             processedText = AutocorrectWrapper.format(cleanedText)
         }
-        
+
+        if settings.shouldApplyCustomDictionary {
+            processedText = CustomDictionary.apply(processedText, entries: settings.customDictionaryEntries)
+        }
+
         return processedText.isEmpty ? "No speech detected in the audio" : processedText
     }
     
