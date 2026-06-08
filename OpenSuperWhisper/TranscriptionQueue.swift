@@ -66,6 +66,7 @@ class TranscriptionQueue: ObservableObject {
         processingTask = Task {
             await cleanupMissingFiles()
             await processQueue()
+            await recordingStore.enforceRetentionPolicy()
             isProcessing = false
             processingTask = nil
         }
