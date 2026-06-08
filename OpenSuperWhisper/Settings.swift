@@ -584,6 +584,7 @@ struct Settings {
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
+    @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
@@ -660,6 +661,7 @@ struct SettingsView: View {
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
+            launchAtLogin.refresh()
             if viewModel.selectedEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
             }
@@ -1157,6 +1159,34 @@ struct SettingsView: View {
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {
+                // Startup
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Startup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Launch at Login")
+                                .font(.subheadline)
+                            Text("Automatically start OpenSuperWhisper when you log in")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin.isEnabled },
+                            set: { launchAtLogin.setEnabled($0) }
+                        ))
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Decoding Strategy")
