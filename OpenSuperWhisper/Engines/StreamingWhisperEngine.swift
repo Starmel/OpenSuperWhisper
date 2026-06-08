@@ -89,7 +89,7 @@ final class StreamingWhisperEngine {
     func start(settings: Settings) throws {
         guard !isRunning else { return }
 
-        self.settings = settings
+        // isCancelled is read on the audio thread before dispatching; clear it up front.
         self.isCancelled = false
 
         let input = audioEngine.inputNode
@@ -102,11 +102,12 @@ final class StreamingWhisperEngine {
         converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         self.converter = converter
 
-        // Queue the (possibly slow) model load + reset FIRST. Because whisperQueue is
-        // serial, this runs only after any previous recording's finalize has completed
-        // (so the previous result is captured before we reset), and audio appended by
-        // the tap below is processed only after this block — recording starts instantly
-        // without dropping the lead-in, and ordering across recordings is preserved.
+        // Queue the (possibly slow) model load + per-recording state FIRST. Because
+        // whisperQueue is serial, this runs only after any previous recording's finalize
+        // has completed (so its result is captured and it has read ITS settings before we
+        // overwrite them), and audio appended by the tap below is processed only after
+        // this block — recording starts instantly without dropping the lead-in, and
+        // ordering across overlapping recordings is preserved.
         whisperQueue.async { [weak self] in
             guard let self = self else { return }
             do {
@@ -115,6 +116,7 @@ final class StreamingWhisperEngine {
                 print("Streaming model load failed: \(error)")
                 return
             }
+            self.settings = settings
             self.committedSegments = 0
             self.runningText = ""
             self.context?.resumableReset()
