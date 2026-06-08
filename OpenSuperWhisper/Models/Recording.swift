@@ -373,6 +373,83 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    // MARK: - Retention policy
+
+    /// Applies the user's retention policy, deleting recordings that exceed the
+    /// configured maximum count and/or that are older than the configured age.
+    /// In-progress recordings (pending / converting / transcribing) are never
+    /// removed. Returns the number of recordings that were deleted.
+    @discardableResult
+    func enforceRetentionPolicy() async -> Int {
+        let policy = RetentionPolicy()
+        guard policy.isActive else { return 0 }
+
+        let deleted: [Recording]
+        do {
+            deleted = try await deleteExpiredRecordings(policy: policy)
+        } catch {
+            print("Failed to enforce retention policy: \(error)")
+            return 0
+        }
+
+        guard !deleted.isEmpty else { return 0 }
+
+        // Remove the stored audio files off the main actor.
+        await Task.detached(priority: .utility) {
+            for recording in deleted {
+                try? FileManager.default.removeItem(at: recording.url)
+            }
+        }.value
+
+        let deletedIds = Set(deleted.map { $0.id })
+        recordings.removeAll { deletedIds.contains($0.id) }
+
+        NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+        return deleted.count
+    }
+
+    private nonisolated func deleteExpiredRecordings(policy: RetentionPolicy) async throws -> [Recording] {
+        try await dbQueue.write { db in
+            let activeStatuses = [
+                RecordingStatus.pending.rawValue,
+                RecordingStatus.converting.rawValue,
+                RecordingStatus.transcribing.rawValue
+            ]
+
+            var toDelete: [UUID: Recording] = [:]
+
+            // Age-based expiration: anything older than the cutoff date.
+            if let cutoff = policy.ageCutoffDate() {
+                let expired = try Recording
+                    .filter(!activeStatuses.contains(Recording.Columns.status))
+                    .filter(Recording.Columns.timestamp < cutoff)
+                    .fetchAll(db)
+                for recording in expired {
+                    toDelete[recording.id] = recording
+                }
+            }
+
+            // Count-based expiration: keep the newest `maxCount`, drop the rest.
+            if policy.maxCountEnabled, policy.maxCount > 0 {
+                let finished = try Recording
+                    .filter(!activeStatuses.contains(Recording.Columns.status))
+                    .order(Recording.Columns.timestamp.desc)
+                    .fetchAll(db)
+                if finished.count > policy.maxCount {
+                    for recording in finished[policy.maxCount...] {
+                        toDelete[recording.id] = recording
+                    }
+                }
+            }
+
+            for recording in toDelete.values {
+                _ = try recording.delete(db)
+            }
+
+            return Array(toDelete.values)
+        }
+    }
+
     func searchRecordings(query: String) -> [Recording] {
         do {
             return try dbQueue.read { db in

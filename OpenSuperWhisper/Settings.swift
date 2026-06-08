@@ -178,6 +178,51 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Retention / storage policy
+
+    @Published var retentionMaxCountEnabled: Bool {
+        didSet {
+            AppPreferences.shared.retentionMaxCountEnabled = retentionMaxCountEnabled
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxCount: Int {
+        didSet {
+            AppPreferences.shared.retentionMaxCount = max(1, retentionMaxCount)
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeEnabled: Bool {
+        didSet {
+            AppPreferences.shared.retentionMaxAgeEnabled = retentionMaxAgeEnabled
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeValue: Int {
+        didSet {
+            AppPreferences.shared.retentionMaxAgeValue = max(1, retentionMaxAgeValue)
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeUnit: RetentionUnit {
+        didSet {
+            AppPreferences.shared.retentionMaxAgeUnit = retentionMaxAgeUnit.rawValue
+            enforceRetention()
+        }
+    }
+
+    /// Applies the retention policy immediately so the user sees the effect of
+    /// toggling a switch or changing a limit without waiting for the next recording.
+    private func enforceRetention() {
+        Task { @MainActor in
+            await RecordingStore.shared.enforceRetentionPolicy()
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -203,6 +248,11 @@ class SettingsViewModel: ObservableObject {
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
+        self.retentionMaxCountEnabled = prefs.retentionMaxCountEnabled
+        self.retentionMaxCount = prefs.retentionMaxCount
+        self.retentionMaxAgeEnabled = prefs.retentionMaxAgeEnabled
+        self.retentionMaxAgeValue = prefs.retentionMaxAgeValue
+        self.retentionMaxAgeUnit = RetentionUnit(rawValue: prefs.retentionMaxAgeUnit) ?? .days
 
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -597,13 +647,20 @@ struct SettingsView: View {
                     Label("Transcription", systemImage: "text.bubble")
                 }
                 .tag(2)
-            
+
+            // Storage / Retention Settings
+            storageSettings
+                .tabItem {
+                    Label("Storage", systemImage: "externaldrive")
+                }
+                .tag(3)
+
             // Advanced Settings
             advancedSettings
                 .tabItem {
                     Label("Advanced", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
         .padding()
         .frame(width: 550)
@@ -1132,6 +1189,100 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.controlBackgroundColor).opacity(0.3))
         .cornerRadius(12)
+    }
+
+    private var storageSettings: some View {
+        Form {
+            VStack(spacing: 20) {
+                // Maximum number of recordings
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Limit Number of Recordings")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Keep only the most recent recordings & transcriptions")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.retentionMaxCountEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.retentionMaxCountEnabled {
+                        HStack {
+                            Text("Keep at most")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("", value: $viewModel.retentionMaxCount, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 80)
+                            Stepper("", value: $viewModel.retentionMaxCount, in: 1...100000)
+                                .labelsHidden()
+                            Text("recordings")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Maximum age
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Delete Old Recordings")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Automatically remove recordings older than the chosen age")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.retentionMaxAgeEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.retentionMaxAgeEnabled {
+                        HStack {
+                            Text("Delete after")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("", value: $viewModel.retentionMaxAgeValue, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 70)
+                            Stepper("", value: $viewModel.retentionMaxAgeValue, in: 1...100000)
+                                .labelsHidden()
+                            Picker("", selection: $viewModel.retentionMaxAgeUnit) {
+                                ForEach(RetentionUnit.allCases) { unit in
+                                    Text(unit.displayName).tag(unit)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 110)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                Text("Both limits can be active at the same time. Cleanup runs automatically when you change these settings and after each new transcription. Recordings that are still being processed are never deleted.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
+        }
     }
 
     private var advancedSettings: some View {
