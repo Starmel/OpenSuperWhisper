@@ -32,6 +32,15 @@ final class StreamingWhisperEngine {
         case window = 1
     }
 
+    /// Outcome of finalizing a streaming session.
+    enum FinalizeResult {
+        /// Streaming ran; the text is the transcription (may be a "no speech" placeholder).
+        case transcribed(String)
+        /// Streaming could never run (no model / mic / start error). The caller should
+        /// fall back to a file-based transcription so the recording is not lost.
+        case unavailable
+    }
+
     /// Mel normalization for the live path. `.window` is recommended for mic input.
     var melNormMode: MelNormMode = .window
     /// WINDOW-mode release half-life in seconds of audio time (ignored for `.global`).
@@ -135,21 +144,28 @@ final class StreamingWhisperEngine {
     }
 
     /// Stop capturing, flush the trailing window, and return the final transcription.
-    func stop() -> String {
-        guard isRunning else { return finalText() }
+    /// Returns `.unavailable` if streaming never actually ran (start failed or the model
+    /// could not be loaded), so the caller can fall back to a file-based pass.
+    func stop() -> FinalizeResult {
+        let wasRunning = isRunning
         isRunning = false
+        if wasRunning {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.stop()
+        }
 
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
-
-        guard !isCancelled else { return finalText() }
+        // start() failed before the engine ever ran -> nothing was captured.
+        guard wasRunning else { return .unavailable }
+        if isCancelled { return .transcribed(finalText()) }
 
         // Runs after all queued appends, so the whole recording is accounted for. The
         // final text is captured INSIDE the sync block so the next recording's reset
         // (also queued) can't clear it first.
         var captured = ""
+        var hadContext = false
         whisperQueue.sync {
-            guard let context = self.context else { return }
+            guard let context = self.context else { return } // model load failed
+            hadContext = true
             var params = self.makeParams()
             // finalize = true: decode the remaining <30s window (padded), like the last
             // iteration of whisper_full's internal loop.
@@ -159,7 +175,9 @@ final class StreamingWhisperEngine {
             }
             captured = self.finalText()
         }
-        return captured.isEmpty ? "No speech detected in the audio" : captured
+
+        guard hadContext else { return .unavailable }
+        return .transcribed(captured)
     }
 
     func cancel() {

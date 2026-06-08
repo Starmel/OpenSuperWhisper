@@ -148,10 +148,18 @@ class IndicatorViewModel: ObservableObject {
                 // Flush the trailing <30s window off the main actor. stop() blocks on the
                 // engine's serial queue, so it waits for the previous recording's finalize
                 // -> ordered transcription + ordered insertion.
-                let text = await Task.detached { [streamingEngine = self.streamingEngine] in
+                let result = await Task.detached { [streamingEngine = self.streamingEngine] in
                     streamingEngine.stop()
                 }.value
-                await self.persist(text: text, tempURL: tempURL)
+
+                switch result {
+                case .transcribed(let text):
+                    await self.persist(text: text, tempURL: tempURL)
+                case .unavailable:
+                    // Streaming never ran (no model / mic / start error): fall back to the
+                    // file-based pass so the recording is never lost.
+                    await self.transcribeFileFallback(tempURL: tempURL)
+                }
                 self.delegate?.didFinishDecoding(for: self)
             }
             return
@@ -228,6 +236,20 @@ class IndicatorViewModel: ObservableObject {
         }
     }
     
+    /// Fallback when live streaming could not run: transcribe the recorded WAV with the
+    /// regular file-based engine so the recording is never lost.
+    private func transcribeFileFallback(tempURL: URL?) async {
+        guard let tempURL = tempURL else { return }
+        do {
+            print("Live streaming unavailable - falling back to file transcription")
+            let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+            await persist(text: text, tempURL: tempURL)
+        } catch {
+            print("Fallback transcription failed: \(error)")
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+    }
+
     /// Saves the transcription (moving the recorded WAV to its final location when present)
     /// and inserts/copies the text. Used by the live streaming path.
     private func persist(text: String, tempURL: URL?) async {
