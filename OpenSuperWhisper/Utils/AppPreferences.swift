@@ -89,6 +89,10 @@ final class AppPreferences {
     
     @UserDefault(key: "debugMode", defaultValue: false)
     var debugMode: Bool
+
+    // Live (resumable) streaming transcription while recording. Whisper engine only.
+    @UserDefault(key: "liveStreamingEnabled", defaultValue: false)
+    var liveStreamingEnabled: Bool
     
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool

@@ -22,7 +22,17 @@ class IndicatorViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
     @Published var isVisible = false
-    
+    /// Running transcription text while live streaming is active.
+    @Published var liveText: String = ""
+
+    private let streamingEngine = StreamingWhisperEngine()
+    private var liveModeActive = false
+
+    /// Live streaming only applies to the whisper engine and when the user opted in.
+    private var useLiveStreaming: Bool {
+        AppPreferences.shared.liveStreamingEnabled && AppPreferences.shared.selectedEngine == "whisper"
+    }
+
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
@@ -58,6 +68,14 @@ class IndicatorViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Warm up the streaming model so the tap can start immediately on record
+        // (otherwise model load would drop the lead-in of the live transcription).
+        if useLiveStreaming {
+            Task.detached { [streamingEngine] in
+                try? streamingEngine.initialize()
+            }
+        }
     }
     
     var isTranscriptionBusy: Bool {
@@ -92,19 +110,63 @@ class IndicatorViewModel: ObservableObject {
         Task.detached { [recorder] in
             recorder.startRecording()
         }
+
+        // Live streaming runs in parallel to the file recorder: the WAV is still
+        // written (playback / re-transcribe stay intact); on stop we use the live
+        // text instead of a fresh file-based pass.
+        if useLiveStreaming {
+            liveModeActive = true
+            liveText = ""
+            let settings = Settings()
+            streamingEngine.melNormMode = .window
+            streamingEngine.onTranscriptionUpdate = { [weak self] text in
+                Task { @MainActor in self?.liveText = text }
+            }
+            Task.detached { [streamingEngine] in
+                do {
+                    if !streamingEngine.isModelLoaded {
+                        try streamingEngine.initialize()
+                    }
+                    try streamingEngine.start(settings: settings)
+                } catch {
+                    print("Live streaming start failed: \(error)")
+                }
+            }
+        }
     }
-    
+
     func startDecoding() {
         stopBlinking()
         
         if isTranscriptionBusy {
             recorder.cancelRecording()
+            if liveModeActive {
+                streamingEngine.cancel()
+                liveModeActive = false
+                liveText = ""
+            }
             showBusyMessage()
             return
         }
-        
+
         state = .decoding
-        
+
+        if liveModeActive {
+            liveModeActive = false
+            let tempURL = recorder.stopRecording()
+            Task { [weak self] in
+                guard let self = self else { return }
+                // Flush the trailing <30s window off the main actor.
+                let text = await Task.detached { [streamingEngine = self.streamingEngine] in
+                    streamingEngine.stop()
+                }.value
+                self.liveText = ""
+                await self.persist(text: text, tempURL: tempURL)
+                self.delegate?.didFinishDecoding()
+            }
+            return
+        }
+
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
                 guard let self = self else { return }
@@ -168,6 +230,44 @@ class IndicatorViewModel: ObservableObject {
         }
     }
     
+    /// Saves the transcription (moving the recorded WAV to its final location when present)
+    /// and inserts/copies the text. Used by the live streaming path.
+    private func persist(text: String, tempURL: URL?) async {
+        if let tempURL = tempURL {
+            let timestamp = Date()
+            let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+            let recordingId = UUID()
+            let finalURL = Recording(
+                id: recordingId,
+                timestamp: timestamp,
+                fileName: fileName,
+                transcription: text,
+                duration: 0,
+                status: .completed,
+                progress: 1.0,
+                sourceFileURL: nil
+            ).url
+
+            do {
+                try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                self.recordingStore.addRecording(Recording(
+                    id: recordingId,
+                    timestamp: timestamp,
+                    fileName: fileName,
+                    transcription: text,
+                    duration: 0,
+                    status: .completed,
+                    progress: 1.0,
+                    sourceFileURL: nil
+                ))
+            } catch {
+                print("Error saving live recording: \(error)")
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
+        insertText(text)
+    }
+
     func insertText(_ text: String) {
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
@@ -225,6 +325,11 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = nil
         recorder.cancelRecording()
+        if liveModeActive {
+            streamingEngine.cancel()
+            liveModeActive = false
+            liveText = ""
+        }
     }
 
     @MainActor
