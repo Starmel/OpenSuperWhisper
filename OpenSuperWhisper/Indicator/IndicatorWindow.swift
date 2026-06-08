@@ -124,9 +124,8 @@ class IndicatorViewModel: ObservableObject {
             }
             Task.detached { [streamingEngine] in
                 do {
-                    if !streamingEngine.isModelLoaded {
-                        try streamingEngine.initialize()
-                    }
+                    // start() loads the model on its serial queue and buffers audio
+                    // meanwhile, so recording is instant and no lead-in is lost.
                     try streamingEngine.start(settings: settings)
                 } catch {
                     print("Live streaming start failed: \(error)")

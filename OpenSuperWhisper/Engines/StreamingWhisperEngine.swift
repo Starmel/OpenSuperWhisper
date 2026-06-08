@@ -55,33 +55,39 @@ final class StreamingWhisperEngine {
 
     // MARK: - Lifecycle
 
+    /// Optional preload so the model is hot before the first recording.
     func initialize() throws {
+        var thrown: Error?
+        whisperQueue.sync {
+            do { try self.loadContextIfNeeded() } catch { thrown = error }
+        }
+        if let thrown = thrown { throw thrown }
+    }
+
+    /// Loads the whisper context if not already loaded. Must run on whisperQueue.
+    private func loadContextIfNeeded() throws {
+        if context != nil { return }
         let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
         guard let modelPath = modelPath else {
             throw TranscriptionError.contextInitializationFailed
         }
         let params = WhisperContextParams()
-        context = MyWhisperContext.initFromFile(path: modelPath, params: params)
-        guard context != nil else {
+        guard let ctx = MyWhisperContext.initFromFile(path: modelPath, params: params) else {
             throw TranscriptionError.contextInitializationFailed
         }
+        context = ctx
     }
 
-    /// Begin capturing from the default input and transcribing live.
+    /// Begin capturing from the default input and transcribing live. Returns
+    /// immediately; the model may still be loading — captured audio is buffered on
+    /// the serial whisper queue, so no lead-in is lost.
     func start(settings: Settings) throws {
-        guard let context = context else {
-            throw TranscriptionError.contextInitializationFailed
-        }
         guard !isRunning else { return }
 
         self.settings = settings
         self.committedSegments = 0
         self.runningText = ""
         self.isCancelled = false
-
-        whisperQueue.sync {
-            context.resumableReset()
-        }
 
         let input = audioEngine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
@@ -92,6 +98,20 @@ final class StreamingWhisperEngine {
         }
         converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         self.converter = converter
+
+        // Queue the (possibly slow) model load + reset FIRST. Because whisperQueue is
+        // serial, audio appended by the tap below is only processed after this block
+        // runs — so recording can start instantly without dropping the lead-in.
+        whisperQueue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.loadContextIfNeeded()
+            } catch {
+                print("Streaming model load failed: \(error)")
+                return
+            }
+            self.context?.resumableReset()
+        }
 
         // ~100ms buffers. The tap runs on the audio render thread: do the cheap
         // format conversion here, then hand the samples to the whisper queue.
@@ -113,9 +133,11 @@ final class StreamingWhisperEngine {
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
 
-        guard let context = context, !isCancelled else { return finalText() }
+        guard !isCancelled else { return finalText() }
 
+        // Runs after all queued appends, so the whole recording is accounted for.
         whisperQueue.sync {
+            guard let context = self.context else { return }
             var params = self.makeParams()
             // finalize = true: decode the remaining <30s window (padded), like the last
             // iteration of whisper_full's internal loop.
