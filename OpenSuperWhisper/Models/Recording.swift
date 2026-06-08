@@ -74,6 +74,7 @@ class RecordingStore: ObservableObject {
 
     @Published private(set) var recordings: [Recording] = []
     private let dbQueue: DatabaseQueue
+    private var retentionTimer: Timer?
 
     private init() {
         let applicationSupport = FileManager.default.urls(
@@ -406,6 +407,31 @@ class RecordingStore: ObservableObject {
 
         NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
         return deleted.count
+    }
+
+    /// Interval between periodic age-based retention checks.
+    private static let retentionCheckInterval: TimeInterval = 60
+
+    /// Starts a periodic timer that re-applies the retention policy.
+    ///
+    /// This is needed for the age-based limit: recordings expire as real time
+    /// passes, even when no new recordings are added. The count-based limit does
+    /// not need this — it is enforced whenever recordings are added (when the
+    /// transcription queue drains). The periodic check therefore only does work
+    /// while the age policy is enabled.
+    func startRetentionScheduler() {
+        // Run once immediately so expired recordings are cleaned up on launch.
+        Task { await enforceRetentionPolicy() }
+
+        retentionTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: Self.retentionCheckInterval, repeats: true) { _ in
+            Task { @MainActor in
+                guard AppPreferences.shared.retentionMaxAgeEnabled else { return }
+                await RecordingStore.shared.enforceRetentionPolicy()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        retentionTimer = timer
     }
 
     private nonisolated func deleteExpiredRecordings(policy: RetentionPolicy) async throws -> [Recording] {

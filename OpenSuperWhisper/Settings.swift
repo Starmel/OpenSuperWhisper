@@ -1276,7 +1276,7 @@ struct SettingsView: View {
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
 
-                Text("Both limits can be active at the same time. Cleanup runs automatically when you change these settings and after each new transcription. Recordings that are still being processed are never deleted.")
+                Text("Both limits can be active at the same time. Cleanup runs automatically when you change these settings and after each new transcription, and the age limit is also re-checked periodically in the background. Recordings that are still being processed are never deleted.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
