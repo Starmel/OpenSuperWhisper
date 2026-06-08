@@ -12,8 +12,8 @@ enum RecordingState {
 
 @MainActor
 protocol IndicatorViewDelegate: AnyObject {
-    
-    func didFinishDecoding()
+
+    func didFinishDecoding(for viewModel: IndicatorViewModel)
 }
 
 @MainActor
@@ -22,10 +22,8 @@ class IndicatorViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
     @Published var isVisible = false
-    /// Running transcription text while live streaming is active.
-    @Published var liveText: String = ""
 
-    private let streamingEngine = StreamingWhisperEngine()
+    private let streamingEngine = StreamingWhisperEngine.shared
     private var liveModeActive = false
 
     /// Live streaming only applies to the whisper engine and when the user opted in.
@@ -88,17 +86,22 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                self?.delegate?.didFinishDecoding()
+                guard let self = self else { return }
+                self.delegate?.didFinishDecoding(for: self)
             }
         }
     }
     
     func startRecording() {
-        if isTranscriptionBusy {
+        // In live mode the streaming engine has its own serial queue and a separate
+        // context, so a new recording can start while a previous one is still
+        // finalizing/transcribing — work is queued, not blocked. The file path shares
+        // a single context, so it must still block to avoid concurrent whisper_full.
+        if !useLiveStreaming && isTranscriptionBusy {
             showBusyMessage()
             return
         }
-        
+
         if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
             state = .connecting
             stopBlinking()
@@ -106,7 +109,7 @@ class IndicatorViewModel: ObservableObject {
             state = .recording
             startBlinking()
         }
-        
+
         Task.detached { [recorder] in
             recorder.startRecording()
         }
@@ -116,12 +119,8 @@ class IndicatorViewModel: ObservableObject {
         // text instead of a fresh file-based pass.
         if useLiveStreaming {
             liveModeActive = true
-            liveText = ""
             let settings = Settings()
             streamingEngine.melNormMode = .window
-            streamingEngine.onTranscriptionUpdate = { [weak self] text in
-                Task { @MainActor in self?.liveText = text }
-            }
             Task.detached { [streamingEngine] in
                 do {
                     // start() loads the model on its serial queue and buffers audio
@@ -137,34 +136,34 @@ class IndicatorViewModel: ObservableObject {
     func startDecoding() {
         stopBlinking()
         
+        // Live mode never blocks: the streaming engine queues this finalize behind any
+        // previous one (serial queue), so recordings are finalized and inserted strictly
+        // in the order they were made.
+        if liveModeActive {
+            liveModeActive = false
+            state = .decoding
+            let tempURL = recorder.stopRecording()
+            Task { [weak self] in
+                guard let self = self else { return }
+                // Flush the trailing <30s window off the main actor. stop() blocks on the
+                // engine's serial queue, so it waits for the previous recording's finalize
+                // -> ordered transcription + ordered insertion.
+                let text = await Task.detached { [streamingEngine = self.streamingEngine] in
+                    streamingEngine.stop()
+                }.value
+                await self.persist(text: text, tempURL: tempURL)
+                self.delegate?.didFinishDecoding(for: self)
+            }
+            return
+        }
+
         if isTranscriptionBusy {
             recorder.cancelRecording()
-            if liveModeActive {
-                streamingEngine.cancel()
-                liveModeActive = false
-                liveText = ""
-            }
             showBusyMessage()
             return
         }
 
         state = .decoding
-
-        if liveModeActive {
-            liveModeActive = false
-            let tempURL = recorder.stopRecording()
-            Task { [weak self] in
-                guard let self = self else { return }
-                // Flush the trailing <30s window off the main actor.
-                let text = await Task.detached { [streamingEngine = self.streamingEngine] in
-                    streamingEngine.stop()
-                }.value
-                self.liveText = ""
-                await self.persist(text: text, tempURL: tempURL)
-                self.delegate?.didFinishDecoding()
-            }
-            return
-        }
 
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
@@ -214,7 +213,7 @@ class IndicatorViewModel: ObservableObject {
                 }
                 
                 await MainActor.run {
-                    self.delegate?.didFinishDecoding()
+                    self.delegate?.didFinishDecoding(for: self)
                 }
             }
         } else {
@@ -223,7 +222,7 @@ class IndicatorViewModel: ObservableObject {
             
             Task {
                 await MainActor.run {
-                    self.delegate?.didFinishDecoding()
+                    self.delegate?.didFinishDecoding(for: self)
                 }
             }
         }
@@ -327,7 +326,6 @@ class IndicatorViewModel: ObservableObject {
         if liveModeActive {
             streamingEngine.cancel()
             liveModeActive = false
-            liveText = ""
         }
     }
 

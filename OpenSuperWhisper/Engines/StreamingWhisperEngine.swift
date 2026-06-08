@@ -15,17 +15,22 @@ import AVFoundation
 ///  - `.window` is an envelope-follower AGC meant for live audio (prevents silence from
 ///    amplifying background noise). Recommended default for the live mic path.
 ///
-/// NOTE: this engine is self-contained and does not (yet) flow through the file-based
+/// NOTE: this engine is self-contained and does not flow through the file-based
 /// `TranscriptionEngine` protocol. It is driven directly by the recording layer.
+///
+/// It is a shared singleton with ONE serial whisper queue. That single queue is also
+/// what guarantees ordering across back-to-back recordings: appends, finalizes and resets
+/// all run in FIFO order, so recordings are transcribed (and therefore inserted) strictly
+/// in the order they were made. The model is loaded once.
 final class StreamingWhisperEngine {
+
+    static let shared = StreamingWhisperEngine()
+    private init() {}
 
     enum MelNormMode: Int32 {
         case global = 0
         case window = 1
     }
-
-    /// Called on the main actor with the running transcription text after each new block.
-    var onTranscriptionUpdate: ((String) -> Void)?
 
     /// Mel normalization for the live path. `.window` is recommended for mic input.
     var melNormMode: MelNormMode = .window
@@ -85,8 +90,6 @@ final class StreamingWhisperEngine {
         guard !isRunning else { return }
 
         self.settings = settings
-        self.committedSegments = 0
-        self.runningText = ""
         self.isCancelled = false
 
         let input = audioEngine.inputNode
@@ -100,8 +103,10 @@ final class StreamingWhisperEngine {
         self.converter = converter
 
         // Queue the (possibly slow) model load + reset FIRST. Because whisperQueue is
-        // serial, audio appended by the tap below is only processed after this block
-        // runs — so recording can start instantly without dropping the lead-in.
+        // serial, this runs only after any previous recording's finalize has completed
+        // (so the previous result is captured before we reset), and audio appended by
+        // the tap below is processed only after this block — recording starts instantly
+        // without dropping the lead-in, and ordering across recordings is preserved.
         whisperQueue.async { [weak self] in
             guard let self = self else { return }
             do {
@@ -110,6 +115,8 @@ final class StreamingWhisperEngine {
                 print("Streaming model load failed: \(error)")
                 return
             }
+            self.committedSegments = 0
+            self.runningText = ""
             self.context?.resumableReset()
         }
 
@@ -135,7 +142,10 @@ final class StreamingWhisperEngine {
 
         guard !isCancelled else { return finalText() }
 
-        // Runs after all queued appends, so the whole recording is accounted for.
+        // Runs after all queued appends, so the whole recording is accounted for. The
+        // final text is captured INSIDE the sync block so the next recording's reset
+        // (also queued) can't clear it first.
+        var captured = ""
         whisperQueue.sync {
             guard let context = self.context else { return }
             var params = self.makeParams()
@@ -145,8 +155,9 @@ final class StreamingWhisperEngine {
             if nNew > 0 {
                 self.appendNewSegments(from: context)
             }
+            captured = self.finalText()
         }
-        return finalText()
+        return captured.isEmpty ? "No speech detected in the audio" : captured
     }
 
     func cancel() {
@@ -219,11 +230,6 @@ final class StreamingWhisperEngine {
             runningText += segmentText
         }
         committedSegments = total
-
-        let snapshot = cleaned(runningText)
-        DispatchQueue.main.async { [weak self] in
-            self?.onTranscriptionUpdate?(snapshot)
-        }
     }
 
     private func finalText() -> String {
