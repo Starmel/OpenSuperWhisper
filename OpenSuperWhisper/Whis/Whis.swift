@@ -651,6 +651,72 @@ public class MyWhisperContext {
         return result == 0
     }
     
+    // MARK: - Resumable / Streaming
+    //
+    // Drives whisper's own seek loop incrementally so transcription can run while
+    // audio is still being captured. With mel_norm_mode == GLOBAL the output is
+    // identical to a single whisper_full() pass over the concatenated audio.
+    //
+    //     ctx.resumableReset()
+    //     while recording {
+    //         ctx.appendAudio(samples: pcm)                       // 16 kHz mono f32
+    //         let nNew = ctx.fullResumable(params: &p, finalize: false)
+    //         // ... read the nNew newly produced segments ...
+    //     }
+    //     _ = ctx.fullResumable(params: &p, finalize: true)       // flush the tail
+
+    /// Clears accumulated audio, seek, context and results. Call before a new stream.
+    public func resumableReset() {
+        guard let ctx = ctx else { return }
+        if let state = state {
+            whisper_resumable_reset_with_state(ctx, state)
+        } else {
+            whisper_resumable_reset(ctx)
+        }
+    }
+
+    /// Append PCM (16 kHz, mono, f32). The mel spectrogram is computed incrementally;
+    /// the raw samples are not retained. Returns true on success.
+    public func appendAudio(samples: [Float]) -> Bool {
+        guard let ctx = ctx else { return false }
+        let result = samples.withUnsafeBufferPointer { buffer -> Int32 in
+            if let state = state {
+                return whisper_append_audio_with_state(ctx, state, buffer.baseAddress, Int32(samples.count))
+            }
+            return whisper_append_audio(ctx, buffer.baseAddress, Int32(samples.count))
+        }
+        return result == 0
+    }
+
+    /// Decode complete 30s windows from the accumulated audio.
+    /// Returns the number of NEW segments (>= 0), or < 0 on error. When finalize is
+    /// false and less than 30s of undecoded audio is available, returns 0 ("need more").
+    public func fullResumable(params: inout whisper_full_params, finalize: Bool) -> Int {
+        guard let ctx = ctx else { return -1 }
+        let result: Int32
+        if let state = state {
+            result = whisper_full_resumable_with_state(ctx, state, params, finalize)
+        } else {
+            result = whisper_full_resumable(ctx, params, finalize)
+        }
+
+        // Free c-allocated strings duplicated by WhisperFullParams.toC(), as full() does.
+        if let suppressRegex = params.suppress_regex {
+            free(UnsafeMutablePointer(mutating: suppressRegex))
+        }
+        if let initialPrompt = params.initial_prompt {
+            free(UnsafeMutablePointer(mutating: initialPrompt))
+        }
+        if let language = params.language {
+            free(UnsafeMutablePointer(mutating: language))
+        }
+        if let baseAddress = params.grammar_rules {
+            free(UnsafeMutableRawPointer(mutating: baseAddress))
+        }
+
+        return Int(result)
+    }
+
     public func fullParallel(samples: [Float], params: inout WhisperFullParams, nProcessors: Int) -> Bool {
         guard let ctx = ctx else { return false }
         let cParams = params.toC()
