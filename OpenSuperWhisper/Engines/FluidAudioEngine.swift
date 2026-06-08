@@ -88,7 +88,11 @@ class FluidAudioEngine: TranscriptionEngine {
         if settings.shouldApplyAsianAutocorrect && !processedText.isEmpty {
             processedText = AutocorrectWrapper.format(processedText)
         }
-        
+
+        if settings.shouldApplyCustomDictionary {
+            processedText = CustomDictionary.apply(processedText, entries: settings.customDictionaryEntries)
+        }
+
         onProgressUpdate?(1.0)
         
         return processedText.isEmpty ? "No speech detected in the audio" : processedText
