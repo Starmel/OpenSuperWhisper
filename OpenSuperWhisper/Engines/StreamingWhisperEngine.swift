@@ -65,6 +65,9 @@ final class StreamingWhisperEngine {
     private var isRunning = false
     private var isCancelled = false
 
+    private let tapBufferSize: AVAudioFrameCount = 4800 // ~100ms
+    private var configObserver: NSObjectProtocol?
+
     var isModelLoaded: Bool { context != nil }
 
     // MARK: - Lifecycle
@@ -101,16 +104,6 @@ final class StreamingWhisperEngine {
         // isCancelled is read on the audio thread before dispatching; clear it up front.
         self.isCancelled = false
 
-        let input = audioEngine.inputNode
-        let inputFormat = input.inputFormat(forBus: 0)
-
-        guard let targetFormat = targetFormat,
-              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
-            throw TranscriptionError.audioConversionFailed
-        }
-        converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
-        self.converter = converter
-
         // Queue the (possibly slow) model load + per-recording state FIRST. Because
         // whisperQueue is serial, this runs only after any previous recording's finalize
         // has completed (so its result is captured and it has read ITS settings before we
@@ -131,16 +124,54 @@ final class StreamingWhisperEngine {
             self.context?.resumableReset()
         }
 
-        // ~100ms buffers. The tap runs on the audio render thread: do the cheap
-        // format conversion here, then hand the samples to the whisper queue.
-        let tapBufferSize: AVAudioFrameCount = 4800
-        input.installTap(onBus: 0, bufferSize: tapBufferSize, format: inputFormat) { [weak self] buffer, _ in
-            self?.handleIncoming(buffer: buffer)
+        try configureCapture()
+
+        // Rebuild the tap/converter if the input device or its format changes mid-stream
+        // (e.g. the mic is unplugged). The resumable state is kept, so the stream continues.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
         }
 
         audioEngine.prepare()
         try audioEngine.start()
         isRunning = true
+    }
+
+    /// (Re)installs the input tap and builds a converter matching the current input format.
+    /// The tap runs on the audio render thread: it does the cheap format conversion and
+    /// hands the samples to the whisper queue.
+    private func configureCapture() throws {
+        let input = audioEngine.inputNode
+        input.removeTap(onBus: 0)
+
+        let inputFormat = input.inputFormat(forBus: 0)
+        guard let targetFormat = targetFormat,
+              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            throw TranscriptionError.audioConversionFailed
+        }
+        converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
+        self.converter = converter
+
+        input.installTap(onBus: 0, bufferSize: tapBufferSize, format: inputFormat) { [weak self] buffer, _ in
+            self?.handleIncoming(buffer: buffer)
+        }
+    }
+
+    /// Input device/format changed (e.g. mic unplugged). Rebuild capture and resume.
+    private func handleConfigurationChange() {
+        guard isRunning else { return }
+        do {
+            try configureCapture()
+            if !audioEngine.isRunning {
+                try audioEngine.start()
+            }
+        } catch {
+            print("Streaming reconfigure after device change failed: \(error)")
+        }
     }
 
     /// Stop capturing, flush the trailing window, and return the final transcription.
@@ -149,6 +180,7 @@ final class StreamingWhisperEngine {
     func stop() -> FinalizeResult {
         let wasRunning = isRunning
         isRunning = false
+        removeConfigObserver()
         if wasRunning {
             audioEngine.inputNode.removeTap(onBus: 0)
             audioEngine.stop()
@@ -182,10 +214,18 @@ final class StreamingWhisperEngine {
 
     func cancel() {
         isCancelled = true
+        removeConfigObserver()
         if isRunning {
             isRunning = false
             audioEngine.inputNode.removeTap(onBus: 0)
             audioEngine.stop()
+        }
+    }
+
+    private func removeConfigObserver() {
+        if let obs = configObserver {
+            NotificationCenter.default.removeObserver(obs)
+            configObserver = nil
         }
     }
 
