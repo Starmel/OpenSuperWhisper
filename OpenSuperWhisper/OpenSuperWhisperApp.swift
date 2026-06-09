@@ -91,7 +91,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var languageSubmenu: NSMenu?
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
-    
+    private var isTerminating = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
 
         setupStatusBarItem()
@@ -106,6 +107,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         OpenSuperWhisperApp.startTranscriptionQueue()
         observeMicrophoneChanges()
+    }
+
+    /// Graceful quit: first let any in-flight transcription finish, then release the live
+    /// and file whisper contexts. Freeing them runs `whisper_free`, which frees the model's
+    /// Metal buffers and drains their macOS 15+ residency sets *before* the GPU device is
+    /// torn down — the app-side root-cause fix for the quit-time abort (libwhisper also
+    /// carries a defensive fix). Singletons are never deinit'd at process exit, so this has
+    /// to be done explicitly here.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isTerminating {
+            return .terminateNow
+        }
+        isTerminating = true
+
+        Task { @MainActor in
+            await TranscriptionQueue.shared.waitUntilIdle()
+            await StreamingWhisperEngine.shared.shutdown()
+            TranscriptionService.shared.releaseEngine()
+            NSApplication.shared.reply(toApplicationShouldTerminate: true)
+        }
+
+        return .terminateLater
     }
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {

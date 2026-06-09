@@ -274,6 +274,23 @@ final class StreamingWhisperEngine {
         }
     }
 
+    /// Graceful teardown for app quit: stop capture, then free the whisper context on the
+    /// serial whisper queue. Releasing the context runs `whisper_free`, which frees the
+    /// model's Metal buffers and drains their macOS 15+ residency sets before the GPU
+    /// device is torn down. The free is enqueued on `whisperQueue`, so it never races an
+    /// in-flight decode, and this never blocks the calling (main) thread.
+    func shutdown() async {
+        cancel()
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            whisperQueue.async { [weak self] in
+                self?.context = nil
+                self?.committedSegments = 0
+                self?.runningText = ""
+                cont.resume()
+            }
+        }
+    }
+
     private func removeConfigObserver() {
         if let obs = configObserver {
             NotificationCenter.default.removeObserver(obs)
