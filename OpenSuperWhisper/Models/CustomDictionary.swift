@@ -30,7 +30,12 @@ enum CustomDictionary {
         var result = text
         for entry in entries {
             let original = entry.original.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !original.isEmpty else { continue }
+            let replacement = entry.replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Skip incomplete rows. An empty `original` has nothing to match; an empty
+            // `replacement` would silently DELETE every occurrence of `original` from the
+            // output — a natural intermediate state when the user has filled "Heard" but not
+            // yet "Replace with". Both are treated as no-ops rather than data loss.
+            guard !original.isEmpty, !replacement.isEmpty else { continue }
 
             let escaped = NSRegularExpression.escapedPattern(for: original)
             // Only add a \b assertion where the adjacent character of the search
@@ -43,7 +48,9 @@ enum CustomDictionary {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
 
             let range = NSRange(result.startIndex..., in: result)
-            let template = NSRegularExpression.escapedTemplate(for: entry.replacement)
+            // Use the trimmed replacement (consistent with promptBoost) so a stray leading/
+            // trailing space in the rule doesn't produce double spaces in the output.
+            let template = NSRegularExpression.escapedTemplate(for: replacement)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: template)
         }
         return result
