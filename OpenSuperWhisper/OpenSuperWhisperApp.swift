@@ -48,6 +48,11 @@ struct OpenSuperWhisperApp: App {
     }
 
     init() {
+        // Line-buffer stdout so log output (Swift `print`) is flushed per line when stdout is
+        // redirected to a file (e.g. `open --stdout ...`). Otherwise stdout is block-buffered and
+        // withholds output until the buffer fills — and an abort() on quit never flushes it — which
+        // makes live/long logs look stalled or truncated even though transcription is fine.
+        setvbuf(stdout, nil, _IOLBF, 0)
         _ = ShortcutManager.shared
         _ = MicrophoneService.shared
         WhisperModelManager.shared.ensureDefaultModelPresent()
