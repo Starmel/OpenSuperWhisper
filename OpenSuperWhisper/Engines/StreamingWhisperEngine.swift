@@ -388,6 +388,15 @@ final class StreamingWhisperEngine {
         let verbose = AppPreferences.shared.debugMode
         params.printRealtime = verbose
         params.print_realtime = verbose
+        if verbose {
+            // Debug logging on: compute real segment timestamps so the realtime log shows valid
+            // [t0 --> t1] times instead of a bogus header built from an unset timestamp token.
+            // The stored transcription text still follows settings.showTimestamps; this only
+            // affects the log (and adds timestamp tokens to decoding while debugging).
+            params.noTimestamps = false
+        }
+        // Only print the [t0 --> t1] header when timestamps are actually computed.
+        params.printTimestamps = verbose || settings.showTimestamps
 
         params.melNormMode = melNormMode.rawValue
         params.melNormHalfLife = melNormHalfLife
