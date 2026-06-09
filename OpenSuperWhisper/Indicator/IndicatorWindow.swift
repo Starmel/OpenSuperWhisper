@@ -155,6 +155,7 @@ class IndicatorViewModel: ObservableObject {
 
                 switch result {
                 case .transcribed(let text):
+                    print("Live transcription result: \(text)")
                     await self.persist(text: text, tempURL: tempURL)
                 case .unavailable:
                     // Streaming never ran (no model / mic / start error): fall back to the

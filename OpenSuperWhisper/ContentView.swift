@@ -33,7 +33,17 @@ class ContentViewModel: ObservableObject {
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
-    
+
+    // Live, resumable transcription (shared engine with the hotkey indicator). When enabled,
+    // the main-window record button streams transcription during recording and only decodes the
+    // trailing window on stop, instead of a full file pass afterwards.
+    private let streamingEngine = StreamingWhisperEngine.shared
+    private var liveModeActive = false
+    /// Live streaming only applies to the whisper engine and when the user opted in.
+    private var useLiveStreaming: Bool {
+        AppPreferences.shared.liveStreamingEnabled && AppPreferences.shared.selectedEngine == "whisper"
+    }
+
     init() {
         recorder.$isConnecting
             .receive(on: RunLoop.main)
@@ -173,6 +183,21 @@ class ContentViewModel: ObservableObject {
         Task.detached { [recorder] in
             recorder.startRecording()
         }
+
+        // Live streaming runs in parallel to the file recorder (the WAV is still written for
+        // playback / re-transcription); on stop we use the streamed text instead of a file pass.
+        if useLiveStreaming {
+            liveModeActive = true
+            let settings = Settings()
+            streamingEngine.melNormMode = .window
+            Task.detached { [streamingEngine] in
+                do {
+                    try streamingEngine.start(settings: settings)
+                } catch {
+                    print("Live streaming start failed: \(error)")
+                }
+            }
+        }
     }
 
     func startDecoding() {
@@ -182,13 +207,33 @@ class ContentViewModel: ObservableObject {
         
         IndicatorWindowManager.shared.hide()
 
+        let wasLive = liveModeActive
+        liveModeActive = false
+
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
                 guard let self = self else { return }
 
                 do {
-                    print("start decoding...")
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let text: String
+                    if wasLive {
+                        // Same live/resumable path as the hotkey indicator: transcription is
+                        // streamed during recording, so only the trailing <30s window is decoded
+                        // on stop. Fall back to a file pass if streaming couldn't run.
+                        let result = await Task.detached { [streamingEngine = self.streamingEngine] in
+                            streamingEngine.stop()
+                        }.value
+                        switch result {
+                        case .transcribed(let liveText):
+                            text = liveText
+                        case .unavailable:
+                            print("Live streaming unavailable - falling back to file transcription")
+                            text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                        }
+                    } else {
+                        print("start decoding...")
+                        text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    }
 
                     // Capture the current recording duration
                     let duration = await MainActor.run { self.recordingDuration }

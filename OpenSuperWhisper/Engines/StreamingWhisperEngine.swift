@@ -381,10 +381,13 @@ final class StreamingWhisperEngine {
             params.beamSearchBeamSize = Int32(settings.beamSize)
         }
 
-        // The resumable API manages cross-window seek + context itself, so we don't
-        // print realtime or feed prompt tokens manually.
-        params.printRealtime = false
-        params.print_realtime = false
+        // The resumable API manages cross-window seek + context itself, so we never feed
+        // prompt tokens manually. Realtime segment printing (whisper -> stderr) is gated on
+        // the app's debug setting, matching the file path's verbosity when logging is on and
+        // staying quiet otherwise.
+        let verbose = AppPreferences.shared.debugMode
+        params.printRealtime = verbose
+        params.print_realtime = verbose
 
         params.melNormMode = melNormMode.rawValue
         params.melNormHalfLife = melNormHalfLife
