@@ -93,10 +93,11 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func startRecording() {
-        // In live mode the streaming engine has its own serial queue and a separate
-        // context, so a new recording can start while a previous one is still
-        // finalizing/transcribing — work is queued, not blocked. The file path shares
-        // a single context, so it must still block to avoid concurrent whisper_full.
+        // In live mode the streaming engine serializes back-to-back recordings on its own
+        // queue (guarded by engineLock): a new recording can start while a previous one is
+        // still finalizing — the new reset is queued strictly after the previous finalize,
+        // so work is ordered, not blocked. The file path shares a single context, so it must
+        // still block to avoid concurrent whisper_full.
         if !useLiveStreaming && isTranscriptionBusy {
             showBusyMessage()
             return

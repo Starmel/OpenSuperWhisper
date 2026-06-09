@@ -18,10 +18,12 @@ import AVFoundation
 /// NOTE: this engine is self-contained and does not flow through the file-based
 /// `TranscriptionEngine` protocol. It is driven directly by the recording layer.
 ///
-/// It is a shared singleton with ONE serial whisper queue. That single queue is also
-/// what guarantees ordering across back-to-back recordings: appends, finalizes and resets
-/// all run in FIFO order, so recordings are transcribed (and therefore inserted) strictly
-/// in the order they were made. The model is loaded once.
+/// It is a shared singleton with ONE whisper context and ONE serial whisper queue, so it
+/// handles a single recording at a time. Back-to-back recordings are serialized: the engine
+/// graph is guarded by `engineLock`, and a recording's finalize is enqueued (under that lock)
+/// before the next recording's reset is enqueued — so appends/finalizes/resets run in FIFO
+/// order and a recording's text is captured before the next one resets the context. The
+/// model is loaded once.
 final class StreamingWhisperEngine {
 
     static let shared = StreamingWhisperEngine()
@@ -80,6 +82,15 @@ final class StreamingWhisperEngine {
     private let tapBufferSize: AVAudioFrameCount = 4800 // ~100ms
     private var configObserver: NSObjectProtocol?
 
+    // Serializes all AVAudioEngine graph mutations (start/stop/tap/converter/observer) AND the
+    // whisperQueue submission of a recording's reset/finalize. This prevents an overlapping
+    // start (recording B) and stop (recording A) from (1) touching the shared engine
+    // concurrently — CoreAudio is not safe for that — or (2) reordering B's reset ahead of
+    // A's finalize on the whisper queue (which would clear A's text before it is captured).
+    // It is held only across the brief engine mutation / enqueue, NEVER across the whisper
+    // decode, so B's capture is not delayed by A's finalize.
+    private let engineLock = NSLock()
+
     var isModelLoaded: Bool { context != nil }
 
     // MARK: - Lifecycle
@@ -111,17 +122,20 @@ final class StreamingWhisperEngine {
     /// immediately; the model may still be loading — captured audio is buffered on
     /// the serial whisper queue, so no lead-in is lost.
     func start(settings: Settings) throws {
+        engineLock.lock()
+        defer { engineLock.unlock() }
+
         guard !isRunning else { return }
 
         // isCancelled is read on the audio thread before dispatching; clear it up front.
         self.isCancelled = false
 
-        // Queue the (possibly slow) model load + per-recording state FIRST. Because
-        // whisperQueue is serial, this runs only after any previous recording's finalize
-        // has completed (so its result is captured and it has read ITS settings before we
-        // overwrite them), and audio appended by the tap below is processed only after
-        // this block — recording starts instantly without dropping the lead-in, and
-        // ordering across overlapping recordings is preserved.
+        // Queue the (possibly slow) model load + per-recording reset FIRST, under engineLock.
+        // Because whisperQueue is serial and stop() enqueues the previous recording's finalize
+        // under this same lock, this reset is ordered strictly AFTER that finalize — so the
+        // previous recording's text is captured before we clear the context. Audio appended by
+        // the tap below is processed only after this block, so recording starts instantly
+        // without dropping the lead-in.
         whisperQueue.async { [weak self] in
             guard let self = self else { return }
             do {
@@ -136,26 +150,38 @@ final class StreamingWhisperEngine {
             self.context?.resumableReset()
         }
 
-        try configureCapture()
+        do {
+            try configureCapture()
 
-        // Rebuild the tap/converter if the input device or its format changes mid-stream
-        // (e.g. the mic is unplugged). The resumable state is kept, so the stream continues.
-        configObserver = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange,
-            object: audioEngine,
-            queue: .main
-        ) { [weak self] _ in
-            self?.handleConfigurationChange()
+            // Rebuild the tap/converter if the input device or its format changes mid-stream
+            // (e.g. the mic is unplugged). The resumable state is kept, so the stream continues.
+            configObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: audioEngine,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleConfigurationChange()
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+        } catch {
+            // Roll back partial setup so the shared engine is not left with a dangling tap or
+            // observer that would corrupt the next live session. isRunning stays false, so the
+            // caller's stop() returns .unavailable and the recording falls back to file
+            // transcription instead of being lost.
+            audioEngine.inputNode.removeTap(onBus: 0)
+            removeConfigObserver()
+            throw error
         }
 
-        audioEngine.prepare()
-        try audioEngine.start()
         isRunning = true
     }
 
     /// (Re)installs the input tap and builds a converter matching the current input format.
     /// The tap runs on the audio render thread: it does the cheap format conversion and
     /// hands the samples to the whisper queue.
+    /// MUST be called with `engineLock` held (callers: start() and handleConfigurationChange()).
     private func configureCapture() throws {
         let input = audioEngine.inputNode
         input.removeTap(onBus: 0)
@@ -175,6 +201,8 @@ final class StreamingWhisperEngine {
 
     /// Input device/format changed (e.g. mic unplugged). Rebuild capture and resume.
     private func handleConfigurationChange() {
+        engineLock.lock()
+        defer { engineLock.unlock() }
         guard isRunning else { return }
         do {
             try configureCapture()
@@ -190,6 +218,8 @@ final class StreamingWhisperEngine {
     /// Returns `.unavailable` if streaming never actually ran (start failed or the model
     /// could not be loaded), so the caller can fall back to a file-based pass.
     func stop() -> FinalizeResult {
+        engineLock.lock()
+
         let wasRunning = isRunning
         isRunning = false
         removeConfigObserver()
@@ -199,16 +229,20 @@ final class StreamingWhisperEngine {
         }
 
         // start() failed before the engine ever ran -> nothing was captured.
-        guard wasRunning else { return .unavailable }
-        if isCancelled { return .transcribed(finalText()) }
+        guard wasRunning else { engineLock.unlock(); return .unavailable }
+        if isCancelled { engineLock.unlock(); return .transcribed(finalText()) }
 
-        // Runs after all queued appends, so the whole recording is accounted for. The
-        // final text is captured INSIDE the sync block so the next recording's reset
-        // (also queued) can't clear it first.
+        // Enqueue the finalize WHILE STILL HOLDING engineLock so it is ordered ahead of any
+        // overlapping start()'s reset (which also enqueues under engineLock). The expensive
+        // decode runs on the serial queue AFTER the lock is released below, so the next
+        // recording's engine setup is not blocked by it. The final text is captured INSIDE
+        // the queued block, so the next recording's reset can't clear it first.
+        let done = DispatchSemaphore(value: 0)
         var captured = ""
         var hadContext = false
-        whisperQueue.sync {
-            guard let context = self.context else { return } // model load failed
+        whisperQueue.async { [weak self] in
+            defer { done.signal() }
+            guard let self = self, let context = self.context else { return } // model load failed
             hadContext = true
             var params = self.makeParams()
             // finalize = true: decode the remaining <30s window (padded), like the last
@@ -219,12 +253,18 @@ final class StreamingWhisperEngine {
             }
             captured = self.finalText()
         }
+        engineLock.unlock()
+
+        // Block this (detached) caller until the finalize finishes, without holding engineLock.
+        done.wait()
 
         guard hadContext else { return .unavailable }
         return .transcribed(captured)
     }
 
     func cancel() {
+        engineLock.lock()
+        defer { engineLock.unlock() }
         isCancelled = true
         removeConfigObserver()
         if isRunning {
