@@ -23,8 +23,8 @@ class FluidAudioEngine: TranscriptionEngine {
         
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
-        try await manager.initialize(models: models)
-        
+        try await manager.loadModels(models)
+
         asrManager = manager
         asrModels = models
     }
@@ -73,8 +73,11 @@ class FluidAudioEngine: TranscriptionEngine {
             progressTask = nil
         }
         
-        // Perform actual transcription - FluidAudio will emit progress automatically
-        let result = try await asrManager.transcribe(url)
+        // Perform actual transcription - FluidAudio will emit progress automatically.
+        // FluidAudio 0.15.x requires an explicit decoder state; a fresh one per call is
+        // correct for one-shot file transcription (no cross-call streaming continuity).
+        var decoderState = try TdtDecoderState()
+        let result = try await asrManager.transcribe(url, decoderState: &decoderState)
         
         guard !isCancelled else {
             throw CancellationError()
