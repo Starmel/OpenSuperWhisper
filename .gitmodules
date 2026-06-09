@@ -1,7 +1,7 @@
 [submodule "libwhisper/whisper.cpp"]
 	path = libwhisper/whisper.cpp
 	url = https://github.com/AlexCherrypi/whisper.cpp.git
-	branch = claude/live-transcription-async-quic3v
+	branch = master
 [submodule "asian-autocorrect"]
 	path = asian-autocorrect
 	url = https://github.com/huacnlee/autocorrect
