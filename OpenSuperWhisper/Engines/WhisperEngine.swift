@@ -160,7 +160,15 @@ class WhisperEngine: TranscriptionEngine {
         
         params.printRealtime = true
         params.print_realtime = true
-        
+        // When debug logging is on, compute real timestamps so the realtime log shows valid
+        // [t0 --> t1] times; otherwise only print the header when the user enabled timestamps
+        // (a header without computed timestamps renders as a bogus negative time).
+        let verboseLog = AppPreferences.shared.debugMode
+        if verboseLog {
+            params.noTimestamps = false
+        }
+        params.printTimestamps = verboseLog || settings.showTimestamps
+
         var cParams = params.toC()
         cParams.abort_callback = abortCallback
         

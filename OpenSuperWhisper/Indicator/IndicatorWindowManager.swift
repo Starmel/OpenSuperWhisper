@@ -100,7 +100,14 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         }
     }
     
-    func didFinishDecoding() {
-        hide()
+    func didFinishDecoding(for vm: IndicatorViewModel) {
+        // Only hide when the CURRENT session finishes. If a newer recording has already
+        // taken over the indicator (overshadow), a stale session finishing in the
+        // background must not hide it — just clean the stale one up.
+        if viewModel === vm {
+            hide()
+        } else {
+            vm.cleanup()
+        }
     }
 }

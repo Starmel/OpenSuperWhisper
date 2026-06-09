@@ -27,11 +27,18 @@ class TranscriptionService: ObservableObject {
         currentEngine?.cancelTranscription()
         transcriptionTask?.cancel()
         transcriptionTask = nil
-        
+
         isTranscribing = false
         currentSegment = ""
         progress = 0.0
         isCancelled = false
+    }
+
+    /// Releases the active engine so its whisper context (if any) is deallocated — and thus
+    /// `whisper_free`'d — which frees the model's Metal buffers and drains their macOS 15+
+    /// residency sets. Call only when no transcription is in flight (e.g. on app quit).
+    func releaseEngine() {
+        currentEngine = nil
     }
     
     private func loadEngine() {

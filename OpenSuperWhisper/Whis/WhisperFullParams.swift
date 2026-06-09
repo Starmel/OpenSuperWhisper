@@ -59,6 +59,12 @@ public struct WhisperFullParams {
     public var iStartRule: Int = 0
     public var grammarPenalty: Float = 0.0
 
+    // Log-mel normalization (used by the resumable/streaming API; ignored by whisper_full).
+    // 0 = WHISPER_MEL_NORM_GLOBAL (batch-identical, default), 1 = WHISPER_MEL_NORM_WINDOW.
+    public var melNormMode: Int32 = 0
+    public var melNormHalfLife: Float = 0.0
+    public var melNormMaxDrop: Float = 0.0
+
     public init() {}
 
     mutating func toC() -> whisper_full_params {
@@ -158,6 +164,10 @@ public struct WhisperFullParams {
 
         cParams.i_start_rule = Int(iStartRule)
         cParams.grammar_penalty = grammarPenalty
+
+        cParams.mel_norm_mode = melNormMode
+        cParams.mel_norm_half_life = melNormHalfLife
+        cParams.mel_norm_max_drop = melNormMaxDrop
 
         return cParams
     }

@@ -12,8 +12,8 @@ enum RecordingState {
 
 @MainActor
 protocol IndicatorViewDelegate: AnyObject {
-    
-    func didFinishDecoding()
+
+    func didFinishDecoding(for viewModel: IndicatorViewModel)
 }
 
 @MainActor
@@ -22,7 +22,15 @@ class IndicatorViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
     @Published var isVisible = false
-    
+
+    private let streamingEngine = StreamingWhisperEngine.shared
+    private var liveModeActive = false
+
+    /// Live streaming only applies to the whisper engine and when the user opted in.
+    private var useLiveStreaming: Bool {
+        AppPreferences.shared.liveStreamingEnabled && AppPreferences.shared.selectedEngine == "whisper"
+    }
+
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
@@ -58,6 +66,14 @@ class IndicatorViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Warm up the streaming model so the tap can start immediately on record
+        // (otherwise model load would drop the lead-in of the live transcription).
+        if useLiveStreaming {
+            Task.detached { [streamingEngine] in
+                try? streamingEngine.initialize()
+            }
+        }
     }
     
     var isTranscriptionBusy: Bool {
@@ -70,17 +86,23 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                self?.delegate?.didFinishDecoding()
+                guard let self = self else { return }
+                self.delegate?.didFinishDecoding(for: self)
             }
         }
     }
     
     func startRecording() {
-        if isTranscriptionBusy {
+        // In live mode the streaming engine serializes back-to-back recordings on its own
+        // queue (guarded by engineLock): a new recording can start while a previous one is
+        // still finalizing — the new reset is queued strictly after the previous finalize,
+        // so work is ordered, not blocked. The file path shares a single context, so it must
+        // still block to avoid concurrent whisper_full.
+        if !useLiveStreaming && isTranscriptionBusy {
             showBusyMessage()
             return
         }
-        
+
         if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
             state = .connecting
             stopBlinking()
@@ -88,23 +110,71 @@ class IndicatorViewModel: ObservableObject {
             state = .recording
             startBlinking()
         }
-        
+
         Task.detached { [recorder] in
             recorder.startRecording()
         }
+
+        // Live streaming runs in parallel to the file recorder: the WAV is still
+        // written (playback / re-transcribe stay intact); on stop we use the live
+        // text instead of a fresh file-based pass.
+        if useLiveStreaming {
+            liveModeActive = true
+            let settings = Settings()
+            streamingEngine.melNormMode = .window
+            Task.detached { [streamingEngine] in
+                do {
+                    // start() loads the model on its serial queue and buffers audio
+                    // meanwhile, so recording is instant and no lead-in is lost.
+                    try streamingEngine.start(settings: settings)
+                } catch {
+                    print("Live streaming start failed: \(error)")
+                }
+            }
+        }
     }
-    
+
     func startDecoding() {
         stopBlinking()
         
+        // Live mode never blocks: the streaming engine queues this finalize behind any
+        // previous one (serial queue), so recordings are finalized and inserted strictly
+        // in the order they were made.
+        if liveModeActive {
+            liveModeActive = false
+            state = .decoding
+            let tempURL = recorder.stopRecording()
+            Task { [weak self] in
+                guard let self = self else { return }
+                // Flush the trailing <30s window off the main actor. stop() blocks on the
+                // engine's serial queue, so it waits for the previous recording's finalize
+                // -> ordered transcription + ordered insertion.
+                let result = await Task.detached { [streamingEngine = self.streamingEngine] in
+                    streamingEngine.stop()
+                }.value
+
+                switch result {
+                case .transcribed(let text):
+                    print("Live transcription result: \(text)")
+                    await self.persist(text: text, tempURL: tempURL)
+                case .unavailable:
+                    // Streaming never ran (no model / mic / start error): fall back to the
+                    // file-based pass so the recording is never lost.
+                    await self.transcribeFileFallback(tempURL: tempURL)
+                }
+                self.delegate?.didFinishDecoding(for: self)
+            }
+            return
+        }
+
         if isTranscriptionBusy {
             recorder.cancelRecording()
             showBusyMessage()
             return
         }
-        
+
         state = .decoding
-        
+
         if let tempURL = recorder.stopRecording() {
             Task { [weak self] in
                 guard let self = self else { return }
@@ -153,7 +223,7 @@ class IndicatorViewModel: ObservableObject {
                 }
                 
                 await MainActor.run {
-                    self.delegate?.didFinishDecoding()
+                    self.delegate?.didFinishDecoding(for: self)
                 }
             }
         } else {
@@ -162,12 +232,64 @@ class IndicatorViewModel: ObservableObject {
             
             Task {
                 await MainActor.run {
-                    self.delegate?.didFinishDecoding()
+                    self.delegate?.didFinishDecoding(for: self)
                 }
             }
         }
     }
     
+    /// Fallback when live streaming could not run: transcribe the recorded WAV with the
+    /// regular file-based engine so the recording is never lost.
+    private func transcribeFileFallback(tempURL: URL?) async {
+        guard let tempURL = tempURL else { return }
+        do {
+            print("Live streaming unavailable - falling back to file transcription")
+            let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+            await persist(text: text, tempURL: tempURL)
+        } catch {
+            print("Fallback transcription failed: \(error)")
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+    }
+
+    /// Saves the transcription (moving the recorded WAV to its final location when present)
+    /// and inserts/copies the text. Used by the live streaming path.
+    private func persist(text: String, tempURL: URL?) async {
+        if let tempURL = tempURL {
+            let timestamp = Date()
+            let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+            let recordingId = UUID()
+            let finalURL = Recording(
+                id: recordingId,
+                timestamp: timestamp,
+                fileName: fileName,
+                transcription: text,
+                duration: 0,
+                status: .completed,
+                progress: 1.0,
+                sourceFileURL: nil
+            ).url
+
+            do {
+                try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                self.recordingStore.addRecording(Recording(
+                    id: recordingId,
+                    timestamp: timestamp,
+                    fileName: fileName,
+                    transcription: text,
+                    duration: 0,
+                    status: .completed,
+                    progress: 1.0,
+                    sourceFileURL: nil
+                ))
+            } catch {
+                print("Error saving live recording: \(error)")
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
+        insertText(text)
+    }
+
     func insertText(_ text: String) {
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
@@ -225,6 +347,10 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = nil
         recorder.cancelRecording()
+        if liveModeActive {
+            streamingEngine.cancel()
+            liveModeActive = false
+        }
     }
 
     @MainActor

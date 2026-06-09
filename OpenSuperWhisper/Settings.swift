@@ -110,6 +110,12 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.debugMode = debugMode
         }
     }
+
+    @Published var liveStreamingEnabled: Bool {
+        didSet {
+            AppPreferences.shared.liveStreamingEnabled = liveStreamingEnabled
+        }
+    }
     
     @Published var playSoundOnRecordStart: Bool {
         didSet {
@@ -168,6 +174,7 @@ class SettingsViewModel: ObservableObject {
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
+        self.liveStreamingEnabled = prefs.liveStreamingEnabled
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
@@ -366,7 +373,7 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 let manager = AsrManager(config: .default)
-                try await manager.initialize(models: models)
+                try await manager.loadModels(models)
                 
                 await MainActor.run {
                     if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
@@ -887,6 +894,21 @@ struct SettingsView: View {
                             Toggle("", isOn: $viewModel.addSpaceAfterSentence)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Live Streaming (Whisper)")
+                                    .font(.subheadline)
+                                Text("Transcribe while recording for a near-instant result on stop")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.liveStreamingEnabled)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .disabled(viewModel.selectedEngine != "whisper")
                         }
                     }
                 }

@@ -71,6 +71,14 @@ class TranscriptionQueue: ObservableObject {
         }
     }
 
+    /// Awaits until the queue has drained every pending recording. Used for a graceful
+    /// shutdown so in-flight transcriptions finish instead of being interrupted.
+    func waitUntilIdle() async {
+        while let task = processingTask {
+            await task.value
+        }
+    }
+
     private func cleanupMissingFiles() async {
         let pendingRecordings = recordingStore.getPendingRecordings()
 
