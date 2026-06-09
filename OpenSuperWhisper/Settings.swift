@@ -189,7 +189,15 @@ class SettingsViewModel: ObservableObject {
 
     @Published var retentionMaxCount: Int {
         didSet {
-            AppPreferences.shared.retentionMaxCount = max(1, retentionMaxCount)
+            // Clamp the published property itself (not only the stored value) so the UI and
+            // the persisted/enforced value can never diverge. The re-assignment re-enters
+            // didSet once with an already-clamped value, which then falls through.
+            let clamped = max(1, retentionMaxCount)
+            if clamped != retentionMaxCount {
+                retentionMaxCount = clamped
+                return
+            }
+            AppPreferences.shared.retentionMaxCount = clamped
             enforceRetention()
         }
     }
@@ -203,7 +211,14 @@ class SettingsViewModel: ObservableObject {
 
     @Published var retentionMaxAgeValue: Int {
         didSet {
-            AppPreferences.shared.retentionMaxAgeValue = max(1, retentionMaxAgeValue)
+            // Clamp the published property itself (see retentionMaxCount) so the UI and the
+            // persisted/enforced value can never diverge.
+            let clamped = max(1, retentionMaxAgeValue)
+            if clamped != retentionMaxAgeValue {
+                retentionMaxAgeValue = clamped
+                return
+            }
+            AppPreferences.shared.retentionMaxAgeValue = clamped
             enforceRetention()
         }
     }
@@ -215,11 +230,20 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    /// Applies the retention policy immediately so the user sees the effect of
-    /// toggling a switch or changing a limit without waiting for the next recording.
+    private var retentionEnforceTimer: Timer?
+
+    /// Applies the retention policy after a short debounce so the user sees the effect of
+    /// toggling a switch or changing a limit, without the data-loss footgun of enforcing on
+    /// every keystroke: the count/age TextFields use `format: .number`, whose binding commits
+    /// (and fires didSet) on each parsed value, so typing "500" passes through 5 and 50.
+    /// Enforcing immediately would permanently delete recordings at those intermediate values.
+    /// Debouncing coalesces a burst of edits into a single enforcement at the final value.
     private func enforceRetention() {
-        Task { @MainActor in
-            await RecordingStore.shared.enforceRetentionPolicy()
+        retentionEnforceTimer?.invalidate()
+        retentionEnforceTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
+            Task { @MainActor in
+                await RecordingStore.shared.enforceRetentionPolicy()
+            }
         }
     }
 
