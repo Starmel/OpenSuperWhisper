@@ -117,4 +117,23 @@ final class AppPreferences {
 
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
+
+    // Retention / storage policy
+    // Limit the number of stored recordings & transcriptions.
+    @UserDefault(key: "retentionMaxCountEnabled", defaultValue: false)
+    var retentionMaxCountEnabled: Bool
+
+    @UserDefault(key: "retentionMaxCount", defaultValue: 100)
+    var retentionMaxCount: Int
+
+    // Delete recordings & transcriptions older than a given age.
+    @UserDefault(key: "retentionMaxAgeEnabled", defaultValue: false)
+    var retentionMaxAgeEnabled: Bool
+
+    @UserDefault(key: "retentionMaxAgeValue", defaultValue: 30)
+    var retentionMaxAgeValue: Int
+
+    // One of RetentionUnit.rawValue: "minutes" | "hours" | "days"
+    @UserDefault(key: "retentionMaxAgeUnit", defaultValue: "days")
+    var retentionMaxAgeUnit: String
 }

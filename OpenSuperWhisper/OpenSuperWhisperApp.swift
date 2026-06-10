@@ -60,6 +60,12 @@ extension OpenSuperWhisperApp {
             TranscriptionQueue.shared.startProcessingQueue()
         }
     }
+
+    static func startRetentionScheduler() {
+        Task { @MainActor in
+            RecordingStore.shared.startRetentionScheduler()
+        }
+    }
 }
 
 class AppState: ObservableObject {
@@ -100,6 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         OpenSuperWhisperApp.startTranscriptionQueue()
+        OpenSuperWhisperApp.startRetentionScheduler()
         observeMicrophoneChanges()
     }
 

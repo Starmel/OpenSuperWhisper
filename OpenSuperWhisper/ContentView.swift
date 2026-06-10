@@ -29,6 +29,9 @@ class ContentViewModel: ObservableObject {
     private var currentPage = 0
     private let pageSize = 100
     private var currentSearchQuery = ""
+    /// Bumped on every full reload so an in-flight load started before a reload
+    /// (e.g. just before a retention prune) discards its now-stale results.
+    private var loadGeneration = 0
     private var blinkTimer: Timer?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
@@ -67,10 +70,20 @@ class ContentViewModel: ObservableObject {
     }
     
     func loadInitialData() {
-        currentSearchQuery = ""
+        startFreshLoad(query: "")
+    }
+
+    /// Resets paging and starts a fresh page-0 load. Bumps the load generation so
+    /// any in-flight load discards its stale results instead of overwriting the
+    /// list, and clears `isLoadingMore` so the reload is never dropped by the
+    /// in-flight guard.
+    private func startFreshLoad(query: String) {
+        currentSearchQuery = query
         currentPage = 0
         canLoadMore = true
         recordings = []
+        loadGeneration += 1
+        isLoadingMore = false
         loadMore()
     }
 
@@ -79,6 +92,7 @@ class ContentViewModel: ObservableObject {
         isLoadingMore = true
         
         // Capture current state for async task
+        let generation = loadGeneration
         let page = currentPage
         let limit = pageSize
         let query = currentSearchQuery
@@ -95,15 +109,12 @@ class ContentViewModel: ObservableObject {
             
             
             await MainActor.run {
-                defer {
-                    self.isLoadingMore = false
-                }
-                
-                // Ensure we are still consistent with the request (basic check)
-                guard self.currentSearchQuery == query else { 
-                    return 
-                }
-                
+                // Discard results once a newer reload (e.g. after a retention
+                // prune) has superseded this load, so stale rows never overwrite
+                // the freshly reloaded list.
+                guard generation == self.loadGeneration else { return }
+                self.isLoadingMore = false
+
                 if page == 0 {
                     self.recordings = newRecordings
                 } else {
@@ -120,11 +131,7 @@ class ContentViewModel: ObservableObject {
     }
     
     func search(query: String) {
-        currentSearchQuery = query
-        currentPage = 0
-        canLoadMore = true
-        recordings = []
-        loadMore()
+        startFreshLoad(query: query)
     }
     
     func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?) {
