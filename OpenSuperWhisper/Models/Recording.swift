@@ -187,6 +187,10 @@ class RecordingStore: ObservableObject {
                 await MainActor.run {
                     NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
                 }
+                // Keep the store within the retention limit right after a new
+                // recording lands, so the count behaves like a fixed-size buffer
+                // instead of overshooting until the next periodic check.
+                await enforceRetentionPolicy()
             } catch {
                 print("Failed to add recording: \(error)")
             }
