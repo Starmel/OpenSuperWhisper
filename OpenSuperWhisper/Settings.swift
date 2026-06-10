@@ -1089,10 +1089,10 @@ struct SettingsView: View {
 
                     ForEach($viewModel.customDictionaryEntries) { $entry in
                         HStack(spacing: 8) {
-                            TextField("git hub", text: $entry.original)
+                            TextField("Heard word", text: $entry.original)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: .infinity)
-                            TextField("GitHub", text: $entry.replacement)
+                            TextField("Preferred spelling", text: $entry.replacement)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: .infinity)
                             Button(action: {
