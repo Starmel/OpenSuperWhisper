@@ -41,6 +41,84 @@ final class WhisperEngineMultiChannelTests: XCTestCase {
     }
 }
 
+final class CustomDictionaryTests: XCTestCase {
+
+    private func entry(_ original: String, _ replacement: String) -> CustomDictionaryEntry {
+        CustomDictionaryEntry(original: original, replacement: replacement)
+    }
+
+    func testApply_replacesWholeWordCaseInsensitively() {
+        let result = CustomDictionary.apply(
+            "I pushed it to git hub yesterday.",
+            entries: [entry("git hub", "GitHub")]
+        )
+        XCTAssertEqual(result, "I pushed it to GitHub yesterday.")
+    }
+
+    func testApply_doesNotReplaceInsideLargerWord() {
+        let result = CustomDictionary.apply(
+            "The category was clear.",
+            entries: [entry("cat", "dog")]
+        )
+        XCTAssertEqual(result, "The category was clear.")
+    }
+
+    func testApply_matchesRegardlessOfInputCasing() {
+        let result = CustomDictionary.apply(
+            "GIT HUB and Git Hub and git hub",
+            entries: [entry("git hub", "GitHub")]
+        )
+        XCTAssertEqual(result, "GitHub and GitHub and GitHub")
+    }
+
+    func testApply_handlesTermsWithPunctuation() {
+        let result = CustomDictionary.apply(
+            "I prefer c plus plus.",
+            entries: [entry("c plus plus", "C++")]
+        )
+        XCTAssertEqual(result, "I prefer C++.")
+    }
+
+    func testApply_treatsReplacementAsLiteralText() {
+        // Replacement contains regex-significant characters; must not be interpreted.
+        let result = CustomDictionary.apply(
+            "ping the channel",
+            entries: [entry("channel", "#general $1")]
+        )
+        XCTAssertEqual(result, "ping the #general $1")
+    }
+
+    func testApply_appliesMultipleEntriesInOrder() {
+        let result = CustomDictionary.apply(
+            "open super whisper uses whisper cpp",
+            entries: [
+                entry("open super whisper", "OpenSuperWhisper"),
+                entry("whisper cpp", "whisper.cpp")
+            ]
+        )
+        XCTAssertEqual(result, "OpenSuperWhisper uses whisper.cpp")
+    }
+
+    func testApply_ignoresEmptyOriginalAndIsNoOpWithoutEntries() {
+        XCTAssertEqual(CustomDictionary.apply("hello", entries: []), "hello")
+        XCTAssertEqual(
+            CustomDictionary.apply("hello", entries: [entry("   ", "x")]),
+            "hello"
+        )
+        XCTAssertEqual(CustomDictionary.apply("", entries: [entry("a", "b")]), "")
+    }
+
+    func testPromptBoost_joinsUniqueReplacements() {
+        let boost = CustomDictionary.promptBoost(entries: [
+            entry("git hub", "GitHub"),
+            entry("g hub", "GitHub"),
+            entry("open super whisper", "OpenSuperWhisper"),
+            entry("noise", "  ")
+        ])
+        XCTAssertEqual(boost, "GitHub, OpenSuperWhisper")
+    }
+}
+
 final class MicrophoneInventoryTests: XCTestCase {
     
     func testPrintConnectedMicrophones() throws {
