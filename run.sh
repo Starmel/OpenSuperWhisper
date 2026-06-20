@@ -44,6 +44,9 @@ fi
 # Check if build output contains BUILD FAILED or if the command failed
 if [[ $? -eq 0 ]] && [[ ! "$BUILD_OUTPUT" =~ "BUILD FAILED" ]]; then
     echo "Building successful!"
+    # Re-sign with a stable identity so macOS keeps granted TCC permissions
+    # across rebuilds (no-op / ad-hoc fallback when no identity is available).
+    "$(dirname "$0")/Scripts/dev-codesign.sh" "./Build/Build/Products/Debug/OpenSuperWhisper.app" || true
     if $JUST_BUILD; then
         exit 0
     fi

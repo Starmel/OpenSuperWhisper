@@ -122,3 +122,5 @@ default.profraw
 .cursorrules
 OpenSuperWhisper.dmg.sha256
 dev_config.json
+# Per-machine dev code-signing identity (used by Scripts/dev-codesign.sh)
+.osw-codesign-identity
