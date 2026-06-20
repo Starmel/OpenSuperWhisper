@@ -140,3 +140,22 @@ interrompre (mixing) via réécriture AVAudioEngine, chevauche #147. → #126 ga
 ### À fermer / clarifier
 - [ ] #8 (background app — marqué fait au README) → vérifier puis fermer.
 - [ ] #20 (todo méta), #71 (doc build) → réponse/fermeture.
+
+## Branches WIP amont (copiées dans le fork) — travail inachevé du proprio à inspecter
+Le proprio amont avait des branches non mergées, potentiellement en avance sur `master` :
+
+| Branche | Probablement liée à |
+|---|---|
+| `SenseVoice-demo` | issue #145 (modèle SenseVoice) |
+| `moonshine` | issue #111 (Moonshine) |
+| `fix_full_screen` | issue #52 (dialogue invisible plein écran) |
+| `multi-input-support` | issue #57 (choisir périphérique d'entrée) |
+| `space-after-punc` | issue #107 (espace manquant entre phrases) |
+| `feat/live-text-insertion` | streaming / insertion live (lié #147) |
+| `parakeet` | moteur Parakeet (lié #142/#149) |
+| `robust-audio` | robustesse audio (lié #78/#84) |
+| `fix_mac_mini_build` / `improve_file_transcribe` / `micro` / `update_release` | build / transcription fichier / release |
+
+→ Avant d'implémenter une issue ci-dessus, **diff la branche amont correspondante** (`git diff master..upstream/<branche>`)
+pour éviter de refaire du travail déjà amorcé. (Ces refs sont sur `origin` car le fork a tout copié ;
+elles existent aussi sur `upstream`.)
