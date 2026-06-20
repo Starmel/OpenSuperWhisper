@@ -1,5 +1,10 @@
 # OpenSuperWhisper
 
+> **Community fork maintained by [My-Monkey](https://my-monkey.fr).** A maintained successor to
+> [`Starmel/OpenSuperWhisper`](https://github.com/Starmel/OpenSuperWhisper) (MIT), revived to land the
+> backlog of pending contributions and keep the project moving. Thanks to the original author and every
+> contributor — merged work credits its original authors.
+
 OpenSuperWhisper is a macOS application that provides real-time audio transcription using the Whisper model. It offers a seamless way to record and transcribe audio with customizable settings and keyboard shortcuts.
 
 <p align="center">
