@@ -182,6 +182,9 @@ class SettingsViewModel: ObservableObject {
     @Published var aiPostProcessingEnabled: Bool {
         didSet {
             AppPreferences.shared.aiPostProcessingEnabled = aiPostProcessingEnabled
+            // Surface connectivity right away when the user turns it on, so they aren't left
+            // wondering why their cleanup silently does nothing when Ollama isn't running.
+            if aiPostProcessingEnabled { testOllamaConnection() }
         }
     }
 
@@ -200,6 +203,18 @@ class SettingsViewModel: ObservableObject {
     @Published var aiPostProcessingPrompt: String {
         didSet {
             AppPreferences.shared.aiPostProcessingPrompt = aiPostProcessingPrompt
+        }
+    }
+
+    /// Live result of the last Ollama connectivity probe, shown next to the AI-cleanup fields.
+    @Published var ollamaStatus: OllamaStatus = .unknown
+
+    func testOllamaConnection() {
+        ollamaStatus = .checking
+        let endpoint = aiOllamaEndpoint
+        let model = aiOllamaModel
+        Task { @MainActor in
+            self.ollamaStatus = await LLMPostProcessor.checkConnection(endpoint: endpoint, model: model)
         }
     }
 
@@ -1270,7 +1285,42 @@ struct SettingsView: View {
                             TextField("http://localhost:11434", text: $viewModel.aiOllamaEndpoint)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 220)
+                            Button {
+                                viewModel.testOllamaConnection()
+                            } label: {
+                                Image(systemName: "bolt.horizontal.circle")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Test the connection to Ollama")
                         }
+
+                        HStack(spacing: 8) {
+                            Button("Test connection") { viewModel.testOllamaConnection() }
+                                .controlSize(.small)
+
+                            switch viewModel.ollamaStatus {
+                            case .unknown:
+                                EmptyView()
+                            case .checking:
+                                ProgressView().controlSize(.small)
+                                Text("Checking…").font(.caption).foregroundColor(.secondary)
+                            case .ok:
+                                Label("Connected — model ready", systemImage: "checkmark.circle.fill")
+                                    .font(.caption).foregroundColor(.green)
+                            case .modelMissing(let model):
+                                Label("Reachable, but “\(model)” isn't pulled — run: ollama pull \(model)",
+                                      systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption).foregroundColor(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            case .unreachable:
+                                Label("Can't reach Ollama — is it running? (ollama serve)",
+                                      systemImage: "xmark.circle.fill")
+                                    .font(.caption).foregroundColor(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                        }
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Instruction")
                                 .font(.subheadline)
