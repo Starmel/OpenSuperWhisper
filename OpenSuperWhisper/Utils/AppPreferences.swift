@@ -142,4 +142,9 @@ final class AppPreferences {
     /// "copied — press ⌘V" notice instead of letting the paste silently go nowhere.
     @UserDefault(key: "notifyWhenNoPasteTarget", defaultValue: true)
     var notifyWhenNoPasteTarget: Bool
+
+    /// Pause currently-playing media while recording, then resume. Opt-in (default
+    /// off): it uses the private MediaRemote API and changes system playback.
+    @UserDefault(key: "pauseMediaOnRecord", defaultValue: false)
+    var pauseMediaOnRecord: Bool
 }

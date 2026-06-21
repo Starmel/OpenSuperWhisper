@@ -134,28 +134,32 @@ class AudioRecorder: NSObject, ObservableObject {
             _ = stopRecording()
         }
         
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.pauseMedia()
+        }
+
         if AppPreferences.shared.playSoundOnRecordStart {
             playNotificationSound()
         }
-        
+
         let timestamp = Int(Date().timeIntervalSince1970)
         let filename = "\(timestamp).wav"
         let fileURL = temporaryDirectory.appendingPathComponent(filename)
         currentRecordingURL = fileURL
-        
+
         print("start record file to \(fileURL)")
-        
+
         #if os(macOS)
         if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
             _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
             print("Set system default input to: \(activeMic.displayName)")
-            
+
             if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
                 recordingDeviceID = deviceID
             }
         }
         #endif
-        
+
         let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
         updateRecordingState(isRecording: false, isConnecting: requiresConnection)
         startRecordingWithRecorder(fileURL: fileURL, monitorConnection: requiresConnection)
@@ -202,6 +206,10 @@ class AudioRecorder: NSObject, ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.primeAudioHardware()  // re-prime so the next recording starts instantly too
         }
+
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.resumeMedia()
+        }
         
         if let url = currentRecordingURL,
            let duration = try? AVAudioPlayer(contentsOf: url).duration,
@@ -221,6 +229,10 @@ class AudioRecorder: NSObject, ObservableObject {
         audioRecorder?.stop()
         updateRecordingState(isRecording: false, isConnecting: false)
         stopConnectionMonitoring()
+
+        if AppPreferences.shared.pauseMediaOnRecord {
+            MediaPlaybackController.shared.resumeMedia()
+        }
         
         if let url = currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
