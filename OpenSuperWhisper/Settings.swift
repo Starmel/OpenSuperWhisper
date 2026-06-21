@@ -1450,7 +1450,14 @@ struct FluidAudioModelDownloadItemView: View {
     var isSelected: Bool {
         viewModel.fluidAudioModelVersion == model.version
     }
-    
+
+    /// The model actually used for transcription: selected *and* its engine is active.
+    /// Only the active model shows the solid green check (resolves the two-checkmarks
+    /// ambiguity of #139).
+    var isActive: Bool {
+        isSelected && viewModel.selectedEngine == "fluidaudio"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -1492,9 +1499,14 @@ struct FluidAudioModelDownloadItemView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else if model.isDownloaded {
-                if isSelected {
+                if isActive {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
+                        .imageScale(.large)
+                } else if isSelected {
+                    // Chosen for this engine, but the engine isn't the active one.
+                    Image(systemName: "checkmark.circle")
+                        .foregroundColor(.secondary)
                         .imageScale(.large)
                 } else {
                     Button(action: {
@@ -1555,7 +1567,13 @@ struct ModelDownloadItemView: View {
         }
         return false
     }
-    
+
+    /// The model actually used for transcription: selected *and* Whisper is the
+    /// active engine. Only the active model shows the solid green check (#139).
+    var isActive: Bool {
+        isSelected && viewModel.selectedEngine == "whisper"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -1592,9 +1610,14 @@ struct ModelDownloadItemView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else if model.isDownloaded {
-                if isSelected {
+                if isActive {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
+                        .imageScale(.large)
+                } else if isSelected {
+                    // Chosen for Whisper, but Whisper isn't the active engine.
+                    Image(systemName: "checkmark.circle")
+                        .foregroundColor(.secondary)
                         .imageScale(.large)
                 } else {
                     Button(action: {
