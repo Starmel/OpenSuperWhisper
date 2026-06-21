@@ -1,5 +1,11 @@
 import Foundation
 
+enum TranscriptionResult {
+    /// Returned by the engines when nothing intelligible was transcribed. It is shown to the
+    /// user as feedback but never pasted into the focused field.
+    static let noSpeech = "No speech detected in the audio"
+}
+
 @propertyWrapper
 struct UserDefault<T> {
     let key: String
@@ -138,6 +144,26 @@ final class AppPreferences {
 
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
+
+    /// Strip filler words (um, uh, …) from the transcription before saving/inserting. Opt-in.
+    @UserDefault(key: "removeFillerWords", defaultValue: false)
+    var removeFillerWords: Bool
+
+    /// User-editable, case-insensitive regex matching the filler words to remove.
+    @UserDefault(key: "fillerWordsPattern", defaultValue: "\\b(um|uh|uh huh|er|ah|hmm|mm)\\b,?\\s*")
+    var fillerWordsPattern: String
+
+    /// Removes the configured filler words (when enabled) and tidies leftover whitespace.
+    /// An invalid regex is a no-op (`replacingOccurrences` returns the input unchanged).
+    func cleanTranscription(_ text: String) -> String {
+        guard removeFillerWords, !fillerWordsPattern.isEmpty else { return text }
+        let stripped = text.replacingOccurrences(
+            of: fillerWordsPattern, with: "",
+            options: [.regularExpression, .caseInsensitive])
+        return stripped
+            .replacingOccurrences(of: "\\s{2,}", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     // Clipboard settings
     @UserDefault(key: "autoCopyToClipboard", defaultValue: true)
