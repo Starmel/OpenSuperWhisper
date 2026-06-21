@@ -28,6 +28,7 @@ class IndicatorViewModel: ObservableObject {
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
+    private var liveStreamingActive = false
     private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
@@ -117,8 +118,29 @@ class IndicatorViewModel: ObservableObject {
         Task.detached { [recorder] in
             recorder.startRecording()
         }
+
+        // Live transcription (Parakeet only): stream in parallel with the WAV recorder so the
+        // indicator can show the text as the user speaks. Falls back to the file pass on stop.
+        if Self.shouldUseLiveStreaming {
+            liveStreamingActive = true
+            let terms = AppPreferences.shared.customDictionaryEnabled
+                ? CustomDictionary.boostTerms(entries: AppPreferences.shared.customDictionaryEntries)
+                : []
+            Task { @MainActor in
+                do {
+                    try await StreamingTranscriptionController.shared.start(boostTerms: terms)
+                } catch {
+                    print("Live streaming start failed: \(error)")
+                    self.liveStreamingActive = false
+                }
+            }
+        }
     }
-    
+
+    static var shouldUseLiveStreaming: Bool {
+        AppPreferences.shared.liveTranscriptionEnabled && AppPreferences.shared.selectedEngine == "fluidaudio"
+    }
+
     func startDecoding() {
         stopBlinking()
         
@@ -136,6 +158,12 @@ class IndicatorViewModel: ObservableObject {
                 
                 do {
                     print("start decoding...")
+                    // Live streaming is a preview only; the inserted text always comes from the
+                    // accurate file pass. Stop the preview, then transcribe the recording.
+                    if self.liveStreamingActive {
+                        self.liveStreamingActive = false
+                        await StreamingTranscriptionController.shared.cancel()
+                    }
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
                     if AppPreferences.shared.saveTranscriptionHistory {
@@ -270,6 +298,10 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = nil
         recorder.cancelRecording()
+        if liveStreamingActive {
+            liveStreamingActive = false
+            Task { await StreamingTranscriptionController.shared.cancel() }
+        }
     }
 
     @MainActor
@@ -308,12 +340,18 @@ struct RecordingIndicator: View {
 
 struct IndicatorWindow: View {
     @ObservedObject var viewModel: IndicatorViewModel
+    @ObservedObject private var streaming = StreamingTranscriptionController.shared
     @Environment(\.colorScheme) private var colorScheme
     
     private var backgroundColor: Color {
         colorScheme == .dark
             ? Color.black.opacity(0.24)
             : Color.white.opacity(0.24)
+    }
+
+    /// Wider while live-recording so the growing caption fits inside the bubble; compact otherwise.
+    private var bubbleWidth: CGFloat {
+        viewModel.state == .recording && IndicatorViewModel.shouldUseLiveStreaming ? 380 : 200
     }
     
     var body: some View {
@@ -334,15 +372,31 @@ struct IndicatorWindow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
             case .recording:
-                HStack(spacing: 8) {
-                    RecordingIndicator(isBlinking: viewModel.isBlinking)
-                        .frame(width: 24)
-                    
-                    Text("Recording...")
-                        .font(.system(size: 13, weight: .semibold))
+                if streaming.confirmedText.isEmpty && streaming.volatileText.isEmpty {
+                    // Before any text arrives, just the dot + label, vertically centered.
+                    HStack(alignment: .center, spacing: 10) {
+                        RecordingIndicator(isBlinking: viewModel.isBlinking)
+                            .frame(width: 16)
+                        Text("Recording…")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    // Once text starts, drop the label: just the dot + the text, which grows
+                    // (the window resizes to fit it) so everything stays visible.
+                    HStack(alignment: .top, spacing: 10) {
+                        RecordingIndicator(isBlinking: viewModel.isBlinking)
+                            .frame(width: 16)
+                            .padding(.top, 3)
+                        (Text(streaming.confirmedText).foregroundColor(.primary)
+                            + Text(streaming.confirmedText.isEmpty ? "" : " ")
+                            + Text(streaming.volatileText).foregroundColor(.secondary))
+                            .font(.system(size: 14))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(width: 300, alignment: .leading)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
+
             case .decoding:
                 HStack(spacing: 8) {
                     ProgressView()
@@ -395,7 +449,8 @@ struct IndicatorWindow: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(height: 36)
+        .padding(.vertical, 12)
+        .frame(minHeight: 36)
         .background {
             rect
                 .fill(backgroundColor)
@@ -406,7 +461,7 @@ struct IndicatorWindow: View {
                 .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
         }
         .clipShape(rect)
-        .frame(width: 200)
+        .frame(width: bubbleWidth)
         .scaleEffect(viewModel.isVisible ? 1 : 0.5)
         .offset(y: viewModel.isVisible ? 0 : 20)
         .opacity(viewModel.isVisible ? 1 : 0)

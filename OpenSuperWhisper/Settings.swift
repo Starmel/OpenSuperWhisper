@@ -135,6 +135,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var liveTranscriptionEnabled: Bool {
+        didSet {
+            AppPreferences.shared.liveTranscriptionEnabled = liveTranscriptionEnabled
+        }
+    }
+
     @Published var useAsianAutocorrect: Bool {
         didSet {
             AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
@@ -290,6 +296,7 @@ class SettingsViewModel: ObservableObject {
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.startHidden = prefs.startHidden
+        self.liveTranscriptionEnabled = prefs.liveTranscriptionEnabled
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
@@ -1631,6 +1638,25 @@ struct SettingsView: View {
                                 .labelsHidden()
                                 .help("Play a notification sound when recording begins")
                         }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Live transcription")
+                                    .font(.subheadline)
+                                Text("Shows your speech in the recording indicator as you talk (Parakeet engine only). The text appears after a short delay and is a rough live preview — it may differ from the final result. The text that actually gets inserted always comes from the full, accurate transcription, not from this preview.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.liveTranscriptionEnabled)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .disabled(viewModel.selectedEngine != "fluidaudio")
+                                .help("Show the transcription live while recording (Parakeet only)")
+                        }
+                        .opacity(viewModel.selectedEngine == "fluidaudio" ? 1 : 0.5)
 
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {

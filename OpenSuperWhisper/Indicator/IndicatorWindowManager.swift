@@ -8,7 +8,13 @@ class IndicatorWindowManager: IndicatorViewDelegate {
     
     var window: NSWindow?
     var viewModel: IndicatorViewModel?
-    
+
+    // The window auto-sizes to its content (so the live caption pill grows with the text).
+    // We keep the bottom edge anchored near the caret so it grows upward, not over the caret.
+    private var anchorBottomY: CGFloat = 0
+    private var anchorCenterX: CGFloat = 0
+    private var resizeObserver: NSObjectProtocol?
+
     private init() {}
     
     func show(nearPoint point: NSPoint? = nil) -> IndicatorViewModel {
@@ -23,7 +29,7 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         if window == nil {
             // Create window if it doesn't exist - using NSPanel for full-screen compatibility
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 200, height: 60),
+                contentRect: NSRect(x: 0, y: 0, width: 380, height: 120),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
@@ -39,38 +45,47 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             self.window = panel
         }
         
+        // Host with a controller that resizes the window to fit the SwiftUI content.
+        let hostingController = NSHostingController(rootView: IndicatorWindow(viewModel: newViewModel))
+        hostingController.sizingOptions = [.preferredContentSize]
+        window?.contentViewController = hostingController
+
         // Position window - use the screen containing the point, or main screen as fallback
         let targetScreen = point.flatMap { FocusUtils.screenContaining(point: $0) } ?? NSScreen.main
         if let window = window, let screen = targetScreen {
-            let windowFrame = window.frame
             let screenFrame = screen.frame
-            
-            var x: CGFloat
-            var y: CGFloat
-            
+
             if let point = point {
-                // Position near cursor
-                x = point.x - windowFrame.width / 2
-                y = point.y + 20 // 20 points above cursor
+                anchorBottomY = point.y + 20 // sit just above the caret
+                anchorCenterX = point.x
             } else {
-                // Default to top center of screen
-                x = screenFrame.midX - windowFrame.width / 2
-                y = screenFrame.maxY - windowFrame.height - 100 // 100 pixels from top
+                anchorBottomY = screenFrame.maxY - 260 // a stable band near the top
+                anchorCenterX = screenFrame.midX
             }
-            
-            // Adjust if out of screen bounds
-            x = max(screenFrame.minX, min(x, screenFrame.maxX - windowFrame.width))
-            y = max(screenFrame.minY, min(y, screenFrame.maxY - windowFrame.height))
-            
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-            
-            // Set content view
-            let hostingView = NSHostingView(rootView: IndicatorWindow(viewModel: newViewModel))
-            window.contentView = hostingView
+
+            reposition(window: window, screen: screen)
+
+            // Keep the bottom edge anchored as the content (and window) grows upward.
+            if resizeObserver == nil {
+                resizeObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.didResizeNotification, object: window, queue: .main
+                ) { [weak self, weak window] _ in
+                    guard let self, let window, let screen = window.screen ?? NSScreen.main else { return }
+                    self.reposition(window: window, screen: screen)
+                }
+            }
         }
-        
+
         window?.orderFront(nil)
         return newViewModel
+    }
+
+    private func reposition(window: NSWindow, screen: NSScreen) {
+        let w = window.frame.width
+        let screenFrame = screen.frame
+        let x = max(screenFrame.minX, min(anchorCenterX - w / 2, screenFrame.maxX - w))
+        let y = max(screenFrame.minY, min(anchorBottomY, screenFrame.maxY - window.frame.height))
+        window.setFrameOrigin(NSPoint(x: x, y: y))
     }
     
     func stopRecording() {
