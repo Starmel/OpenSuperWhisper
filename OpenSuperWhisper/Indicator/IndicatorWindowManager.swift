@@ -55,12 +55,24 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         if let window = window, let screen = targetScreen {
             let screenFrame = screen.frame
 
-            if let point = point {
-                anchorBottomY = point.y + 20 // sit just above the caret
-                anchorCenterX = point.x
-            } else {
-                anchorBottomY = screenFrame.maxY - 260 // a stable band near the top
+            switch AppPreferences.shared.indicatorPosition {
+            case "top":
                 anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.maxY - 140
+            case "center":
+                anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.midY
+            case "bottom":
+                anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.minY + 120
+            default: // "cursor": sit just above the caret, falling back to a band near the top
+                if let point = point {
+                    anchorBottomY = point.y + 20
+                    anchorCenterX = point.x
+                } else {
+                    anchorBottomY = screenFrame.maxY - 260
+                    anchorCenterX = screenFrame.midX
+                }
             }
 
             reposition(window: window, screen: screen)

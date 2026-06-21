@@ -147,6 +147,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var indicatorPosition: String {
+        didSet {
+            AppPreferences.shared.indicatorPosition = indicatorPosition
+        }
+    }
+
     @Published var liveTranscriptionEnabled: Bool {
         didSet {
             AppPreferences.shared.liveTranscriptionEnabled = liveTranscriptionEnabled
@@ -332,6 +338,7 @@ class SettingsViewModel: ObservableObject {
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.startHidden = prefs.startHidden
+        self.indicatorPosition = prefs.indicatorPosition
         self.liveTranscriptionEnabled = prefs.liveTranscriptionEnabled
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
@@ -1782,8 +1789,23 @@ struct SettingsView: View {
                     Text("Recording Behavior")
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     VStack(alignment: .leading, spacing: 12) {
+                        SettingRow(
+                            title: "Indicator position",
+                            caption: "Where the recording indicator appears.",
+                            info: "Near cursor (default) shows it just above your text caret. Top, Center or Bottom pin it to the middle of the screen instead."
+                        ) {
+                            Picker("", selection: $viewModel.indicatorPosition) {
+                                Text("Near cursor").tag("cursor")
+                                Text("Top").tag("top")
+                                Text("Center").tag("center")
+                                Text("Bottom").tag("bottom")
+                            }
+                            .labelsHidden()
+                            .frame(width: 140)
+                        }
+
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Hold to Record")
