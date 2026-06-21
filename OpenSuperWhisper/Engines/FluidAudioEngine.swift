@@ -23,7 +23,7 @@ class FluidAudioEngine: TranscriptionEngine {
         
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
-        try await manager.initialize(models: models)
+        try await manager.loadModels(models)
         
         asrManager = manager
         asrModels = models
@@ -74,7 +74,8 @@ class FluidAudioEngine: TranscriptionEngine {
         }
         
         // Perform actual transcription - FluidAudio will emit progress automatically
-        let result = try await asrManager.transcribe(url)
+        var decoderState = try TdtDecoderState()
+        let result = try await asrManager.transcribe(url, decoderState: &decoderState)
         
         guard !isCancelled else {
             throw CancellationError()
