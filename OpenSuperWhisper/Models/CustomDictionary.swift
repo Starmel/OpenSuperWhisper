@@ -56,16 +56,22 @@ enum CustomDictionary {
         return result
     }
 
-    /// Builds an initial-prompt fragment from the dictionary's replacement terms
-    /// so a prompt-conditioned model (Whisper) is biased toward producing the
-    /// correct spelling in the first place. Terms are de-duplicated, order
-    /// preserved.
-    static func promptBoost(entries: [CustomDictionaryEntry]) -> String {
+    /// The de-duplicated list of replacement terms (the "correct" forms). This is
+    /// the single source of the words we boost on both engines: Whisper via the
+    /// initial prompt (`promptBoost`) and Parakeet via custom-vocabulary boosting
+    /// (`FluidAudioEngine`). Order is preserved; de-duplication is case-insensitive.
+    static func boostTerms(entries: [CustomDictionaryEntry]) -> [String] {
         var seen = Set<String>()
-        let terms = entries
+        return entries
             .map { $0.replacement.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-        return terms.joined(separator: ", ")
+    }
+
+    /// Builds an initial-prompt fragment from the dictionary's replacement terms
+    /// so a prompt-conditioned model (Whisper) is biased toward producing the
+    /// correct spelling in the first place.
+    static func promptBoost(entries: [CustomDictionaryEntry]) -> String {
+        boostTerms(entries: entries).joined(separator: ", ")
     }
 
     private static func isWordCharacter(_ character: Character?) -> Bool {

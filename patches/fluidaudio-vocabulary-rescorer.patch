@@ -1,0 +1,23 @@
+diff --git a/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift b/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
+--- a/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
++++ b/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
+@@ -84,9 +84,9 @@ extension VocabularyRescorer {
+-        // PASS 2: Sort by span length (ascending) then by similarity (descending)
+-        // This ensures shorter spans are preferred when multiple matches overlap
++        // PASS 2: Sort by span length (descending) then by similarity (descending)
++        // This ensures longer spans are preferred when multiple matches overlap
+         let sortedReplacements = pendingReplacements.sorted { a, b in
+             if a.candidate.spanLength != b.candidate.spanLength {
+-                return a.candidate.spanLength < b.candidate.spanLength  // Prefer shorter spans
++                return a.candidate.spanLength > b.candidate.spanLength  // Prefer longer spans
+             }
+             // For same span length, prefer higher similarity
+             return a.similarity > b.similarity
+         }
+diff --git a/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift b/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
+--- a/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
++++ b/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift
+@@ -457,2 +457,3 @@ extension VocabularyRescorer {
+                 for spanLength in minSpan...maxSpan {
++                    guard wordTimings.count >= spanLength else { continue }
+                     for startIdx in 0..<(wordTimings.count - spanLength + 1) {

@@ -5,6 +5,37 @@ if [[ "$1" == "build" ]]; then
     JUST_BUILD=true
 fi
 
+# Patch FluidAudio's vocabulary rescorer to prefer longer matching spans
+# (keyword boosting quality, e.g. "My-Monkey" matched as one term). Idempotent;
+# fails loudly if the target moved (so a FluidAudio bump can't silently skip it).
+apply_fluidaudio_patches() {
+    local checkout="SourcePackages/checkouts/FluidAudio"
+    local patch_file="patches/fluidaudio-vocabulary-rescorer.patch"
+    local target="$checkout/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift"
+
+    if [[ ! -f "$patch_file" ]]; then
+        echo "Missing FluidAudio patch: $patch_file"
+        exit 1
+    fi
+
+    if [[ ! -f "$target" ]]; then
+        echo "Missing FluidAudio source checkout: $target"
+        exit 1
+    fi
+
+    if grep -q "Prefer longer spans" "$target" && grep -q "wordTimings.count >= spanLength" "$target"; then
+        echo "FluidAudio vocabulary rescorer patch already applied."
+        return
+    fi
+
+    echo "Applying FluidAudio vocabulary rescorer patch..."
+    patch --silent --forward -d "$checkout" -p1 < "$patch_file"
+    if [[ $? -ne 0 ]] && { ! grep -q "Prefer longer spans" "$target" || ! grep -q "wordTimings.count >= spanLength" "$target"; }; then
+        echo "Failed to apply FluidAudio vocabulary rescorer patch."
+        exit 1
+    fi
+}
+
 # Configure libwhisper
 echo "Configuring libwhisper..."
 cmake -G Xcode -B libwhisper/build -S libwhisper
@@ -28,6 +59,17 @@ echo "Copying libomp.dylib..."
 cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign - ./build/libomp.dylib
+
+# Resolve Swift packages so the FluidAudio checkout exists, then patch it.
+echo "Resolving Swift packages..."
+RESOLVE_OUTPUT=$(xcodebuild -resolvePackageDependencies -scheme OpenSuperWhisper -derivedDataPath build -clonedSourcePackagesDirPath SourcePackages -skipPackagePluginValidation -skipMacroValidation 2>&1)
+if [[ $? -ne 0 ]]; then
+    echo "$RESOLVE_OUTPUT"
+    echo "Swift package resolution failed!"
+    exit 1
+fi
+
+apply_fluidaudio_patches
 
 # Build the app
 echo "Building OpenSuperWhisper..."
