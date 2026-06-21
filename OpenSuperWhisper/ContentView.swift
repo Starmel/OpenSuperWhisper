@@ -208,7 +208,9 @@ class ContentViewModel: ObservableObject {
                 do {
                     print("start decoding...")
                     let rawText = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
-                    let text = AppPreferences.shared.cleanTranscription(rawText)
+                    let cleanedText = AppPreferences.shared.cleanTranscription(rawText)
+                    // Optional LLM cleanup (no-op when disabled; returns the raw text on failure).
+                    let text = await LLMPostProcessor.process(cleanedText)
 
                     if AppPreferences.shared.saveTranscriptionHistory {
                         // Capture the current recording duration

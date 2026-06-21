@@ -179,6 +179,30 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var aiPostProcessingEnabled: Bool {
+        didSet {
+            AppPreferences.shared.aiPostProcessingEnabled = aiPostProcessingEnabled
+        }
+    }
+
+    @Published var aiOllamaEndpoint: String {
+        didSet {
+            AppPreferences.shared.aiOllamaEndpoint = aiOllamaEndpoint
+        }
+    }
+
+    @Published var aiOllamaModel: String {
+        didSet {
+            AppPreferences.shared.aiOllamaModel = aiOllamaModel
+        }
+    }
+
+    @Published var aiPostProcessingPrompt: String {
+        didSet {
+            AppPreferences.shared.aiPostProcessingPrompt = aiPostProcessingPrompt
+        }
+    }
+
     @Published var removeFillerWords: Bool {
         didSet {
             AppPreferences.shared.removeFillerWords = removeFillerWords
@@ -337,6 +361,10 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
+        self.aiPostProcessingEnabled = prefs.aiPostProcessingEnabled
+        self.aiOllamaEndpoint = prefs.aiOllamaEndpoint
+        self.aiOllamaModel = prefs.aiOllamaModel
+        self.aiPostProcessingPrompt = prefs.aiPostProcessingPrompt
         self.removeFillerWords = prefs.removeFillerWords
         self.fillerWordsPattern = prefs.fillerWordsPattern
         self.postRecordHookEnabled = prefs.postRecordHookEnabled
@@ -1203,6 +1231,60 @@ struct SettingsView: View {
                         Text("Case-insensitive regex of filler words to remove.")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // AI Cleanup
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("AI Cleanup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "Clean up with a local LLM (Ollama)",
+                        caption: "Fix punctuation & obvious errors via a local model after transcribing.",
+                        info: "Sends the transcription to your local Ollama server and inserts the cleaned-up result. Requires Ollama running with the model below pulled (e.g. `ollama pull llama3.2`). Adds a little latency. If Ollama isn't reachable, the raw transcription is used unchanged — nothing is lost. Everything stays on your machine."
+                    ) {
+                        Toggle("", isOn: $viewModel.aiPostProcessingEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.aiPostProcessingEnabled {
+                        HStack {
+                            Text("Model")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("llama3.2", text: $viewModel.aiOllamaModel)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 180)
+                        }
+                        HStack {
+                            Text("Ollama endpoint")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("http://localhost:11434", text: $viewModel.aiOllamaEndpoint)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 220)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Instruction")
+                                .font(.subheadline)
+                            TextEditor(text: $viewModel.aiPostProcessingPrompt)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(height: 80)
+                                .padding(6)
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                        }
                     }
                 }
                 .padding()

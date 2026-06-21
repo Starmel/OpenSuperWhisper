@@ -173,6 +173,19 @@ final class AppPreferences {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // AI post-processing (clean up the transcription with a local LLM via Ollama). Opt-in.
+    @UserDefault(key: "aiPostProcessingEnabled", defaultValue: false)
+    var aiPostProcessingEnabled: Bool
+
+    @UserDefault(key: "aiOllamaEndpoint", defaultValue: "http://localhost:11434")
+    var aiOllamaEndpoint: String
+
+    @UserDefault(key: "aiOllamaModel", defaultValue: "llama3.2")
+    var aiOllamaModel: String
+
+    @UserDefault(key: "aiPostProcessingPrompt", defaultValue: "You clean up dictated speech-to-text transcriptions. Fix punctuation, capitalization, and obvious recognition errors. Preserve the original wording and meaning — do not summarize, rephrase, translate, add, or remove content. Output only the corrected text, with no preamble, explanation, or quotes.")
+    var aiPostProcessingPrompt: String
+
     // Clipboard settings
     @UserDefault(key: "autoCopyToClipboard", defaultValue: true)
     var autoCopyToClipboard: Bool

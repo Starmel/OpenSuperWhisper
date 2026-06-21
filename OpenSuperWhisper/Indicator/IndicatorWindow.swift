@@ -165,7 +165,7 @@ class IndicatorViewModel: ObservableObject {
                         await StreamingTranscriptionController.shared.cancel()
                     }
                     let rawText = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
-                    let text = AppPreferences.shared.cleanTranscription(rawText)
+                    var text = AppPreferences.shared.cleanTranscription(rawText)
 
                     // Nothing intelligible was said: never paste the placeholder — just give a
                     // brief on-screen hint and finish (don't store an empty recording either).
@@ -175,6 +175,9 @@ class IndicatorViewModel: ObservableObject {
                         await MainActor.run { self.showInfo("No speech detected") }
                         return
                     }
+
+                    // Optional LLM cleanup (no-op when disabled; returns the raw text on failure).
+                    text = await LLMPostProcessor.process(text)
 
                     var hookAudioPath: String? = nil
                     if AppPreferences.shared.saveTranscriptionHistory {
