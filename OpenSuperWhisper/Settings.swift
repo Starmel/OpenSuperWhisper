@@ -207,7 +207,7 @@ class SettingsViewModel: ObservableObject {
         let modelManager = WhisperModelManager.shared
         downloadableModels = SettingsDownloadableModels.availableModels.map { model in
             var updatedModel = model
-            let filename = model.url.lastPathComponent
+            let filename = model.filename
             updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             return updatedModel
         }
@@ -231,7 +231,7 @@ class SettingsViewModel: ObservableObject {
         
         downloadTask = Task {
             do {
-                let filename = model.url.lastPathComponent
+                let filename = model.filename
                 
                 try await WhisperModelManager.shared.downloadModel(url: model.url, name: filename) { [weak self] progress in
                     Task { @MainActor [weak self] in
@@ -305,7 +305,7 @@ class SettingsViewModel: ObservableObject {
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if selectedEngine == "whisper", let model = downloadableModels.first(where: { $0.name == modelName }) {
-                let filename = model.url.lastPathComponent
+                let filename = model.filename
                 WhisperModelManager.shared.cancelDownload(name: filename)
             }
             // Reset progress for the downloading model
@@ -450,6 +450,8 @@ struct SettingsDownloadableModel: Identifiable {
     let size: Int
     let description: String
     var downloadProgress: Double = 0.0
+    let filename: String
+    let preferredLanguage: String?
 
     var sizeString: String {
         let formatter = ByteCountFormatter()
@@ -460,12 +462,15 @@ struct SettingsDownloadableModel: Identifiable {
         return formatter.string(fromByteCount: Int64(size) * 1000000)
     }
 
-    init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String) {
+    init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String,
+         filename: String? = nil, preferredLanguage: String? = nil) {
         self.name = name
         self.isDownloaded = isDownloaded
         self.url = url
         self.size = size
         self.description = description
+        self.filename = filename ?? url.lastPathComponent
+        self.preferredLanguage = preferredLanguage
     }
 }
 
