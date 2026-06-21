@@ -1145,4 +1145,19 @@ final class HebrewIvritSupportTests: XCTestCase {
         XCTAssertEqual(ivrit?.url.host, "huggingface.co")
         XCTAssertTrue(ivrit?.url.absoluteString.contains("ivrit-ai/whisper-large-v3-turbo-ggml") ?? false)
     }
+
+    // MARK: Task 4 — preferred-language lookup
+    func testPreferredLanguageLookupForIvritModel() {
+        XCTAssertEqual(
+            SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-ivrit-large-v3-turbo.bin"),
+            "he")
+    }
+
+    func testPreferredLanguageLookupForStandardModelIsNil() {
+        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-large-v3-turbo.bin"))
+    }
+
+    func testPreferredLanguageLookupForUnknownFilenameIsNil() {
+        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "does-not-exist.bin"))
+    }
 }
