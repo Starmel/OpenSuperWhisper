@@ -684,7 +684,7 @@ struct SettingsView: View {
             // Storage / Retention Settings
             storageSettings
                 .tabItem {
-                    Label("Storage", systemImage: "externaldrive")
+                    Label("History", systemImage: "clock.arrow.circlepath")
                 }
                 .tag(3)
 
@@ -1106,68 +1106,6 @@ struct SettingsView: View {
 
                 // Custom Dictionary
                 customDictionarySection
-
-                // Privacy
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Privacy")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Save Transcription History")
-                                .font(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.saveTranscriptionHistory)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
-                        }
-
-                        Text("When disabled, audio recordings and transcriptions are not saved to disk. Only the current transcription is kept in memory for pasting.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
-
-                // Transcriptions Directory
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Transcriptions Directory")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Directory:")
-                                .font(.subheadline)
-                            Spacer()
-                            Button(action: {
-                                NSWorkspace.shared.open(Recording.recordingsDirectory)
-                            }) {
-                                Label("Open Folder", systemImage: "folder")
-                                    .font(.subheadline)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Open transcriptions directory")
-                        }
-                        
-                        Text(Recording.recordingsDirectory.path)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.textBackgroundColor).opacity(0.5))
-                            .cornerRadius(6)
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
             }
             .padding()
         }
@@ -1340,6 +1278,69 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Privacy
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Privacy")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Save Transcription History")
+                                .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.saveTranscriptionHistory)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        Text("When disabled, audio recordings and transcriptions are not saved to disk. Only the current transcription is kept in memory for pasting.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Transcriptions Directory
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Transcriptions Directory")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Directory:")
+                                .font(.subheadline)
+                            Spacer()
+                            Button(action: {
+                                NSWorkspace.shared.open(Recording.recordingsDirectory)
+                            }) {
+                                Label("Open Folder", systemImage: "folder")
+                                    .font(.subheadline)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Open transcriptions directory")
+                        }
+                        
+                        Text(Recording.recordingsDirectory.path)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.textBackgroundColor).opacity(0.5))
+                            .cornerRadius(6)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
             }
             .padding()
         }
