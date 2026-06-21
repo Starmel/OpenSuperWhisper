@@ -167,6 +167,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var removeFillerWords: Bool {
+        didSet {
+            AppPreferences.shared.removeFillerWords = removeFillerWords
+        }
+    }
+
+    @Published var fillerWordsPattern: String {
+        didSet {
+            AppPreferences.shared.fillerWordsPattern = fillerWordsPattern
+        }
+    }
+
     @Published var autoCopyToClipboard: Bool {
         didSet {
             AppPreferences.shared.autoCopyToClipboard = autoCopyToClipboard
@@ -301,6 +313,8 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
+        self.removeFillerWords = prefs.removeFillerWords
+        self.fillerWordsPattern = prefs.fillerWordsPattern
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
@@ -1096,6 +1110,43 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Filler Words
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Filler Words")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "Remove filler words",
+                        caption: "Strip um, uh, er… from transcriptions before inserting.",
+                        info: "Removes matches of the regex below (case-insensitive) from the transcription, then tidies the spacing. Off by default; the inserted text is otherwise unchanged."
+                    ) {
+                        Toggle("", isOn: $viewModel.removeFillerWords)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.removeFillerWords {
+                        TextEditor(text: $viewModel.fillerWordsPattern)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 56)
+                            .padding(6)
+                            .background(Color(.textBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        Text("Case-insensitive regex of filler words to remove.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding()

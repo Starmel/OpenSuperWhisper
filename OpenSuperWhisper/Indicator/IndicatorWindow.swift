@@ -164,7 +164,17 @@ class IndicatorViewModel: ObservableObject {
                         self.liveStreamingActive = false
                         await StreamingTranscriptionController.shared.cancel()
                     }
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let rawText = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let text = AppPreferences.shared.cleanTranscription(rawText)
+
+                    // Nothing intelligible was said: never paste the placeholder — just give a
+                    // brief on-screen hint and finish (don't store an empty recording either).
+                    if text == TranscriptionResult.noSpeech
+                        || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        try? FileManager.default.removeItem(at: tempURL)
+                        await MainActor.run { self.showInfo("No speech detected") }
+                        return
+                    }
 
                     if AppPreferences.shared.saveTranscriptionHistory {
                         // Create a new Recording instance

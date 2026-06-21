@@ -214,7 +214,7 @@ class WhisperEngine: TranscriptionEngine {
             processedText = CustomDictionary.apply(processedText, entries: settings.customDictionaryEntries)
         }
 
-        return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        return processedText.isEmpty ? TranscriptionResult.noSpeech : processedText
     }
     
     func cancelTranscription() {
