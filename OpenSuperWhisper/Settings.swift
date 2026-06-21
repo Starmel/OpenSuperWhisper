@@ -377,7 +377,7 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 let manager = AsrManager(config: .default)
-                try await manager.initialize(models: models)
+                try await manager.loadModels(models)
                 
                 await MainActor.run {
                     if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
@@ -473,6 +473,10 @@ struct SettingsDownloadableModel: Identifiable {
         return formatter.string(fromByteCount: Int64(size) * 1000000)
     }
 
+    var huggingFacePageURL: URL? {
+        makeHuggingFacePageURL(fromDownloadURL: url)
+    }
+
     init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String,
          filename: String? = nil, preferredLanguage: String? = nil) {
         self.name = name
@@ -522,6 +526,20 @@ struct SettingsDownloadableModels {
     static func preferredLanguage(forFilename filename: String) -> String? {
         availableModels.first { $0.filename == filename }?.preferredLanguage
     }
+
+    static func isVisible(_ model: SettingsDownloadableModel,
+                          selectedLanguage: String,
+                          systemLanguage: String) -> Bool {
+        guard let lang = model.preferredLanguage else { return true }
+        if model.isDownloaded { return true }
+        return selectedLanguage == lang || systemLanguage == lang
+    }
+}
+
+func makeHuggingFacePageURL(fromDownloadURL url: URL) -> URL? {
+    let absoluteString = url.absoluteString
+    guard let range = absoluteString.range(of: "/resolve/") else { return nil }
+    return URL(string: String(absoluteString[..<range.lowerBound]))
 }
 
 struct Settings {
@@ -684,7 +702,11 @@ struct SettingsView: View {
                             ScrollView {
                                 VStack(spacing: 12) {
                                     ForEach($viewModel.downloadableModels) { $model in
-                                        ModelDownloadItemView(model: $model, viewModel: viewModel)
+                                        if SettingsDownloadableModels.isVisible(model,
+                                                selectedLanguage: viewModel.selectedLanguage,
+                                                systemLanguage: LanguageUtil.getSystemLanguage()) {
+                                            ModelDownloadItemView(model: $model, viewModel: viewModel)
+                                        }
                                     }
                                 }
                             }
@@ -1300,6 +1322,16 @@ struct OnboardingUnifiedModel: Identifiable {
     let description: String
     let type: OnboardingModelType
     var downloadProgress: Double = 0.0
+
+    var huggingFacePageURL: URL? {
+        switch type {
+        case .whisper(let url, _):
+            return makeHuggingFacePageURL(fromDownloadURL: url)
+        case .parakeet(let version):
+            let repo = version == "v2" ? "parakeet-tdt-0.6b-v2-coreml" : "parakeet-tdt-0.6b-v3-coreml"
+            return URL(string: "https://huggingface.co/FluidInference/\(repo)")
+        }
+    }
 }
 
 struct OnboardingUnifiedModels {
@@ -1479,7 +1511,17 @@ struct ModelDownloadItemView: View {
                 Text(model.description)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
+                if let pageURL = model.huggingFacePageURL {
+                    Link(destination: pageURL) {
+                        HStack(spacing: 3) {
+                            Text("Hugging Face")
+                            Image(systemName: "arrow.up.right")
+                        }
+                        .font(.caption2)
+                    }
+                }
+
                 if model.downloadProgress > 0 && model.downloadProgress < 1 {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
