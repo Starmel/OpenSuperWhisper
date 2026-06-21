@@ -112,7 +112,11 @@ final class AppPreferences {
     
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
-    
+
+    /// Launch into the menu bar without showing the main window (opt-in).
+    @UserDefault(key: "startHidden", defaultValue: false)
+    var startHidden: Bool
+
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
     

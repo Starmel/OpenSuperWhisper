@@ -103,6 +103,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
             window.minSize = NSSize(width: 450, height: 400)
             window.maxSize = NSSize(width: 450, height: 900)
+
+            // Start in the menu bar only (don't show the main window) when requested.
+            // Never hide during onboarding — the user needs the window to finish setup.
+            if AppPreferences.shared.startHidden && AppPreferences.shared.hasCompletedOnboarding {
+                window.orderOut(nil)
+                NSApplication.shared.setActivationPolicy(.accessory)
+            }
         }
 
         OpenSuperWhisperApp.startTranscriptionQueue()

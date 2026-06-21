@@ -128,7 +128,13 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.playSoundOnRecordStart = playSoundOnRecordStart
         }
     }
-    
+
+    @Published var startHidden: Bool {
+        didSet {
+            AppPreferences.shared.startHidden = startHidden
+        }
+    }
+
     @Published var useAsianAutocorrect: Bool {
         didSet {
             AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
@@ -283,6 +289,7 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
+        self.startHidden = prefs.startHidden
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
@@ -1386,6 +1393,22 @@ struct SettingsView: View {
                         ))
                         .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                         .labelsHidden()
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Start in the Menu Bar")
+                                .font(.subheadline)
+                            Text("Launch without showing the main window — open it anytime from the menu bar icon. Takes effect on next launch.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.startHidden)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
                     }
                 }
                 .padding()
