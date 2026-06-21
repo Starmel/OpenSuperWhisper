@@ -4,7 +4,13 @@ import builder
 import coder
 import gitops
 import github
-from config import BASE_BRANCH, MAX_BUILD_FIX_ATTEMPTS, ConfigError, openrouter_api_key
+from config import (
+    BASE_BRANCH,
+    MAX_BUILD_FIX_ATTEMPTS,
+    UPSTREAM_REPO,
+    ConfigError,
+    openrouter_api_key,
+)
 
 
 STASH_LABEL = "issue-agent-autostash"
@@ -123,7 +129,10 @@ def handle_issue(issue) -> None:
             pr_url = github.create_pull_request(
                 branch=branch,
                 title=f"Fix #{issue.number}: {issue.title}",
-                body=f"Closes #{issue.number}\n\n{issue.title}",
+                body=(
+                    f"Implements upstream issue {UPSTREAM_REPO}#{issue.number}\n\n"
+                    f"{issue.title}\n\n{issue.url}"
+                ),
                 base=BASE_BRANCH,
             )
             print(f"\nPR created: {pr_url}")
