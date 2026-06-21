@@ -1,12 +1,15 @@
 import Foundation
 
-/// Controls system media playback via the private MediaRemote framework.
-/// Sends explicit play/pause commands (not toggles), so pause is safe to call
-/// even when nothing is playing.
+/// Pauses/resumes system media playback via the private MediaRemote framework.
+///
+/// macOS lets a normal app *send* play/pause commands but not reliably *read* the Now
+/// Playing state from inside the process, so we can't tell whether something was actually
+/// playing. We therefore always pause on record and always resume on stop. The trade-off:
+/// if media was already paused when you start recording, it will resume on stop — accepted.
 final class MediaPlaybackController {
     static let shared = MediaPlaybackController()
 
-    /// Tracks whether we sent a pause, so `resumeMedia` only resumes on stop.
+    /// Whether we sent a pause this cycle, so `resumeMedia` only acts after `pauseMedia`.
     private(set) var didPauseMedia = false
 
     private static let kMRPlay: UInt32 = 0
@@ -28,21 +31,13 @@ final class MediaPlaybackController {
         sendCommand = unsafeBitCast(ptr, to: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool).self)
     }
 
-    /// Pauses whatever the system "Now Playing" is.
-    ///
-    /// We send the explicit pause **unconditionally** — deliberately NOT probing
-    /// "is something playing?" first. At the moment recording starts, the audio-session
-    /// setup (switching the default input + starting `AVAudioRecorder`) transiently
-    /// clears the system Now Playing `playing` flag, so a probe here falsely reports
-    /// not-playing and the pause gets skipped (observed on macOS 27). The pause command
-    /// is a harmless no-op when nothing is playing, so sending it unconditionally is
-    /// both correct and reliable.
+    /// Sends an explicit pause (a harmless no-op when nothing is playing).
     func pauseMedia() {
         guard let sendCommand = sendCommand else { return }
         didPauseMedia = sendCommand(Self.kMRPause, nil)
     }
 
-    /// Resumes playback, but only if we previously sent a pause.
+    /// Sends play, but only if we previously paused this cycle.
     func resumeMedia() {
         guard didPauseMedia, let sendCommand = sendCommand else { return }
         _ = sendCommand(Self.kMRPlay, nil)
