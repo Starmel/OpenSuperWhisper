@@ -41,6 +41,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    /// User-initiated model selection. Persists the model and, when the model declares a
+    /// preferred language (e.g. the ivrit.ai Hebrew model), switches to it. Use this for
+    /// explicit user actions only — not from init/restore — so we never override the language
+    /// on a routine reload.
+    func selectModel(_ url: URL) {
+        selectedModelURL = url
+        if let lang = SettingsDownloadableModels.preferredLanguage(forFilename: url.lastPathComponent),
+           selectedLanguage != lang {
+            selectedLanguage = lang
+        }
+    }
+
     @Published var availableModels: [URL] = []
     
     @Published var downloadableModels: [SettingsDownloadableModel] = []
@@ -373,7 +385,7 @@ class SettingsViewModel: ObservableObject {
         let modelManager = WhisperModelManager.shared
         downloadableModels = SettingsDownloadableModels.availableModels.map { model in
             var updatedModel = model
-            let filename = model.url.lastPathComponent
+            let filename = model.filename
             updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             return updatedModel
         }
@@ -397,7 +409,7 @@ class SettingsViewModel: ObservableObject {
         
         downloadTask = Task {
             do {
-                let filename = model.url.lastPathComponent
+                let filename = model.filename
                 
                 try await WhisperModelManager.shared.downloadModel(url: model.url, name: filename) { [weak self] progress in
                     Task { @MainActor [weak self] in
@@ -433,7 +445,7 @@ class SettingsViewModel: ObservableObject {
                     }
                     loadAvailableModels()
                     let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(filename).path
-                    selectedModelURL = URL(fileURLWithPath: modelPath)
+                    selectModel(URL(fileURLWithPath: modelPath))
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -471,7 +483,7 @@ class SettingsViewModel: ObservableObject {
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if selectedEngine == "whisper", let model = downloadableModels.first(where: { $0.name == modelName }) {
-                let filename = model.url.lastPathComponent
+                let filename = model.filename
                 WhisperModelManager.shared.cancelDownload(name: filename)
             }
             // Reset progress for the downloading model
@@ -616,6 +628,11 @@ struct SettingsDownloadableModel: Identifiable {
     let size: Int
     let description: String
     var downloadProgress: Double = 0.0
+    /// On-disk filename. Defaults to the URL's basename, but some sources (e.g. the ivrit.ai
+    /// model served as a generic `ggml-model.bin`) need an explicit, distinct name.
+    let filename: String
+    /// Language to switch to when this model is selected (e.g. "he" for the Hebrew model).
+    let preferredLanguage: String?
 
     var sizeString: String {
         let formatter = ByteCountFormatter()
@@ -626,12 +643,15 @@ struct SettingsDownloadableModel: Identifiable {
         return formatter.string(fromByteCount: Int64(size) * 1000000)
     }
 
-    init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String) {
+    init(name: String, isDownloaded: Bool, url: URL, size: Int, description: String,
+         filename: String? = nil, preferredLanguage: String? = nil) {
         self.name = name
         self.isDownloaded = isDownloaded
         self.url = url
         self.size = size
         self.description = description
+        self.filename = filename ?? url.lastPathComponent
+        self.preferredLanguage = preferredLanguage
     }
 }
 
@@ -657,8 +677,21 @@ struct SettingsDownloadableModels {
             url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
             size: 574,
             description: "Fastest processing"
+        ),
+        SettingsDownloadableModel(
+            name: "Hebrew — ivrit.ai Turbo v3",
+            isDownloaded: false,
+            url: URL(string: "https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ggml/resolve/main/ggml-model.bin?download=true")!,
+            size: 1624,
+            description: "Hebrew-optimized model by ivrit.ai. Selecting it sets the language to Hebrew.",
+            filename: "ggml-ivrit-large-v3-turbo.bin",
+            preferredLanguage: "he"
         )
     ]
+
+    static func preferredLanguage(forFilename filename: String) -> String? {
+        availableModels.first { $0.filename == filename }?.preferredLanguage
+    }
 }
 
 struct Settings {
@@ -2072,7 +2105,7 @@ struct ModelDownloadItemView: View {
     
     var isSelected: Bool {
         if let selectedURL = viewModel.selectedModelURL {
-            let filename = model.url.lastPathComponent
+            let filename = model.filename
             return selectedURL.lastPathComponent == filename
         }
         return false
@@ -2131,8 +2164,8 @@ struct ModelDownloadItemView: View {
                         .imageScale(.large)
                 } else {
                     Button(action: {
-                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                        viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
+                        viewModel.selectModel(URL(fileURLWithPath: modelPath))
                     }) {
                         Text("Select")
                     }
@@ -2165,8 +2198,8 @@ struct ModelDownloadItemView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if model.isDownloaded && !isSelected {
-                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
+                viewModel.selectModel(URL(fileURLWithPath: modelPath))
             }
         }
         .alert("Download Error", isPresented: $showError) {

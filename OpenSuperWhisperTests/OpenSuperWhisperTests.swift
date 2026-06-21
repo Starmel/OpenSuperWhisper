@@ -1178,3 +1178,51 @@ final class TextUtilTests: XCTestCase {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
     }
 }
+
+final class HebrewIvritSupportTests: XCTestCase {
+    func testHebrewIsAvailableLanguage() {
+        XCTAssertTrue(LanguageUtil.availableLanguages.contains("he"))
+        XCTAssertEqual(LanguageUtil.languageNames["he"], "Hebrew")
+    }
+
+    func testDownloadableModelDefaultsFilenameToURLBasename() {
+        let model = SettingsDownloadableModel(
+            name: "X", isDownloaded: false,
+            url: URL(string: "https://example.com/path/ggml-foo.bin?download=true")!,
+            size: 1, description: "d")
+        XCTAssertEqual(model.filename, "ggml-foo.bin")
+        XCTAssertNil(model.preferredLanguage)
+    }
+
+    func testDownloadableModelHonorsExplicitFilenameAndLanguage() {
+        let model = SettingsDownloadableModel(
+            name: "X", isDownloaded: false,
+            url: URL(string: "https://example.com/ggml-model.bin?download=true")!,
+            size: 1, description: "d",
+            filename: "ggml-custom.bin", preferredLanguage: "he")
+        XCTAssertEqual(model.filename, "ggml-custom.bin")
+        XCTAssertEqual(model.preferredLanguage, "he")
+    }
+
+    func testExistingStandardModelsKeepURLBasenameFilenames() {
+        for m in SettingsDownloadableModels.availableModels where m.preferredLanguage == nil {
+            XCTAssertEqual(m.filename, m.url.lastPathComponent)
+        }
+    }
+
+    func testIvritModelIsAvailableWithCorrectMetadata() {
+        let ivrit = SettingsDownloadableModels.availableModels.first {
+            $0.filename == "ggml-ivrit-large-v3-turbo.bin"
+        }
+        XCTAssertNotNil(ivrit)
+        XCTAssertEqual(ivrit?.preferredLanguage, "he")
+        XCTAssertTrue(ivrit?.url.absoluteString.contains("ivrit-ai/whisper-large-v3-turbo-ggml") ?? false)
+    }
+
+    func testPreferredLanguageLookupByFilename() {
+        XCTAssertEqual(
+            SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-ivrit-large-v3-turbo.bin"), "he")
+        XCTAssertNil(
+            SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-large-v3-turbo.bin"))
+    }
+}
