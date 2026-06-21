@@ -176,6 +176,7 @@ class IndicatorViewModel: ObservableObject {
                         return
                     }
 
+                    var hookAudioPath: String? = nil
                     if AppPreferences.shared.saveTranscriptionHistory {
                         // Create a new Recording instance
                         let timestamp = Date()
@@ -194,6 +195,7 @@ class IndicatorViewModel: ObservableObject {
 
                         // Move the temporary recording to final location
                         try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                        hookAudioPath = finalURL.path
 
                         // Save the recording to store
                         await MainActor.run {
@@ -215,6 +217,7 @@ class IndicatorViewModel: ObservableObject {
 
                     let pasteTargetMissing = insertText(text)
                     print("Transcription result: \(text)")
+                    PostRecordHook.runIfEnabled(text: text, audioPath: hookAudioPath, timestamp: Date(), duration: 0)
                     await MainActor.run {
                         if pasteTargetMissing {
                             self.showInfo("Copied — press ⌘V to paste")
