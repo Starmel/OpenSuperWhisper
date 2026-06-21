@@ -127,7 +127,7 @@ final class AppPreferences {
     
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
-    
+
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
 
@@ -166,4 +166,8 @@ final class AppPreferences {
     // One of RetentionUnit.rawValue: "minutes" | "hours" | "days"
     @UserDefault(key: "retentionMaxAgeUnit", defaultValue: "days")
     var retentionMaxAgeUnit: String
+
+    /// When off, recordings & transcriptions are not persisted (deleted right after use).
+    @UserDefault(key: "saveTranscriptionHistory", defaultValue: true)
+    var saveTranscriptionHistory: Bool
 }

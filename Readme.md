@@ -25,12 +25,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 
 ## Installation
 
-```shell
-brew update # Optional
-brew install opensuperwhisper
-```
-
-Or from [GitHub releases page](https://github.com/Starmel/OpenSuperWhisper/releases).
+Download the latest build from the [Releases page](https://github.com/my-monkeys/OpenSuperWhisper/releases), or [build it from source](#building-locally).
 
 ## Requirements
 
