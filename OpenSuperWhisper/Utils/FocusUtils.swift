@@ -130,8 +130,73 @@ class FocusUtils {
                 return screen
             }
         }
-        
+
         return NSScreen.main
+    }
+
+    // MARK: - Paste target detection
+
+    static let editableRoles: Set<String> = [
+        kAXTextFieldRole as String,
+        kAXTextAreaRole as String,
+        kAXComboBoxRole as String,
+    ]
+
+    static let nonEditableRoles: Set<String> = [
+        kAXButtonRole as String,
+        kAXWindowRole as String,
+        kAXImageRole as String,
+        kAXMenuRole as String,
+        kAXMenuItemRole as String,
+        kAXMenuBarRole as String,
+        kAXCheckBoxRole as String,
+        kAXRadioButtonRole as String,
+        kAXSliderRole as String,
+        kAXStaticTextRole as String,
+    ]
+
+    /// Pure decision from observed accessibility facts (unit-testable).
+    /// Biased toward `true`: only returns `false` when we are confident there is
+    /// no editable text target, so callers never warn spuriously.
+    static func classifyEditability(hasFocusedElement: Bool, valueIsSettable: Bool, role: String?) -> Bool {
+        if !hasFocusedElement { return false }
+        if valueIsSettable { return true }
+        if let role = role {
+            if editableRoles.contains(role) { return true }
+            if nonEditableRoles.contains(role) { return false }
+        }
+        return true
+    }
+
+    /// Best-effort check of whether the system-wide focused element can receive
+    /// pasted text. Returns `nil` when undeterminable (no Accessibility trust).
+    static func focusedElementIsEditable() -> Bool? {
+        guard AXIsProcessTrusted() else { return nil }
+
+        let systemElement = AXUIElementCreateSystemWide()
+        var focused: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(systemElement,
+                                                kAXFocusedUIElementAttribute as CFString,
+                                                &focused)
+        guard err == .success, let focusedCF = focused else {
+            return classifyEditability(hasFocusedElement: false, valueIsSettable: false, role: nil)
+        }
+        let element = focusedCF as! AXUIElement
+
+        var settable: DarwinBoolean = false
+        AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)
+
+        var roleRef: CFTypeRef?
+        let role: String?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success {
+            role = roleRef as? String
+        } else {
+            role = nil
+        }
+
+        return classifyEditability(hasFocusedElement: true,
+                                   valueIsSettable: settable.boolValue,
+                                   role: role)
     }
 
 }

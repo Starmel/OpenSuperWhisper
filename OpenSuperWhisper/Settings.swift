@@ -154,6 +154,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var notifyWhenNoPasteTarget: Bool {
+        didSet {
+            AppPreferences.shared.notifyWhenNoPasteTarget = notifyWhenNoPasteTarget
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -175,6 +181,7 @@ class SettingsViewModel: ObservableObject {
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
+        self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
 
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -926,6 +933,20 @@ struct SettingsView: View {
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.autoPasteTranscription)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Notify When No Paste Target")
+                                    .font(.subheadline)
+                                Text("Show a “copied — press ⌘V” notice if no editable field is focused")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.notifyWhenNoPasteTarget)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }
