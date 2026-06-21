@@ -1134,4 +1134,15 @@ final class HebrewIvritSupportTests: XCTestCase {
             XCTAssertEqual(m.filename, m.url.lastPathComponent)
         }
     }
+
+    // MARK: Task 3 — ivrit.ai model entry
+    func testIvritModelIsAvailableWithCorrectMetadata() {
+        let ivrit = SettingsDownloadableModels.availableModels.first {
+            $0.filename == "ggml-ivrit-large-v3-turbo.bin"
+        }
+        XCTAssertNotNil(ivrit)
+        XCTAssertEqual(ivrit?.preferredLanguage, "he")
+        XCTAssertEqual(ivrit?.url.host, "huggingface.co")
+        XCTAssertTrue(ivrit?.url.absoluteString.contains("ivrit-ai/whisper-large-v3-turbo-ggml") ?? false)
+    }
 }
