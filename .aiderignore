@@ -1,0 +1,18 @@
+# Keep Aider focused on the macOS app sources.
+# Native/3rd-party/build dirs are noise for issue implementation.
+libwhisper/
+asian-autocorrect/
+libsherpa/
+SourcePackages/
+.build/
+build/
+Build/
+agent/
+docs/
+Scripts/
+fastlane/
+*.bin
+*.wav
+*.dmg
+*.profraw
+*.dylib
