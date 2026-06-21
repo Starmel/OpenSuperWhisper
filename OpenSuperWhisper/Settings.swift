@@ -179,6 +179,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var reduceVolumeOnRecord: Bool {
+        didSet {
+            AppPreferences.shared.reduceVolumeOnRecord = reduceVolumeOnRecord
+        }
+    }
+
+    @Published var reduceVolumeLevel: Double {
+        didSet {
+            AppPreferences.shared.reduceVolumeLevel = reduceVolumeLevel
+        }
+    }
+
     // MARK: - Retention / storage policy
 
     @Published var retentionMaxCountEnabled: Bool {
@@ -279,6 +291,8 @@ class SettingsViewModel: ObservableObject {
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
+        self.reduceVolumeOnRecord = prefs.reduceVolumeOnRecord
+        self.reduceVolumeLevel = prefs.reduceVolumeLevel
         self.retentionMaxCountEnabled = prefs.retentionMaxCountEnabled
         self.retentionMaxCount = prefs.retentionMaxCount
         self.retentionMaxAgeEnabled = prefs.retentionMaxAgeEnabled
@@ -1599,15 +1613,46 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Pause media during recording")
                                     .font(.subheadline)
-                                Text("Pauses playback in other apps and resumes when done")
+                                Text("Pauses playback in other apps and resumes when done. macOS doesn't let the app detect what was playing, so if media was already paused it may start playing when you stop — if that bothers you, use the volume option below instead.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.pauseMediaOnRecord)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                                 .help("Automatically pause media playback when recording starts")
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Lower system volume while recording")
+                                    .font(.subheadline)
+                                Text("Temporarily reduces the output volume, then restores it")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.reduceVolumeOnRecord)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .help("Lower the system output volume while recording, then restore it")
+                        }
+
+                        if viewModel.reduceVolumeOnRecord {
+                            HStack {
+                                Text("Volume while recording")
+                                    .font(.subheadline)
+                                Spacer()
+                                Slider(value: $viewModel.reduceVolumeLevel, in: 0...0.5)
+                                    .frame(width: 160)
+                                Text("\(Int((viewModel.reduceVolumeLevel * 100).rounded()))%")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 44, alignment: .trailing)
+                            }
                         }
                     }
                 }

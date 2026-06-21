@@ -148,6 +148,14 @@ final class AppPreferences {
     @UserDefault(key: "pauseMediaOnRecord", defaultValue: false)
     var pauseMediaOnRecord: Bool
 
+    /// Lower the system output volume while recording, then restore it. Opt-in.
+    @UserDefault(key: "reduceVolumeOnRecord", defaultValue: false)
+    var reduceVolumeOnRecord: Bool
+
+    /// Target output volume (0...1) while recording when `reduceVolumeOnRecord` is on.
+    @UserDefault(key: "reduceVolumeLevel", defaultValue: 0.1)
+    var reduceVolumeLevel: Double
+
     // Retention / storage policy
     // Limit the number of stored recordings & transcriptions.
     @UserDefault(key: "retentionMaxCountEnabled", defaultValue: false)
