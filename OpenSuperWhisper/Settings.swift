@@ -179,6 +179,18 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var postRecordHookEnabled: Bool {
+        didSet {
+            AppPreferences.shared.postRecordHookEnabled = postRecordHookEnabled
+        }
+    }
+
+    @Published var postRecordHookCommand: String {
+        didSet {
+            AppPreferences.shared.postRecordHookCommand = postRecordHookCommand
+        }
+    }
+
     @Published var autoCopyToClipboard: Bool {
         didSet {
             AppPreferences.shared.autoCopyToClipboard = autoCopyToClipboard
@@ -315,6 +327,8 @@ class SettingsViewModel: ObservableObject {
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.removeFillerWords = prefs.removeFillerWords
         self.fillerWordsPattern = prefs.fillerWordsPattern
+        self.postRecordHookEnabled = prefs.postRecordHookEnabled
+        self.postRecordHookCommand = prefs.postRecordHookCommand
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
@@ -711,8 +725,9 @@ struct InfoButton: View {
         .popover(isPresented: $isShown, arrowEdge: .bottom) {
             Text(text)
                 .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
                 .frame(width: 300, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding()
         }
     }
@@ -746,6 +761,14 @@ struct SettingRow<Trailing: View>: View {
 }
 
 struct SettingsView: View {
+    struct HookVariable { let name: String; let description: String }
+    static let postRecordHookVariables = [
+        HookVariable(name: "$OSW_TEXT", description: "the transcription"),
+        HookVariable(name: "$OSW_AUDIO_PATH", description: "wav file path (when history is on)"),
+        HookVariable(name: "$OSW_TIMESTAMP", description: "ISO 8601 date"),
+        HookVariable(name: "$OSW_DURATION", description: "length in seconds"),
+    ]
+
     @StateObject private var viewModel = SettingsViewModel()
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @Environment(\.dismiss) var dismiss
@@ -1557,7 +1580,60 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Post-Record Hook
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Post-Record Hook")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "Run a command after each transcription",
+                        caption: "Launch your own script when a transcription completes.",
+                        info: "Runs via /bin/sh -c after each successful transcription, in the background. Your command receives the data as environment variables — OSW_TEXT, OSW_AUDIO_PATH (when history is on), OSW_TIMESTAMP, OSW_DURATION — and a JSON object on stdin with the same fields. Example: echo \"$OSW_TEXT\" >> ~/dictations.txt"
+                    ) {
+                        Toggle("", isOn: $viewModel.postRecordHookEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.postRecordHookEnabled {
+                        TextEditor(text: $viewModel.postRecordHookCommand)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 56)
+                            .padding(6)
+                            .background(Color(.textBackgroundColor))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Available in your command (also piped as JSON on stdin):")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            ForEach(Self.postRecordHookVariables, id: \.name) { variable in
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text(variable.name)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                    Text("— \(variable.description)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Debug Options
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Debug Options")

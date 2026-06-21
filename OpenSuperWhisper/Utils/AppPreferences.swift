@@ -145,6 +145,14 @@ final class AppPreferences {
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
 
+    /// Run a user shell command after each successful transcription. Opt-in (power user).
+    @UserDefault(key: "postRecordHookEnabled", defaultValue: false)
+    var postRecordHookEnabled: Bool
+
+    /// The command run via `/bin/sh -c` after transcription. Receives OSW_* env vars + JSON on stdin.
+    @UserDefault(key: "postRecordHookCommand", defaultValue: "")
+    var postRecordHookCommand: String
+
     /// Strip filler words (um, uh, …) from the transcription before saving/inserting. Opt-in.
     @UserDefault(key: "removeFillerWords", defaultValue: false)
     var removeFillerWords: Bool
