@@ -99,7 +99,19 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         let y = max(screenFrame.minY, min(anchorBottomY, screenFrame.maxY - window.frame.height))
         window.setFrameOrigin(NSPoint(x: x, y: y))
     }
-    
+
+    /// Briefly shows the indicator at the configured position (without recording) so the user
+    /// can see where it will appear. Used by the position picker's "Preview" button.
+    func preview() {
+        guard viewModel == nil else { return } // don't interfere with a live recording
+        let vm = show(nearPoint: FocusUtils.getCurrentCursorPosition())
+        vm.state = .recording
+        vm.isBlinking = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            self?.hide()
+        }
+    }
+
     func stopRecording() {
         viewModel?.startDecoding()
     }

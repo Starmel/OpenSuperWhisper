@@ -1796,14 +1796,21 @@ struct SettingsView: View {
                             caption: "Where the recording indicator appears.",
                             info: "Near cursor (default) shows it just above your text caret. Top, Center or Bottom pin it to the middle of the screen instead."
                         ) {
-                            Picker("", selection: $viewModel.indicatorPosition) {
-                                Text("Near cursor").tag("cursor")
-                                Text("Top").tag("top")
-                                Text("Center").tag("center")
-                                Text("Bottom").tag("bottom")
+                            HStack(spacing: 8) {
+                                Picker("", selection: $viewModel.indicatorPosition) {
+                                    Text("Near cursor").tag("cursor")
+                                    Text("Top").tag("top")
+                                    Text("Center").tag("center")
+                                    Text("Bottom").tag("bottom")
+                                }
+                                .labelsHidden()
+                                .frame(width: 140)
+                                Button("Preview") {
+                                    IndicatorWindowManager.shared.preview()
+                                }
+                                .controlSize(.small)
+                                .help("Briefly show the indicator at this position")
                             }
-                            .labelsHidden()
-                            .frame(width: 140)
                         }
 
                         HStack {
