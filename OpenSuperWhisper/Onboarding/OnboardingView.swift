@@ -234,7 +234,7 @@ class OnboardingViewModel: ObservableObject {
                 }
                 
                 let manager = AsrManager(config: .default)
-                try await manager.initialize(models: models)
+                try await manager.loadModels(models)
                 
                 await MainActor.run {
                     if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
@@ -524,7 +524,17 @@ struct OnboardingUnifiedModelItemView: View {
                 Text(model.description)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
+                if let pageURL = model.huggingFacePageURL {
+                    Link(destination: pageURL) {
+                        HStack(spacing: 3) {
+                            Text("Hugging Face")
+                            Image(systemName: "arrow.up.right")
+                        }
+                        .font(.caption2)
+                    }
+                }
+
                 if viewModel.isDownloading && viewModel.downloadingModelName == model.name && isParakeet {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
