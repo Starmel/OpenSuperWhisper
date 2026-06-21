@@ -509,11 +509,11 @@ struct SettingsDownloadableModels {
             description: "Fastest processing"
         ),
         SettingsDownloadableModel(
-            name: "Hebrew — ivrit.ai Turbo v3",
+            name: "Turbo V3 Hebrew",
             isDownloaded: false,
             url: URL(string: "https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ggml/resolve/main/ggml-model.bin?download=true")!,
             size: 1624,
-            description: "Hebrew-optimized model by ivrit.ai. Selecting it sets the language to Hebrew.",
+            description: "Hebrew fine-tune of Turbo V3 by ivrit.ai. Sets the language to Hebrew.",
             filename: "ggml-ivrit-large-v3-turbo.bin",
             preferredLanguage: "he"
         )
