@@ -41,6 +41,17 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    /// User-initiated model selection. Persists the model and, if the model declares a
+    /// preferred language (e.g. the ivrit.ai Hebrew model), switches the language to it.
+    /// Do not call from init/restore — only in response to an explicit user action.
+    func selectModel(_ url: URL) {
+        selectedModelURL = url
+        if let lang = SettingsDownloadableModels.preferredLanguage(forFilename: url.lastPathComponent),
+           selectedLanguage != lang {
+            selectedLanguage = lang
+        }
+    }
+
     @Published var availableModels: [URL] = []
     
     @Published var downloadableModels: [SettingsDownloadableModel] = []
@@ -267,7 +278,7 @@ class SettingsViewModel: ObservableObject {
                     }
                     loadAvailableModels()
                     let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(filename).path
-                    selectedModelURL = URL(fileURLWithPath: modelPath)
+                    selectModel(URL(fileURLWithPath: modelPath))
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -507,6 +518,10 @@ struct SettingsDownloadableModels {
             preferredLanguage: "he"
         )
     ]
+
+    static func preferredLanguage(forFilename filename: String) -> String? {
+        availableModels.first { $0.filename == filename }?.preferredLanguage
+    }
 }
 
 struct Settings {
@@ -1440,7 +1455,7 @@ struct ModelDownloadItemView: View {
     
     var isSelected: Bool {
         if let selectedURL = viewModel.selectedModelURL {
-            let filename = model.url.lastPathComponent
+            let filename = model.filename
             return selectedURL.lastPathComponent == filename
         }
         return false
@@ -1488,8 +1503,8 @@ struct ModelDownloadItemView: View {
                         .imageScale(.large)
                 } else {
                     Button(action: {
-                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                        viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+                        let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
+                        viewModel.selectModel(URL(fileURLWithPath: modelPath))
                     }) {
                         Text("Select")
                     }
@@ -1522,8 +1537,8 @@ struct ModelDownloadItemView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if model.isDownloaded && !isSelected {
-                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.url.lastPathComponent).path
-                viewModel.selectedModelURL = URL(fileURLWithPath: modelPath)
+                let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
+                viewModel.selectModel(URL(fileURLWithPath: modelPath))
             }
         }
         .alert("Download Error", isPresented: $showError) {
