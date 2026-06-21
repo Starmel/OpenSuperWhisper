@@ -178,6 +178,75 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Retention / storage policy
+
+    @Published var retentionMaxCountEnabled: Bool {
+        didSet {
+            AppPreferences.shared.retentionMaxCountEnabled = retentionMaxCountEnabled
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxCount: Int {
+        didSet {
+            // Clamp the published property itself (not only the stored value) so the UI and
+            // the persisted/enforced value can never diverge. The re-assignment re-enters
+            // didSet once with an already-clamped value, which then falls through.
+            let clamped = max(1, retentionMaxCount)
+            if clamped != retentionMaxCount {
+                retentionMaxCount = clamped
+                return
+            }
+            AppPreferences.shared.retentionMaxCount = clamped
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeEnabled: Bool {
+        didSet {
+            AppPreferences.shared.retentionMaxAgeEnabled = retentionMaxAgeEnabled
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeValue: Int {
+        didSet {
+            // Clamp the published property itself (see retentionMaxCount) so the UI and the
+            // persisted/enforced value can never diverge.
+            let clamped = max(1, retentionMaxAgeValue)
+            if clamped != retentionMaxAgeValue {
+                retentionMaxAgeValue = clamped
+                return
+            }
+            AppPreferences.shared.retentionMaxAgeValue = clamped
+            enforceRetention()
+        }
+    }
+
+    @Published var retentionMaxAgeUnit: RetentionUnit {
+        didSet {
+            AppPreferences.shared.retentionMaxAgeUnit = retentionMaxAgeUnit.rawValue
+            enforceRetention()
+        }
+    }
+
+    private var retentionEnforceTimer: Timer?
+
+    /// Applies the retention policy after a short debounce so the user sees the effect of
+    /// toggling a switch or changing a limit, without the data-loss footgun of enforcing on
+    /// every keystroke: the count/age TextFields use `format: .number`, whose binding commits
+    /// (and fires didSet) on each parsed value, so typing "500" passes through 5 and 50.
+    /// Enforcing immediately would permanently delete recordings at those intermediate values.
+    /// Debouncing coalesces a burst of edits into a single enforcement at the final value.
+    private func enforceRetention() {
+        retentionEnforceTimer?.invalidate()
+        retentionEnforceTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
+            Task { @MainActor in
+                await RecordingStore.shared.enforceRetentionPolicy()
+            }
+        }
+    }
+
     init() {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -203,6 +272,11 @@ class SettingsViewModel: ObservableObject {
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
+        self.retentionMaxCountEnabled = prefs.retentionMaxCountEnabled
+        self.retentionMaxCount = prefs.retentionMaxCount
+        self.retentionMaxAgeEnabled = prefs.retentionMaxAgeEnabled
+        self.retentionMaxAgeValue = prefs.retentionMaxAgeValue
+        self.retentionMaxAgeUnit = RetentionUnit(rawValue: prefs.retentionMaxAgeUnit) ?? .days
 
         if let savedPath = prefs.selectedWhisperModelPath ?? prefs.selectedModelPath {
             self.selectedModelURL = URL(fileURLWithPath: savedPath)
@@ -570,6 +644,7 @@ struct Settings {
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
+    @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
@@ -597,13 +672,20 @@ struct SettingsView: View {
                     Label("Transcription", systemImage: "text.bubble")
                 }
                 .tag(2)
-            
+
+            // Storage / Retention Settings
+            storageSettings
+                .tabItem {
+                    Label("Storage", systemImage: "externaldrive")
+                }
+                .tag(3)
+
             // Advanced Settings
             advancedSettings
                 .tabItem {
                     Label("Advanced", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
         .padding()
         .frame(width: 550)
@@ -639,6 +721,7 @@ struct SettingsView: View {
         }
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
+            launchAtLogin.refresh()
             if viewModel.selectedEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
             }
@@ -1134,9 +1217,131 @@ struct SettingsView: View {
         .cornerRadius(12)
     }
 
+    private var storageSettings: some View {
+        Form {
+            VStack(spacing: 20) {
+                // Maximum number of recordings
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Limit Number of Recordings")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Keep only the most recent recordings & transcriptions")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.retentionMaxCountEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.retentionMaxCountEnabled {
+                        HStack {
+                            Text("Keep at most")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("", value: $viewModel.retentionMaxCount, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 80)
+                            Stepper("", value: $viewModel.retentionMaxCount, in: 1...100000)
+                                .labelsHidden()
+                            Text("recordings")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Maximum age
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Delete Old Recordings")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text("Automatically remove recordings older than the chosen age")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.retentionMaxAgeEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.retentionMaxAgeEnabled {
+                        HStack {
+                            Text("Delete after")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("", value: $viewModel.retentionMaxAgeValue, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 70)
+                            Stepper("", value: $viewModel.retentionMaxAgeValue, in: 1...100000)
+                                .labelsHidden()
+                            Picker("", selection: $viewModel.retentionMaxAgeUnit) {
+                                ForEach(RetentionUnit.allCases) { unit in
+                                    Text(unit.displayName).tag(unit)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 110)
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                Text("Both limits can be active at the same time. Cleanup runs automatically when you change these settings and after each new transcription, and the age limit is also re-checked periodically in the background. Recordings that are still being processed are never deleted.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
+        }
+    }
+
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {
+                // Startup
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Startup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Launch at Login")
+                                .font(.subheadline)
+                            Text("Automatically start OpenSuperWhisper when you log in")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin.isEnabled },
+                            set: { launchAtLogin.setEnabled($0) }
+                        ))
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Decoding Strategy")

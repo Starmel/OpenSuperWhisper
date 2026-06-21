@@ -170,6 +170,10 @@ class TranscriptionQueue: ObservableObject {
             currentRecordingId = recording.id
             await processRecording(recording)
             currentRecordingId = nil
+            // Enforce the retention limit after each recording finishes so the
+            // count is held as a fixed-size buffer. In-progress recordings stay
+            // excluded; they get pruned as soon as they finish on a later pass.
+            await recordingStore.enforceRetentionPolicy()
         }
     }
 
