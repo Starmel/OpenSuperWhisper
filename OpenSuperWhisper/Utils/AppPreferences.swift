@@ -153,6 +153,10 @@ final class AppPreferences {
     @UserDefault(key: "postRecordHookCommand", defaultValue: "")
     var postRecordHookCommand: String
 
+    /// Where the recording indicator appears: "cursor" (default), "top", "center", "bottom".
+    @UserDefault(key: "indicatorPosition", defaultValue: "cursor")
+    var indicatorPosition: String
+
     /// Strip filler words (um, uh, …) from the transcription before saving/inserting. Opt-in.
     @UserDefault(key: "removeFillerWords", defaultValue: false)
     var removeFillerWords: Bool

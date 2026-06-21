@@ -55,12 +55,24 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         if let window = window, let screen = targetScreen {
             let screenFrame = screen.frame
 
-            if let point = point {
-                anchorBottomY = point.y + 20 // sit just above the caret
-                anchorCenterX = point.x
-            } else {
-                anchorBottomY = screenFrame.maxY - 260 // a stable band near the top
+            switch AppPreferences.shared.indicatorPosition {
+            case "top":
                 anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.maxY - 140
+            case "center":
+                anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.midY
+            case "bottom":
+                anchorCenterX = screenFrame.midX
+                anchorBottomY = screenFrame.minY + 120
+            default: // "cursor": sit just above the caret, falling back to a band near the top
+                if let point = point {
+                    anchorBottomY = point.y + 20
+                    anchorCenterX = point.x
+                } else {
+                    anchorBottomY = screenFrame.maxY - 260
+                    anchorCenterX = screenFrame.midX
+                }
             }
 
             reposition(window: window, screen: screen)
@@ -87,7 +99,19 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         let y = max(screenFrame.minY, min(anchorBottomY, screenFrame.maxY - window.frame.height))
         window.setFrameOrigin(NSPoint(x: x, y: y))
     }
-    
+
+    /// Briefly shows the indicator at the configured position (without recording) so the user
+    /// can see where it will appear. Used by the position picker's "Preview" button.
+    func preview() {
+        guard viewModel == nil else { return } // don't interfere with a live recording
+        let vm = show(nearPoint: FocusUtils.getCurrentCursorPosition())
+        vm.state = .recording
+        vm.isBlinking = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            self?.hide()
+        }
+    }
+
     func stopRecording() {
         viewModel?.startDecoding()
     }
