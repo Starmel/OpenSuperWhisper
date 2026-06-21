@@ -2,12 +2,14 @@ import Cocoa
 import Combine
 import SwiftUI
 
-enum RecordingState {
+enum RecordingState: Equatable {
     case idle
     case connecting
     case recording
     case decoding
     case busy
+    case error(String)
+    case info(String)
 }
 
 @MainActor
@@ -66,9 +68,32 @@ class IndicatorViewModel: ObservableObject {
     
     func showBusyMessage() {
         state = .busy
-        
+
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.delegate?.didFinishDecoding()
+            }
+        }
+    }
+
+    func showError(_ message: String) {
+        state = .error(message)
+
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.delegate?.didFinishDecoding()
+            }
+        }
+    }
+
+    /// Brief, non-alarming notice (e.g. when there was no editable field to paste into).
+    func showInfo(_ message: String) {
+        state = .info(message)
+
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.delegate?.didFinishDecoding()
             }
@@ -145,15 +170,22 @@ class IndicatorViewModel: ObservableObject {
                         ))
                     }
                     
-                    insertText(text)
+                    let pasteTargetMissing = insertText(text)
                     print("Transcription result: \(text)")
+                    await MainActor.run {
+                        if pasteTargetMissing {
+                            self.showInfo("Copied — press ⌘V to paste")
+                        } else {
+                            self.delegate?.didFinishDecoding()
+                        }
+                    }
+                    return
                 } catch {
                     print("Error transcribing audio: \(error)")
-                    try? FileManager.default.removeItem(at: tempURL)
-                }
-                
-                await MainActor.run {
-                    self.delegate?.didFinishDecoding()
+                    await MainActor.run {
+                        self.showError("Transcription failed")
+                    }
+                    return
                 }
             }
         } else {
@@ -168,24 +200,32 @@ class IndicatorViewModel: ObservableObject {
         }
     }
     
-    func insertText(_ text: String) {
+    /// Returns `true` when auto-paste ran but no editable field was focused, so the
+    /// caller can surface a "copied — press ⌘V" notice. The paste is always attempted
+    /// (never suppressed), so a wrong detection can never swallow a working paste.
+    @discardableResult
+    func insertText(_ text: String) -> Bool {
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
 
         if prefs.autoPasteTranscription {
-            if prefs.autoCopyToClipboard {
-                // Paste and keep in clipboard
+            // Check the focus target BEFORE pasting (our own Cmd+V could change it).
+            let targetMissing = prefs.notifyWhenNoPasteTarget
+                && FocusUtils.focusedElementIsEditable() == false
+
+            // Keep the text on the clipboard whenever we'll warn, so "press ⌘V" is
+            // actionable even if "copy to clipboard" is turned off.
+            if targetMissing || prefs.autoCopyToClipboard {
                 ClipboardUtil.insertTextAndKeepInClipboard(finalText)
             } else {
-                // Paste but restore original clipboard (legacy behavior)
                 ClipboardUtil.insertText(finalText)
             }
+            return targetMissing
         } else if prefs.autoCopyToClipboard {
-            // Only copy to clipboard, don't paste
             ClipboardUtil.copyToClipboard(finalText)
         }
         // If both are false, do nothing
-
+        return false
     }
     
     static func applyPostProcessing(_ text: String) -> String {
@@ -321,6 +361,30 @@ struct IndicatorWindow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
+            case .error(let message):
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .frame(width: 24)
+
+                    Text(message)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            case .info(let message):
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.clipboard")
+                        .foregroundColor(.accentColor)
+                        .frame(width: 24)
+
+                    Text(message)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             case .idle:
                 EmptyView()
             }

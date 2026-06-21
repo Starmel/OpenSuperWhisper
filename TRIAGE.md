@@ -1,7 +1,7 @@
 # TRIAGE — OpenSuperWhisper fork (2026-06-21)
 
-> **Synthèse** : 22 PR — 5 *merge-clean* (quick wins), 10 *adapt-rebase* (à intégrer après rebase),
-> 4 *reject/superseded*, 3 en **décision mainteneur** (post-traitement IA). 38 issues — ~18 bugs
+> **Synthèse** : 22 PR — 4 *merge-clean* (quick wins), 10 *adapt-rebase* (à intégrer après rebase),
+> 5 *reject/superseded* (dont #100 qui casse le build), 3 en **décision mainteneur** (post-traitement IA). 38 issues — ~18 bugs
 > (dont P0 : #117), ~18 features, ~2 méta/déjà-résolues.
 > Gagnants des features concurrentes : **rétention #148** (supersède #47), **audio #126** (vs #49),
 > **boost #149 + #142 complémentaires**, **IA → reco #106 (MLX), à valider**.
@@ -19,7 +19,7 @@ Légende verdicts : `merge-clean` (mergeable + valeur sûre) · `adapt-rebase` (
 | #116 spinner pendant chargement modèle (rakendd) | fiabilité | MERGEABLE | **merge-clean** | +1/-1, UX évidente (bouton record silencieusement désactivé pendant le load) |
 | #132 feedback d'erreur engine/transcription (michael-wojcik) | fiabilité | MERGEABLE | **merge-clean** | +489/-10, **inclut des tests** ; résout #117 (échec silencieux, P0) |
 | #137 anti cold-start (pré-warm audio) (RABJR51) | fiabilité | MERGEABLE | **merge-clean** | +24/-1, supprime la coupure des 1ers mots ; lié #84 |
-| #100 bump asian-autocorrect (dependabot) | infra | MERGEABLE | **merge-clean** | +1/-1 ; déjà sur 203fd5f, bump vers 8855a5c |
+| #100 bump asian-autocorrect (dependabot) | infra | MERGEABLE | **reject** | ❌ **CASSE le build** : la cible 8855a5c a supprimé en amont le crate `autocorrect-swift` dont dépend `Bridge.h` (`package ID specification 'autocorrect-swift' did not match any packages`). Rester sur 203fd5f. Vérifié 2026-06-21 |
 | #105 bump fastlane 2.229→2.232 (dependabot) | infra | MERGEABLE | **merge-clean** | Gemfile.lock seulement |
 | #67 bump whisper.cpp f3ff80e→44fa2f6 (dependabot) | infra | MERGEABLE | **adapt-rebase** | Touche aussi build.yml + run.sh ; **à tester** (API ggml/whisper peut bouger) |
 | #149 dictionnaire perso / boost mots-clés (AlexCherrypi) | dict/boost | MERGEABLE | **adapt-rebase** | Remplacement *Heard→Replace* post-transcription, **universel (2 moteurs)** ; implémente #19 |
@@ -114,8 +114,10 @@ interrompre (mixing) via réécriture AVAudioEngine, chevauche #147. → #126 ga
 ## Backlog priorisé (entrée des phases 2-3)
 
 ### Phase 2 — Quick wins (merge-clean, faible risque)
-- [ ] #116 spinner · #132 feedback erreur (résout #117 P0) · #137 cold-start · #100 · #105
-- [ ] #67 bump whisper.cpp (à **tester** après rebase)
+- [x] #132 feedback erreur (résout #117 P0) · #116 spinner · #137 cold-start · #129 race clipboard · #105 fastlane — **intégrés + testés** sur `feat/phase2-quickwins`
+- [x] feature maison **notify-when-no-paste-target** (filet presse-papier) — livrée + 8 tests
+- [ ] ~~#100 asian-autocorrect~~ → **rejeté** (casse le build, voir tableau)
+- [ ] #67 bump whisper.cpp (à **tester** après rebase ; conflit run.sh + change l'API → à part)
 - [ ] **Feature neuve clipboard-fallback** : toujours copier la transcription au presse-papier
       (issue #80), au-dessus des réglages clipboard déjà mergés (#133), en intégrant le fix de race #129.
 

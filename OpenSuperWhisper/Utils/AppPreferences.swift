@@ -117,4 +117,9 @@ final class AppPreferences {
 
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
+
+    /// When auto-paste is on but no editable field is focused, show a brief
+    /// "copied — press ⌘V" notice instead of letting the paste silently go nowhere.
+    @UserDefault(key: "notifyWhenNoPasteTarget", defaultValue: true)
+    var notifyWhenNoPasteTarget: Bool
 }
