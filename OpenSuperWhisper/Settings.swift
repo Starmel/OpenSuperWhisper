@@ -815,7 +815,7 @@ struct SettingsView: View {
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
 
@@ -1799,6 +1799,7 @@ struct SettingsView: View {
                             HStack(spacing: 8) {
                                 Picker("", selection: $viewModel.indicatorPosition) {
                                     Text("Near cursor").tag("cursor")
+                                    Text("Notch").tag("notch")
                                     Text("Top").tag("top")
                                     Text("Center").tag("center")
                                     Text("Bottom").tag("bottom")
