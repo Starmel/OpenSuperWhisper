@@ -80,6 +80,26 @@ final class AppPreferences {
     
     @UserDefault(key: "initialPrompt", defaultValue: "")
     var initialPrompt: String
+
+    // Custom dictionary settings
+    @UserDefault(key: "customDictionaryEnabled", defaultValue: false)
+    var customDictionaryEnabled: Bool
+
+    @OptionalUserDefault(key: "customDictionaryData")
+    private var customDictionaryData: Data?
+
+    var customDictionaryEntries: [CustomDictionaryEntry] {
+        get {
+            guard let data = customDictionaryData,
+                  let entries = try? JSONDecoder().decode([CustomDictionaryEntry].self, from: data) else {
+                return []
+            }
+            return entries
+        }
+        set {
+            customDictionaryData = try? JSONEncoder().encode(newValue)
+        }
+    }
     
     @UserDefault(key: "useBeamSearch", defaultValue: false)
     var useBeamSearch: Bool
