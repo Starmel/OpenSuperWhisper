@@ -1100,3 +1100,12 @@ final class TextUtilTests: XCTestCase {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
     }
 }
+
+final class HebrewIvritSupportTests: XCTestCase {
+
+    // MARK: Task 1 — Hebrew language
+    func testHebrewIsAvailableLanguage() {
+        XCTAssertTrue(LanguageUtil.availableLanguages.contains("he"))
+        XCTAssertEqual(LanguageUtil.languageNames["he"], "Hebrew")
+    }
+}
