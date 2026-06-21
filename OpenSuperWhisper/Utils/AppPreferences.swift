@@ -117,6 +117,10 @@ final class AppPreferences {
     @UserDefault(key: "startHidden", defaultValue: false)
     var startHidden: Bool
 
+    /// Show the transcription live (in the indicator) while recording. Parakeet only; opt-in.
+    @UserDefault(key: "liveTranscriptionEnabled", defaultValue: false)
+    var liveTranscriptionEnabled: Bool
+
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
     
