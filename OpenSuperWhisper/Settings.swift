@@ -678,6 +678,59 @@ struct Settings {
     }
 }
 
+/// A small "ⓘ" button that reveals a longer explanation in a popover, so setting rows can
+/// show a short caption by default and keep the full details one click away.
+struct InfoButton: View {
+    let text: String
+    @State private var isShown = false
+
+    var body: some View {
+        Button {
+            isShown.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("More info")
+        .popover(isPresented: $isShown, arrowEdge: .bottom) {
+            Text(text)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 300, alignment: .leading)
+                .padding()
+        }
+    }
+}
+
+/// A standard setting row: title (+ optional ⓘ with full details), a short caption, and a
+/// trailing control (e.g. a Toggle).
+struct SettingRow<Trailing: View>: View {
+    let title: String
+    let caption: String
+    var info: String? = nil
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(title).font(.subheadline)
+                    if let info { InfoButton(text: info) }
+                }
+                Text(caption)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer()
+            trailing()
+        }
+    }
+}
+
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
@@ -692,7 +745,7 @@ struct SettingsView: View {
              // Shortcut Settings
             shortcutSettings
                 .tabItem {
-                    Label("Shortcuts", systemImage: "command")
+                    Label("General", systemImage: "slider.horizontal.3")
                 }
                 .tag(0)
             // Model Settings
@@ -1379,50 +1432,6 @@ struct SettingsView: View {
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {
-                // Startup
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Startup")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Launch at Login")
-                                .font(.subheadline)
-                            Text("Automatically start OpenSuperWhisper when you log in")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { launchAtLogin.isEnabled },
-                            set: { launchAtLogin.setEnabled($0) }
-                        ))
-                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                        .labelsHidden()
-                    }
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Start in the Menu Bar")
-                                .font(.subheadline)
-                            Text("Launch without showing the main window — open it anytime from the menu bar icon. Takes effect on next launch.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $viewModel.startHidden)
-                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                            .labelsHidden()
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
-
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Decoding Strategy")
@@ -1639,17 +1648,11 @@ struct SettingsView: View {
                                 .help("Play a notification sound when recording begins")
                         }
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Live transcription")
-                                    .font(.subheadline)
-                                Text("Shows your speech in the recording indicator as you talk (Parakeet engine only). The text appears after a short delay and is a rough live preview — it may differ from the final result. The text that actually gets inserted always comes from the full, accurate transcription, not from this preview.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            Spacer()
+                        SettingRow(
+                            title: "Live transcription",
+                            caption: "Preview your speech in the indicator as you talk (Parakeet only).",
+                            info: "The text appears after a short delay and is a rough live preview — it may differ from the final result. The text that actually gets inserted always comes from the full, accurate transcription, not from this preview."
+                        ) {
                             Toggle("", isOn: $viewModel.liveTranscriptionEnabled)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
@@ -1658,32 +1661,21 @@ struct SettingsView: View {
                         }
                         .opacity(viewModel.selectedEngine == "fluidaudio" ? 1 : 0.5)
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Pause media during recording")
-                                    .font(.subheadline)
-                                Text("Pauses playback in other apps and resumes when done. macOS doesn't let the app detect what was playing, so if media was already paused it may start playing when you stop — if that bothers you, use the volume option below instead.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            Spacer()
+                        SettingRow(
+                            title: "Pause media during recording",
+                            caption: "Pause other apps' playback while recording, then resume.",
+                            info: "macOS doesn't let the app detect what was playing, so if media was already paused it may start playing when you stop — if that bothers you, use the volume option below instead."
+                        ) {
                             Toggle("", isOn: $viewModel.pauseMediaOnRecord)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                                 .help("Automatically pause media playback when recording starts")
                         }
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Lower system volume while recording")
-                                    .font(.subheadline)
-                                Text("Temporarily reduces the output volume, then restores it")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
+                        SettingRow(
+                            title: "Lower system volume while recording",
+                            caption: "Temporarily reduce the output volume, then restore it."
+                        ) {
                             Toggle("", isOn: $viewModel.reduceVolumeOnRecord)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
@@ -1703,6 +1695,39 @@ struct SettingsView: View {
                                     .frame(width: 44, alignment: .trailing)
                             }
                         }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Startup
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Startup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "Launch at Login",
+                        caption: "Start OpenSuperWhisper automatically when you log in."
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin.isEnabled },
+                            set: { launchAtLogin.setEnabled($0) }
+                        ))
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                    }
+
+                    SettingRow(
+                        title: "Start in the Menu Bar",
+                        caption: "Launch without the main window — open it from the menu bar icon.",
+                        info: "Launches straight into the menu bar with no window shown. Open the window anytime from the menu bar icon. Takes effect on next launch."
+                    ) {
+                        Toggle("", isOn: $viewModel.startHidden)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
                     }
                 }
                 .padding()

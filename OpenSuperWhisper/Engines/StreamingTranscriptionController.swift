@@ -37,15 +37,16 @@ final class StreamingTranscriptionController: ObservableObject {
         let version: AsrModelVersion = versionString == "v2" ? .v2 : .v3
         let models = try await AsrModels.downloadAndLoad(version: version)
 
-        // Small windows so a rough preview appears every few seconds (the default 11–15s
-        // window emits nothing for short dictations). This preview is intentionally lower
-        // quality — the final inserted text comes from the accurate file pass, not from here.
+        // Small windows so a rough preview appears quickly (the default 11–15s window emits
+        // nothing for short dictations). First text lands at ~chunk+right ≈ 1.8s, then ~every
+        // 1.5s. Intentionally lower quality — the inserted text comes from the accurate file
+        // pass, not from here — so we trade accuracy for responsiveness.
         let previewConfig = StreamingAsrConfig(
-            chunkSeconds: 2.5,
-            hypothesisChunkSeconds: 1.0,
-            leftContextSeconds: 5.0,
-            rightContextSeconds: 0.5,
-            minContextForConfirmation: 2.0,
+            chunkSeconds: 1.5,
+            hypothesisChunkSeconds: 0.5,
+            leftContextSeconds: 4.0,
+            rightContextSeconds: 0.3,
+            minContextForConfirmation: 1.0,
             confirmationThreshold: 0.80
         )
         let manager = StreamingAsrManager(config: previewConfig)
