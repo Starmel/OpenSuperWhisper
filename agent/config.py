@@ -13,6 +13,12 @@ ENV_FILE = AGENT_DIR / ".env"
 MODEL = "openrouter/deepseek/deepseek-v4-flash"
 BASE_BRANCH = "master"
 
+# Issues are read from the public upstream repo; branches and PRs go to the
+# private fork so the work stays private.
+UPSTREAM_REPO = "Starmel/OpenSuperWhisper"
+FORK_REPO = "Starmel/OpenSuperWhisper-private"
+FORK_REMOTE = "fork"
+
 # CA bundle used by aider's HTTP client (this Python build ships without one).
 CA_BUNDLE = "/etc/ssl/cert.pem"
 

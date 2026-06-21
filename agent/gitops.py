@@ -1,7 +1,7 @@
 import re
 import subprocess
 
-from config import REPO_ROOT
+from config import FORK_REMOTE, REPO_ROOT
 
 
 class GitError(Exception):
@@ -66,7 +66,7 @@ def create_issue_branch(number: int, title: str, base: str) -> str:
 
 
 def push_branch(branch: str) -> None:
-    _run(["push", "-u", "origin", branch])
+    _run(["push", "-u", FORK_REMOTE, branch])
 
 
 def has_commits_since(base: str) -> bool:

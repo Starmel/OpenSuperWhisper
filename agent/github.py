@@ -2,7 +2,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 
-from config import REPO_ROOT
+from config import FORK_REPO, REPO_ROOT, UPSTREAM_REPO
 
 
 class GitHubError(Exception):
@@ -37,6 +37,7 @@ def _run(args: list) -> str:
 def list_open_issues(limit: int = 50) -> list:
     raw = _run([
         "gh", "issue", "list",
+        "--repo", UPSTREAM_REPO,
         "--state", "open",
         "--limit", str(limit),
         "--json", "number,title,body,labels,url",
@@ -57,6 +58,7 @@ def list_open_issues(limit: int = 50) -> list:
 def create_pull_request(branch: str, title: str, body: str, base: str) -> str:
     raw = _run([
         "gh", "pr", "create",
+        "--repo", FORK_REPO,
         "--base", base,
         "--head", branch,
         "--title", title,
