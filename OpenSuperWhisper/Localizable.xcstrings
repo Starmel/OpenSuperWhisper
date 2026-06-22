@@ -2340,6 +2340,36 @@
           }
         }
       }
+    },
+    "Most accurate, ~99 languages, and can translate to English. Runs fully on-device.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus précis, ~99 langues, et peut traduire en anglais. 100 % en local."
+          }
+        }
+      }
+    },
+    "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rapide — chinois, cantonais, anglais, japonais, coréen. 100 % en local."
+          }
+        }
+      }
+    },
+    "Fast, multilingual (25 languages), with a live preview as you speak. Runs fully on-device.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rapide, multilingue (25 langues), avec aperçu en direct pendant que vous parlez. 100 % en local."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

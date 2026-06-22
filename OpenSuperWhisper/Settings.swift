@@ -880,6 +880,18 @@ struct SettingsView: View {
         return cancelKeyChoices.first { $0.shortcut == current }?.id ?? "esc"
     }
 
+    /// One-line description of the selected engine, to help users choose.
+    private var engineBlurb: LocalizedStringKey {
+        switch viewModel.selectedEngine {
+        case "whisper":
+            return "Most accurate, ~99 languages, and can translate to English. Runs fully on-device."
+        case "sensevoice":
+            return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
+        default:
+            return "Fast, multilingual (25 languages), with a live preview as you speak. Runs fully on-device."
+        }
+    }
+
     var body: some View {
         TabView(selection: $selectedTab) {
 
@@ -999,6 +1011,12 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
+
+                    Text(engineBlurb)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 8)
 
 #if arch(arm64)
                     if viewModel.selectedEngine == "sensevoice" {
