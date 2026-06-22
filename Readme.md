@@ -19,8 +19,14 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 - ✊ Hold-to-record mode — hold the shortcut to record, release to stop
 - 📁 Drag & drop audio files for transcription with queue processing
 - 🎤 Microphone selection — switch between built-in, external, Bluetooth and iPhone (Apple Continuity) mics from the menu bar
-- 🌍 Support for multiple languages with auto-detection
+- 🌍 Support for many languages with auto-detection — including Hebrew (with an [ivrit.ai](https://www.ivrit.ai/) fine-tuned model)
 - 📖 Custom dictionary — fix proper nouns and jargon with your own replacements (works with both engines; biases Whisper recognition)
+- 👀 Live transcription preview — see the text build up in the indicator as you speak (Parakeet)
+- 🧹 Cleaner output — optionally remove filler words (um, uh…) and never paste "No speech detected"
+- 🤐 Privacy & history — disable transcription history, or set retention limits (max count / age)
+- 🚀 Lifecycle — launch at login and/or start hidden in the menu bar
+- 🔇 While recording — optionally pause other apps' media or lower the system volume
+- 🪝 Post-record hook — run your own shell command after each transcription (text + audio path via env vars / JSON)
 - 🇯🇵🇨🇳🇰🇷 Asian language autocorrect ([autocorrect](https://github.com/huacnlee/autocorrect))
 
 ## Installation
@@ -42,7 +48,7 @@ If you encounter any issues or have questions, please:
 
 To build locally, you'll need:
 
-    git clone git@github.com:Starmel/OpenSuperWhisper.git
+    git clone git@github.com:my-monkeys/OpenSuperWhisper.git
     cd OpenSuperWhisper
     git submodule update --init --recursive
     brew install cmake libomp rust ruby
