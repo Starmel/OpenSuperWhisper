@@ -207,10 +207,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         transcriptionLanguageItem.submenu = languageSubmenu
         menu.addItem(transcriptionLanguageItem)
 
-        let translateItem = NSMenuItem(title: NSLocalizedString("Translate to English", comment: ""),
-                                       action: #selector(toggleTranslateToEnglish), keyEquivalent: "")
+        // Translation is a Whisper-only feature; Parakeet/SenseVoice only transcribe in the source
+        // language (#124). Off Whisper, gray the item out and say why instead of silently ignoring it.
+        let isWhisperEngine = AppPreferences.shared.selectedEngine == "whisper"
+        let translateItem = NSMenuItem(
+            title: isWhisperEngine
+                ? NSLocalizedString("Translate to English", comment: "")
+                : NSLocalizedString("Translate to English (Whisper only)", comment: ""),
+            action: isWhisperEngine ? #selector(toggleTranslateToEnglish) : nil,
+            keyEquivalent: "")
         translateItem.target = self
-        translateItem.state = AppPreferences.shared.translateToEnglish ? .on : .off
+        translateItem.state = (isWhisperEngine && AppPreferences.shared.translateToEnglish) ? .on : .off
         menu.addItem(translateItem)
 
         // Listen for language preference changes

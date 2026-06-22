@@ -278,12 +278,19 @@ class IndicatorViewModel: ObservableObject {
     }
     
     static func applyPostProcessing(_ text: String) -> String {
-        guard AppPreferences.shared.addSpaceAfterSentence,
-              let lastChar = text.last,
-              lastChar.isPunctuation else {
-            return text
+        guard AppPreferences.shared.addSpaceAfterSentence else { return text }
+        // Some models emit run-on sentences with no space after the period ("regularly.Using" — #107).
+        // Insert one when a lowercase word-end is immediately followed by sentence punctuation and an
+        // uppercase letter; the lowercase/uppercase guard leaves decimals (3.14) and acronyms (U.S.A) alone.
+        var result = text.replacingOccurrences(
+            of: "([a-z])([.!?])([A-Z])",
+            with: "$1$2 $3",
+            options: .regularExpression)
+        // Trailing space after a finished sentence so the next dictation doesn't run into it.
+        if let lastChar = result.last, lastChar.isPunctuation {
+            result += " "
         }
-        return text + " "
+        return result
     }
     
     private func startBlinking() {

@@ -105,8 +105,11 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             window?.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
             window?.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
         } else {
-            window?.level = .floating
-            window?.collectionBehavior = [.canJoinAllSpaces]
+            // .fullScreenAuxiliary lets the indicator appear over apps in full-screen spaces;
+            // without it the recording dialog is invisible there (#52). statusBar level keeps it
+            // above the full-screen app's content.
+            window?.level = .statusBar
+            window?.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
         }
 
         window?.orderFront(nil)
