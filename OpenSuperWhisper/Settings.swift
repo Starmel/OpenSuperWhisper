@@ -185,6 +185,45 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var aiPostProcessingEnabled: Bool {
+        didSet {
+            AppPreferences.shared.aiPostProcessingEnabled = aiPostProcessingEnabled
+            // Surface connectivity right away when the user turns it on, so they aren't left
+            // wondering why their cleanup silently does nothing when Ollama isn't running.
+            if aiPostProcessingEnabled { testOllamaConnection() }
+        }
+    }
+
+    @Published var aiOllamaEndpoint: String {
+        didSet {
+            AppPreferences.shared.aiOllamaEndpoint = aiOllamaEndpoint
+        }
+    }
+
+    @Published var aiOllamaModel: String {
+        didSet {
+            AppPreferences.shared.aiOllamaModel = aiOllamaModel
+        }
+    }
+
+    @Published var aiPostProcessingPrompt: String {
+        didSet {
+            AppPreferences.shared.aiPostProcessingPrompt = aiPostProcessingPrompt
+        }
+    }
+
+    /// Live result of the last Ollama connectivity probe, shown next to the AI-cleanup fields.
+    @Published var ollamaStatus: OllamaStatus = .unknown
+
+    func testOllamaConnection() {
+        ollamaStatus = .checking
+        let endpoint = aiOllamaEndpoint
+        let model = aiOllamaModel
+        Task { @MainActor in
+            self.ollamaStatus = await LLMPostProcessor.checkConnection(endpoint: endpoint, model: model)
+        }
+    }
+
     @Published var removeFillerWords: Bool {
         didSet {
             AppPreferences.shared.removeFillerWords = removeFillerWords
@@ -344,6 +383,10 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
+        self.aiPostProcessingEnabled = prefs.aiPostProcessingEnabled
+        self.aiOllamaEndpoint = prefs.aiOllamaEndpoint
+        self.aiOllamaModel = prefs.aiOllamaModel
+        self.aiPostProcessingPrompt = prefs.aiPostProcessingPrompt
         self.removeFillerWords = prefs.removeFillerWords
         self.fillerWordsPattern = prefs.fillerWordsPattern
         self.postRecordHookEnabled = prefs.postRecordHookEnabled
@@ -1217,6 +1260,95 @@ struct SettingsView: View {
                         Text("Case-insensitive regex of filler words to remove.")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // AI Cleanup
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("AI Cleanup")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "Clean up with a local LLM (Ollama)",
+                        caption: "Fix punctuation & obvious errors via a local model after transcribing.",
+                        info: "Sends the transcription to your local Ollama server and inserts the cleaned-up result. Requires Ollama running with the model below pulled (e.g. `ollama pull llama3.2`). Adds a little latency. If Ollama isn't reachable, the raw transcription is used unchanged — nothing is lost. Everything stays on your machine."
+                    ) {
+                        Toggle("", isOn: $viewModel.aiPostProcessingEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
+                    }
+
+                    if viewModel.aiPostProcessingEnabled {
+                        HStack {
+                            Text("Model")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("llama3.2", text: $viewModel.aiOllamaModel)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 180)
+                        }
+                        HStack {
+                            Text("Ollama endpoint")
+                                .font(.subheadline)
+                            Spacer()
+                            TextField("http://localhost:11434", text: $viewModel.aiOllamaEndpoint)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 220)
+                            Button {
+                                viewModel.testOllamaConnection()
+                            } label: {
+                                Image(systemName: "bolt.horizontal.circle")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Test the connection to Ollama")
+                        }
+
+                        HStack(spacing: 8) {
+                            Button("Test connection") { viewModel.testOllamaConnection() }
+                                .controlSize(.small)
+
+                            switch viewModel.ollamaStatus {
+                            case .unknown:
+                                EmptyView()
+                            case .checking:
+                                ProgressView().controlSize(.small)
+                                Text("Checking…").font(.caption).foregroundColor(.secondary)
+                            case .ok:
+                                Label("Connected — model ready", systemImage: "checkmark.circle.fill")
+                                    .font(.caption).foregroundColor(.green)
+                            case .modelMissing(let model):
+                                Label("Reachable, but “\(model)” isn't pulled — run: ollama pull \(model)",
+                                      systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption).foregroundColor(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            case .unreachable:
+                                Label("Can't reach Ollama — is it running? (ollama serve)",
+                                      systemImage: "xmark.circle.fill")
+                                    .font(.caption).foregroundColor(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Instruction")
+                                .font(.subheadline)
+                            TextEditor(text: $viewModel.aiPostProcessingPrompt)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(height: 80)
+                                .padding(6)
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                        }
                     }
                 }
                 .padding()
