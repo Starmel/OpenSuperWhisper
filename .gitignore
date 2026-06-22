@@ -126,3 +126,4 @@ dev_config.json
 .osw-codesign-identity
 
 build-test/
+vendor/

@@ -51,6 +51,8 @@ class TranscriptionService: ObservableObject {
             
             if selectedEngine == "fluidaudio" {
                 engine = await FluidAudioEngine()
+            } else if selectedEngine == "sensevoice" {
+                engine = SenseVoiceEngine()
             } else {
                 engine = await WhisperEngine()
             }

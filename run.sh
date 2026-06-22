@@ -44,6 +44,8 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+./Scripts/fetch-sherpa.sh
+
 echo "Building autocorrect-swift..."
 mkdir -p build
 cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manifest-path=asian-autocorrect/Cargo.toml
@@ -59,6 +61,11 @@ echo "Copying libomp.dylib..."
 cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign - ./build/libomp.dylib
+
+echo "Copying libonnxruntime.dylib..."
+cp vendor/onnxruntime/libonnxruntime.1.24.4.dylib ./build/libonnxruntime.1.24.4.dylib
+ln -sf libonnxruntime.1.24.4.dylib ./build/libonnxruntime.dylib
+codesign --force --sign - ./build/libonnxruntime.1.24.4.dylib
 
 # Resolve Swift packages so the FluidAudio checkout exists, then patch it.
 echo "Resolving Swift packages..."

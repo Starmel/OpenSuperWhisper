@@ -10,6 +10,8 @@ KEYCHAIN_PROFILE="osw-notary"
 CODE_SIGN_IDENTITY="${1}"
 DEVELOPMENT_TEAM="5C67TFSJ2B"
 
+./Scripts/fetch-sherpa.sh
+
 rm -rf libwhisper/build
 cmake -G Xcode -B libwhisper/build -S libwhisper
 
@@ -26,6 +28,11 @@ echo "Copying libomp.dylib..."
 cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libomp.dylib
+
+echo "Copying libonnxruntime.dylib..."
+cp vendor/onnxruntime/libonnxruntime.1.24.4.dylib ./build/libonnxruntime.1.24.4.dylib
+ln -sf libonnxruntime.1.24.4.dylib ./build/libonnxruntime.dylib
+codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libonnxruntime.1.24.4.dylib
 
 xcodebuild \
   -scheme "OpenSuperWhisper" \
