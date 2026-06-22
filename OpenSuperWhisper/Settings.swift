@@ -870,15 +870,10 @@ struct SettingsView: View {
     }
     static let cancelKeyChoices: [CancelKeyChoice] = [
         .init(id: "esc", label: "Esc", shortcut: .init(.escape)),
-        .init(id: "cmd-period", label: "⌘ .", shortcut: .init(.period, modifiers: .command)),
         .init(id: "cmd-esc", label: "⌘ Esc", shortcut: .init(.escape, modifiers: .command)),
-        .init(id: "f13", label: "F13", shortcut: .init(.f13)),
-        .init(id: "f14", label: "F14", shortcut: .init(.f14)),
-        .init(id: "f15", label: "F15", shortcut: .init(.f15)),
-        .init(id: "f16", label: "F16", shortcut: .init(.f16)),
-        .init(id: "f17", label: "F17", shortcut: .init(.f17)),
-        .init(id: "f18", label: "F18", shortcut: .init(.f18)),
-        .init(id: "f19", label: "F19", shortcut: .init(.f19)),
+        .init(id: "opt-esc", label: "⌥ Esc", shortcut: .init(.escape, modifiers: .option)),
+        .init(id: "ctrl-esc", label: "⌃ Esc", shortcut: .init(.escape, modifiers: .control)),
+        .init(id: "cmd-period", label: "⌘ .", shortcut: .init(.period, modifiers: .command)),
     ]
     static func currentCancelKeyID() -> String {
         let current = KeyboardShortcuts.getShortcut(for: .escape)
@@ -1986,7 +1981,7 @@ struct SettingsView: View {
                         SettingRow(
                             title: "Cancel Shortcut",
                             caption: "Press while recording to discard it.",
-                            info: "Press this key during recording to cancel and discard it without transcribing. Pick from the list — Esc is the default; F13–F19 are handy if they're free on your keyboard."
+                            info: "Press this key during recording to cancel and discard it without transcribing. Esc is the default; the ⌘/⌥/⌃ combos are there in case Esc conflicts with something else."
                         ) {
                             Picker("", selection: $cancelKey) {
                                 ForEach(SettingsView.cancelKeyChoices) { choice in
