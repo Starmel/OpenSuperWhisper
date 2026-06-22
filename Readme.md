@@ -14,7 +14,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 ## Features
 
 - 🎙️ Real-time audio recording and transcription
-- 🧠 Two transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp) and [Parakeet](https://github.com/AntinomyCollective/FluidAudio) — download models directly from the app
+- 🧠 Three transcription engines, all on-device: [Whisper](https://github.com/ggerganov/whisper.cpp), [Parakeet](https://github.com/AntinomyCollective/FluidAudio), and [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) (Chinese/Cantonese/English/Japanese/Korean, via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)) — download models directly from the app
 - ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
 - ✊ Hold-to-record mode — hold the shortcut to record, release to stop
 - 📁 Drag & drop audio files for transcription with queue processing
@@ -85,9 +85,10 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 - [x] AI cleanup — optional local-LLM post-processing
 - [x] Configurable indicator position + Notch / Dynamic Island mode
 - [x] Notarized Developer ID build + Homebrew cask
-- [x] In-app update check (Updates tab + menu bar)
-- [ ] Sparkle auto-update (in-place download & install)
-- [ ] Internationalization / localization (French first)
+- [x] Sparkle auto-update (in-place download & install)
+- [x] SenseVoice engine — local multilingual ASR via sherpa-onnx ([#145](https://github.com/Starmel/OpenSuperWhisper/issues/145))
+- [x] Internationalization / localization — initial French
+- [ ] CLI ([#150](https://github.com/Starmel/OpenSuperWhisper/issues/150))
 - [ ] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15))
 - [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
 
