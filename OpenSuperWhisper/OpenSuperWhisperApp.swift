@@ -12,6 +12,17 @@ import Combine
 import UniformTypeIdentifiers
 
 @main
+enum AppMain {
+    static func main() {
+        // `OpenSuperWhisper transcribe <file>` runs headless and never launches the GUI (#150).
+        let args = CommandLine.arguments
+        if CLI.shouldHandle(args) {
+            CLI.run(args)
+        }
+        OpenSuperWhisperApp.main()
+    }
+}
+
 struct OpenSuperWhisperApp: App {
     @StateObject private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
