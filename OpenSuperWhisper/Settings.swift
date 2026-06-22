@@ -1840,7 +1840,7 @@ struct SettingsView: View {
     }
     
     private var shortcutSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Recording Trigger
                 VStack(alignment: .leading, spacing: 16) {
