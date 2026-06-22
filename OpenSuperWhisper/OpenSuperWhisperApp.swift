@@ -191,7 +191,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         menu.addItem(NSMenuItem(title: "OpenSuperWhisper", action: #selector(openApp), keyEquivalent: "o"))
         
-        let transcriptionLanguageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
+        let transcriptionLanguageItem = NSMenuItem(title: NSLocalizedString("Language", comment: ""), action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
         
         // Add language options
@@ -217,14 +217,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         menu.addItem(NSMenuItem.separator())
         
-        let microphoneMenu = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: "")
+        let microphoneMenu = NSMenuItem(title: NSLocalizedString("Microphone", comment: ""), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         
         let microphones = microphoneService.availableMicrophones
         let currentMic = microphoneService.currentMicrophone
         
         if microphones.isEmpty {
-            let noDeviceItem = NSMenuItem(title: "No microphones available", action: nil, keyEquivalent: "")
+            let noDeviceItem = NSMenuItem(title: NSLocalizedString("No microphones available", comment: ""), action: nil, keyEquivalent: "")
             noDeviceItem.isEnabled = false
             submenu.addItem(noDeviceItem)
         } else {
@@ -273,12 +273,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         menu.addItem(NSMenuItem.separator())
 
-        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        let updateItem = NSMenuItem(title: NSLocalizedString("Check for Updates…", comment: ""), action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: NSLocalizedString("Quit", comment: ""), action: #selector(quitApp), keyEquivalent: "q"))
 
         statusItem?.menu = menu
     }

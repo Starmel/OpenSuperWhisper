@@ -1,0 +1,84 @@
+{
+  "sourceLanguage" : "en",
+  "version" : "1.0",
+  "strings" : {
+    "Add Word" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter un mot" } } }
+    },
+    "Advanced" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Avancé" } } }
+    },
+    "Cancel" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } } }
+    },
+    "Check for Updates" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher des mises à jour" } } }
+    },
+    "Check for Updates…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher des mises à jour…" } } }
+    },
+    "Couldn't check for updates. Check your connection and try again." : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de vérifier les mises à jour. Vérifiez votre connexion et réessayez." } } }
+    },
+    "Done" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } } }
+    },
+    "Download" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Télécharger" } } }
+    },
+    "General" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Général" } } }
+    },
+    "History" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Historique" } } }
+    },
+    "Language" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } } }
+    },
+    "Later" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Plus tard" } } }
+    },
+    "Loading release notes…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement des notes de version…" } } }
+    },
+    "Loading Parakeet Model..." : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement du modèle Parakeet…" } } }
+    },
+    "Loading Whisper Model..." : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement du modèle Whisper…" } } }
+    },
+    "Microphone" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Microphone" } } }
+    },
+    "Model" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Modèle" } } }
+    },
+    "No microphones available" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun microphone disponible" } } }
+    },
+    "Open Folder" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir le dossier" } } }
+    },
+    "Quit" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Quitter" } } }
+    },
+    "Transcription" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Transcription" } } }
+    },
+    "Updates" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mises à jour" } } }
+    },
+    "Version" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Version" } } }
+    },
+    "What's New" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nouveautés" } } }
+    },
+    "You're on the latest version." : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vous avez déjà la dernière version." } } }
+    },
+    "You're up to date" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vous êtes à jour" } } }
+    }
+  }
+}
