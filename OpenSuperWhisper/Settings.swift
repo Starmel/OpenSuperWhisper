@@ -2139,7 +2139,15 @@ struct SettingsFluidAudioModel: Identifiable {
     let version: String
     var isDownloaded: Bool
     let description: String
+    var size: Int = 0   // approximate download size, MB
     var downloadProgress: Double = 0.0
+
+    var sizeString: String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.isAdaptive = true
+        return formatter.string(fromByteCount: Int64(size) * 1_000_000)
+    }
 }
 
 struct SettingsFluidAudioModels {
@@ -2148,13 +2156,15 @@ struct SettingsFluidAudioModels {
             name: "Parakeet v3",
             version: "v3",
             isDownloaded: false,
-            description: "Multilingual, 25 languages"
+            description: "Multilingual, 25 languages",
+            size: 461
         ),
         SettingsFluidAudioModel(
             name: "Parakeet v2",
             version: "v2",
             isDownloaded: false,
-            description: "English-only, higher recall"
+            description: "English-only, higher recall",
+            size: 460
         )
     ]
 }
@@ -2249,10 +2259,14 @@ struct FluidAudioModelDownloadItemView: View {
                     }
                 }
                 
-                Text(model.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
+                HStack(spacing: 6) {
+                    Text(model.description)
+                    Text("·")
+                    Text(model.sizeString)
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+
                 if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
