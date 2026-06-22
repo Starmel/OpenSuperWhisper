@@ -860,6 +860,30 @@ struct SettingsView: View {
     @State private var previousModelURL: URL?
     @State private var appLanguage = LanguageManager.selected
     @State private var langNeedsRelaunch = false
+    @State private var cancelKey = "esc"
+
+    /// Curated cancel-recording keys (the recorder can't capture Esc / single special keys).
+    struct CancelKeyChoice: Identifiable {
+        let id: String
+        let label: String
+        let shortcut: KeyboardShortcuts.Shortcut
+    }
+    static let cancelKeyChoices: [CancelKeyChoice] = [
+        .init(id: "esc", label: "Esc", shortcut: .init(.escape)),
+        .init(id: "cmd-period", label: "⌘ .", shortcut: .init(.period, modifiers: .command)),
+        .init(id: "cmd-esc", label: "⌘ Esc", shortcut: .init(.escape, modifiers: .command)),
+        .init(id: "f13", label: "F13", shortcut: .init(.f13)),
+        .init(id: "f14", label: "F14", shortcut: .init(.f14)),
+        .init(id: "f15", label: "F15", shortcut: .init(.f15)),
+        .init(id: "f16", label: "F16", shortcut: .init(.f16)),
+        .init(id: "f17", label: "F17", shortcut: .init(.f17)),
+        .init(id: "f18", label: "F18", shortcut: .init(.f18)),
+        .init(id: "f19", label: "F19", shortcut: .init(.f19)),
+    ]
+    static func currentCancelKeyID() -> String {
+        let current = KeyboardShortcuts.getShortcut(for: .escape)
+        return cancelKeyChoices.first { $0.shortcut == current }?.id ?? "esc"
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -1961,20 +1985,22 @@ struct SettingsView: View {
 
                         SettingRow(
                             title: "Cancel Shortcut",
-                            caption: "Press while recording to discard it. Defaults to Esc.",
-                            info: "Press this key during recording to cancel and discard it without transcribing. Defaults to Esc. The recorder can't capture Esc itself (Esc cancels the recorder), so use the reset button (↺) to restore the Esc default."
+                            caption: "Press while recording to discard it.",
+                            info: "Press this key during recording to cancel and discard it without transcribing. Pick from the list — Esc is the default; F13–F19 are handy if they're free on your keyboard."
                         ) {
-                            HStack(spacing: 6) {
-                                KeyboardShortcuts.Recorder("", name: .escape)
-                                    .frame(width: 130)
-                                Button {
-                                    KeyboardShortcuts.reset(.escape)
-                                } label: {
-                                    Image(systemName: "arrow.uturn.backward")
+                            Picker("", selection: $cancelKey) {
+                                ForEach(SettingsView.cancelKeyChoices) { choice in
+                                    Text(choice.label).tag(choice.id)
                                 }
-                                .controlSize(.small)
-                                .help("Reset to Esc")
                             }
+                            .labelsHidden()
+                            .frame(width: 140)
+                            .onChange(of: cancelKey) { _, id in
+                                if let choice = SettingsView.cancelKeyChoices.first(where: { $0.id == id }) {
+                                    KeyboardShortcuts.setShortcut(choice.shortcut, for: .escape)
+                                }
+                            }
+                            .onAppear { cancelKey = SettingsView.currentCancelKeyID() }
                         }
 
                         HStack {
