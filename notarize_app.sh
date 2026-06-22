@@ -5,10 +5,10 @@ set -e
 APP_NAME="OpenSuperWhisper"                                   
 APP_PATH="./build/Build/Products/Release/OpenSuperWhisper.app"                        
 ZIP_PATH="./build/OpenSuperWhisper.zip"                        
-BUNDLE_ID="ru.starmel.OpenSuperWhisper"                       
-KEYCHAIN_PROFILE="Slava"
+BUNDLE_ID="fr.my-monkey.opensuperwhisper"                       
+KEYCHAIN_PROFILE="osw-notary"
 CODE_SIGN_IDENTITY="${1}"
-DEVELOPMENT_TEAM="8LLDD7HWZK"
+DEVELOPMENT_TEAM="5C67TFSJ2B"
 
 rm -rf libwhisper/build
 cmake -G Xcode -B libwhisper/build -S libwhisper
@@ -49,7 +49,13 @@ xcrun notarytool submit "${ZIP_PATH}" --wait --keychain-profile "${KEYCHAIN_PROF
 
 xcrun stapler staple "${APP_PATH}"
 
-swifty-dmg --skipcodesign "${APP_PATH}" --output "${APP_NAME}.dmg" --verbose
+# Build the DMG with hdiutil (no extra tooling): the .app + an Applications symlink.
+DMG_STAGE="$(mktemp -d)"
+cp -R "${APP_PATH}" "${DMG_STAGE}/"
+ln -s /Applications "${DMG_STAGE}/Applications"
+rm -f "${APP_NAME}.dmg"
+hdiutil create -volname "${APP_NAME}" -srcfolder "${DMG_STAGE}" -ov -format UDZO "${APP_NAME}.dmg"
+rm -rf "${DMG_STAGE}"
 
 codesign --sign "${CODE_SIGN_IDENTITY}" "${APP_NAME}.dmg"
 xcrun notarytool submit "${APP_NAME}.dmg" --wait --keychain-profile "${KEYCHAIN_PROFILE}"
