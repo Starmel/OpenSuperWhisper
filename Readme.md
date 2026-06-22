@@ -47,7 +47,10 @@ Or download the latest **notarized** `.dmg` from the [Releases page](https://git
 
 ## Requirements
 
-- macOS (Apple Silicon/ARM64)
+- macOS 14 (Sonoma) or later
+- **Apple Silicon or Intel** — `brew install` picks the right build automatically. The Intel
+  (x86_64) build ships Whisper + Parakeet; SenseVoice is Apple-Silicon-only (its onnxruntime
+  dependency ships arm64-only).
 
 ## Support
 
@@ -88,8 +91,8 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 - [x] Sparkle auto-update (in-place download & install)
 - [x] SenseVoice engine — local multilingual ASR via sherpa-onnx ([#145](https://github.com/Starmel/OpenSuperWhisper/issues/145))
 - [x] Internationalization / localization — initial French
+- [x] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15)) — separate x86_64 build (Whisper + Parakeet)
 - [ ] CLI ([#150](https://github.com/Starmel/OpenSuperWhisper/issues/150))
-- [ ] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15))
 - [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
 
 ## License
