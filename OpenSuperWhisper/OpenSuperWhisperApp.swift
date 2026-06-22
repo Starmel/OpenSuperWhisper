@@ -285,30 +285,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
-        Task { @MainActor in
-            let alert = NSAlert()
-            do {
-                let releases = try await UpdateChecker.fetchReleases()
-                if let update = UpdateChecker.availableUpdate(in: releases) {
-                    alert.messageText = "Update available: \(update.tagName)"
-                    alert.informativeText = "You're on \(UpdateChecker.currentVersion). Open the release page to download it?"
-                    alert.addButton(withTitle: "Download")
-                    alert.addButton(withTitle: "Later")
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        NSWorkspace.shared.open(update.htmlURL)
-                    }
-                } else {
-                    alert.messageText = "You're up to date"
-                    alert.informativeText = "OpenSuperWhisper \(UpdateChecker.currentVersion) is the latest version."
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                }
-            } catch {
-                alert.messageText = "Couldn't check for updates"
-                alert.informativeText = "Check your connection and try again."
-                alert.addButton(withTitle: "OK")
-                alert.runModal()
-            }
+        MainActor.assumeIsolated {
+            SparkleUpdater.shared.checkForUpdates()
         }
     }
     
