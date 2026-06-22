@@ -354,6 +354,7 @@ struct RecordingIndicator: View {
 struct IndicatorWindow: View {
     @ObservedObject var viewModel: IndicatorViewModel
     @ObservedObject private var streaming = StreamingTranscriptionController.shared
+    @ObservedObject private var notch = NotchTuning.shared
     @Environment(\.colorScheme) private var colorScheme
     
     private var backgroundColor: Color {
@@ -364,13 +365,24 @@ struct IndicatorWindow: View {
 
     /// Wider while live-recording so the growing caption fits inside the bubble; compact otherwise.
     private var bubbleWidth: CGFloat {
-        viewModel.state == .recording && IndicatorViewModel.shouldUseLiveStreaming ? 380 : 200
+        if isNotchMode {
+            // Idle width is tunable; it only expands once there is actual caption text to show.
+            let hasCaption = !streaming.confirmedText.isEmpty || !streaming.volatileText.isEmpty
+            return hasCaption ? max(notch.width, 440) : notch.width
+        }
+        let live = viewModel.state == .recording && IndicatorViewModel.shouldUseLiveStreaming
+        return live ? 380 : 200
     }
     
+    private var isNotchMode: Bool { AppPreferences.shared.indicatorPosition == "notch" }
+
     var body: some View {
 
-        let rect = RoundedRectangle(cornerRadius: 24)
-        
+        // Notch mode uses the real notch silhouette (concave top wings + rounded bottom).
+        let rect: AnyShape = isNotchMode
+            ? AnyShape(NotchShape(topRadius: notch.topRadius, bottomRadius: notch.bottomRadius))
+            : AnyShape(RoundedRectangle(cornerRadius: 24))
+
         VStack(spacing: 12) {
             switch viewModel.state {
             case .connecting:
@@ -461,24 +473,37 @@ struct IndicatorWindow: View {
                 EmptyView()
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .frame(minHeight: 36)
+        .padding(.horizontal, isNotchMode ? 22 : 24)
+        .padding(.vertical, isNotchMode ? 10 : 12)
+        // Width must be set *before* the background so the bubble itself fills it (not just the
+        // surrounding frame). Notch content is centred; the others stay leading.
+        .frame(minHeight: isNotchMode ? notch.height : 36)
+        .frame(width: bubbleWidth, alignment: isNotchMode ? .center : .leading)
         .background {
-            rect
-                .fill(backgroundColor)
-                .background {
-                    rect
-                        .fill(Material.thinMaterial)
-                }
-                .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
+            if isNotchMode {
+                rect
+                    .fill(.black)
+                    .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
+            } else {
+                rect
+                    .fill(backgroundColor)
+                    .background {
+                        rect
+                            .fill(Material.thinMaterial)
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
+            }
         }
         .clipShape(rect)
-        .frame(width: bubbleWidth)
-        .scaleEffect(viewModel.isVisible ? 1 : 0.5)
-        .offset(y: viewModel.isVisible ? 0 : 20)
+        .environment(\.colorScheme, isNotchMode ? .dark : colorScheme)
+        // Notch drops in from the top edge; the others rise from below.
+        .scaleEffect(viewModel.isVisible ? 1 : (isNotchMode ? 0.85 : 0.5), anchor: isNotchMode ? .top : .center)
+        .offset(y: viewModel.isVisible ? 0 : (isNotchMode ? -20 : 20))
         .opacity(viewModel.isVisible ? 1 : 0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isVisible)
+        .animation(.spring(response: 0.35, dampingFraction: 0.72), value: viewModel.isVisible)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: bubbleWidth)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: streaming.confirmedText)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: streaming.volatileText)
         .onAppear {
             viewModel.isVisible = true
         }

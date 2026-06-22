@@ -13,6 +13,9 @@ class IndicatorWindowManager: IndicatorViewDelegate {
     // We keep the bottom edge anchored near the caret so it grows upward, not over the caret.
     private var anchorBottomY: CGFloat = 0
     private var anchorCenterX: CGFloat = 0
+    // Notch mode anchors the *top* edge instead (the pill hangs from the screen top, growing down).
+    private var anchorFromTop = false
+    private var anchorTopY: CGFloat = 0
     private var resizeObserver: NSObjectProtocol?
 
     private init() {}
@@ -55,7 +58,14 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         if let window = window, let screen = targetScreen {
             let screenFrame = screen.frame
 
+            anchorFromTop = false
             switch AppPreferences.shared.indicatorPosition {
+            case "notch":
+                // Hang from the very top-center, growing downward — sitting in/around the notch
+                // on notched Macs, or as a faux-notch pill on Macs without one.
+                anchorFromTop = true
+                anchorCenterX = screenFrame.midX
+                anchorTopY = screenFrame.maxY
             case "top":
                 anchorCenterX = screenFrame.midX
                 anchorBottomY = screenFrame.maxY - 140
@@ -88,15 +98,30 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             }
         }
 
+        // Notch mode must draw *over* the menu bar (which sits above the normal floating level),
+        // otherwise the menu bar clips the top of the pill and it looks like it's hanging too low.
+        // Same recipe the MewNotch / boring.notch projects use.
+        if anchorFromTop {
+            window?.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
+            window?.collectionBehavior = [.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]
+        } else {
+            window?.level = .floating
+            window?.collectionBehavior = [.canJoinAllSpaces]
+        }
+
         window?.orderFront(nil)
         return newViewModel
     }
 
     private func reposition(window: NSWindow, screen: NSScreen) {
         let w = window.frame.width
+        let h = window.frame.height
         let screenFrame = screen.frame
         let x = max(screenFrame.minX, min(anchorCenterX - w / 2, screenFrame.maxX - w))
-        let y = max(screenFrame.minY, min(anchorBottomY, screenFrame.maxY - window.frame.height))
+        // Notch mode pins the top edge (grows down); everything else pins the bottom (grows up).
+        let y = anchorFromTop
+            ? max(screenFrame.minY, anchorTopY - h)
+            : max(screenFrame.minY, min(anchorBottomY, screenFrame.maxY - h))
         window.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
@@ -107,7 +132,7 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         let vm = show(nearPoint: FocusUtils.getCurrentCursorPosition())
         vm.state = .recording
         vm.isBlinking = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             self?.hide()
         }
     }
