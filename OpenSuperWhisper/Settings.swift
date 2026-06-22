@@ -906,7 +906,7 @@ struct SettingsView: View {
                 .tag(5)
             }
         .padding()
-        .frame(width: 550)
+        .frame(width: 550, height: 600)
         .background(Color(.windowBackgroundColor))
         .safeAreaInset(edge: .bottom) {
             HStack {
@@ -1961,11 +1961,20 @@ struct SettingsView: View {
 
                         SettingRow(
                             title: "Cancel Shortcut",
-                            caption: "Press while recording to discard it.",
-                            info: "Press this key during recording to cancel and discard it without transcribing. Defaults to Esc — rebind it here if Esc conflicts with something else."
+                            caption: "Press while recording to discard it. Defaults to Esc.",
+                            info: "Press this key during recording to cancel and discard it without transcribing. Defaults to Esc. The recorder can't capture Esc itself (Esc cancels the recorder), so use the reset button (↺) to restore the Esc default."
                         ) {
-                            KeyboardShortcuts.Recorder("", name: .escape)
-                                .frame(width: 150)
+                            HStack(spacing: 6) {
+                                KeyboardShortcuts.Recorder("", name: .escape)
+                                    .frame(width: 130)
+                                Button {
+                                    KeyboardShortcuts.reset(.escape)
+                                } label: {
+                                    Image(systemName: "arrow.uturn.backward")
+                                }
+                                .controlSize(.small)
+                                .help("Reset to Esc")
+                            }
                         }
 
                         HStack {
