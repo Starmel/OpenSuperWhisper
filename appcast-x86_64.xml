@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>OpenSuperWhisper (Intel)</title>
+    <description>Updates for OpenSuperWhisper — Intel (x86_64) builds</description>
+    <language>en</language>
+    <item>
+      <title>0.5.0</title>
+      <link>https://github.com/my-monkeys/OpenSuperWhisper/releases/tag/v0.5.0</link>
+      <sparkle:version>20</sparkle:version>
+      <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 23 Jun 2026 02:00:00 +0000</pubDate>
+      <enclosure
+        url="https://github.com/my-monkeys/OpenSuperWhisper/releases/download/v0.5.0/OpenSuperWhisper-x86_64-0.5.0.dmg"
+        sparkle:edSignature="Qt5vME+/YLr4yslTDAD7jcxYkFfYnGSejHhC4lugzoFHAbFCud8mVpz+G4hPUsqVATVVCBivJpV+EIFOh359Dw=="
+        length="15540687"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
