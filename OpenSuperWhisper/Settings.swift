@@ -989,11 +989,6 @@ struct SettingsView: View {
                                 .font(.headline)
                                 .foregroundColor(.primary)
                             
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
-                            
                             ScrollView {
                                 VStack(spacing: 12) {
                                     ForEach($viewModel.downloadableModels) { $model in
@@ -1059,11 +1054,6 @@ struct SettingsView: View {
                             Text("Parakeet Model")
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
                             
                             ScrollView {
                                 VStack(spacing: 12) {
