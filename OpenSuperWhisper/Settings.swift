@@ -1893,7 +1893,16 @@ struct SettingsView: View {
                                 Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
                                     .font(.caption)
                                     .foregroundColor(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.top, 4)
+
+                                Button("Open Input Monitoring Settings…") {
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .font(.caption)
                             }
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
