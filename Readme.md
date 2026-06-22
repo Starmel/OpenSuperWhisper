@@ -45,6 +45,23 @@ brew install --cask my-monkeys/tap/opensuperwhisper
 
 Or download the latest **notarized** `.dmg` from the [Releases page](https://github.com/my-monkeys/OpenSuperWhisper/releases), or [build it from source](#building-locally).
 
+## Command line
+
+OpenSuperWhisper can transcribe a file from the terminal, headless (no window/dock), reusing the
+engine and settings configured in the app:
+
+```sh
+# via the Homebrew-installed binary
+opensuperwhisper transcribe path/to/audio.wav
+opensuperwhisper transcribe path/to/audio.wav --json   # { "file", "text" }
+
+# or directly, without Homebrew
+/Applications/OpenSuperWhisper.app/Contents/MacOS/OpenSuperWhisper transcribe audio.wav
+```
+
+The transcription goes to stdout (engine logs go to stderr), so it pipes cleanly:
+`opensuperwhisper transcribe note.m4a > note.txt`. Set up a model in the app at least once first.
+
 ## Requirements
 
 - macOS 14 (Sonoma) or later
@@ -92,7 +109,7 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 - [x] SenseVoice engine — local multilingual ASR via sherpa-onnx ([#145](https://github.com/Starmel/OpenSuperWhisper/issues/145))
 - [x] Internationalization / localization — initial French
 - [x] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15)) — separate x86_64 build (Whisper + Parakeet)
-- [ ] CLI ([#150](https://github.com/Starmel/OpenSuperWhisper/issues/150))
+- [x] CLI ([#150](https://github.com/Starmel/OpenSuperWhisper/issues/150)) — `opensuperwhisper transcribe <file>`
 - [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
 
 ## License
