@@ -852,6 +852,13 @@ struct SettingsView: View {
                     Label("Advanced", systemImage: "gear")
                 }
                 .tag(4)
+
+            // Updates / What's New
+            UpdatesView()
+                .tabItem {
+                    Label("Updates", systemImage: "sparkles")
+                }
+                .tag(5)
             }
         .padding()
         .frame(width: 550)
