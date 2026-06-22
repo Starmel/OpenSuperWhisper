@@ -2300,6 +2300,46 @@
           }
         }
       }
+    },
+    "Not downloaded · %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non téléchargé · %@"
+          }
+        }
+      }
+    },
+    "Update available: %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mise à jour disponible : %@"
+          }
+        }
+      }
+    },
+    "Downloading: %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargement : %@"
+          }
+        }
+      }
+    },
+    "Downloading… %lld%%": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargement… %lld %%"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
