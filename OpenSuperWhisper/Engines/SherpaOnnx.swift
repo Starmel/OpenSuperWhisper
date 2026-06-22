@@ -1,3 +1,4 @@
+#if arch(arm64)
 /// swift-api-examples/SherpaOnnx.swift
 /// Copyright (c)  2023  Xiaomi Corporation
 
@@ -2266,3 +2267,4 @@ class SourceSeparator {
     }
   }
 }
+#endif

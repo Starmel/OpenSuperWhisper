@@ -1,3 +1,4 @@
+#if arch(arm64)
 import AVFoundation
 import Foundation
 
@@ -94,3 +95,4 @@ final class SenseVoiceEngine: TranscriptionEngine {
         return Array(UnsafeBufferPointer(start: channel[0], count: Int(dstBuffer.frameLength)))
     }
 }
+#endif

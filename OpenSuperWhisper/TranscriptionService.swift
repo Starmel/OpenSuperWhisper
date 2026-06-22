@@ -52,7 +52,12 @@ class TranscriptionService: ObservableObject {
             if selectedEngine == "fluidaudio" {
                 engine = await FluidAudioEngine()
             } else if selectedEngine == "sensevoice" {
+#if arch(arm64)
                 engine = SenseVoiceEngine()
+#else
+                // SenseVoice (sherpa-onnx/onnxruntime) ships arm64-only; fall back on Intel.
+                engine = await WhisperEngine()
+#endif
             } else {
                 engine = await WhisperEngine()
             }

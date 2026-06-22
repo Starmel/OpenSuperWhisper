@@ -993,14 +993,18 @@ struct SettingsView: View {
                     Picker("Engine", selection: $viewModel.selectedEngine) {
                         Text("Parakeet").tag("fluidaudio")
                         Text("Whisper").tag("whisper")
+#if arch(arm64)
                         Text("SenseVoice").tag("sensevoice")
+#endif
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
 
+#if arch(arm64)
                     if viewModel.selectedEngine == "sensevoice" {
                         SenseVoiceModelSection()
                     }
+#endif
 
                     if viewModel.selectedEngine == "whisper" {
                         VStack(alignment: .leading, spacing: 16) {
