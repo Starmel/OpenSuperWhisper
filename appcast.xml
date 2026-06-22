@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>OpenSuperWhisper</title>
+    <description>Updates for OpenSuperWhisper</description>
+    <language>en</language>
+    <item>
+      <title>0.3.0</title>
+      <link>https://github.com/my-monkeys/OpenSuperWhisper/releases/tag/v0.3.0</link>
+      <sparkle:version>15</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Sun, 22 Jun 2026 00:00:00 +0000</pubDate>
+      <enclosure
+        url="https://github.com/my-monkeys/OpenSuperWhisper/releases/download/v0.3.0/OpenSuperWhisper-0.3.0.dmg"
+        sparkle:edSignature="u7vZ4Mfuyv/9XJTzdCjMiGVeEp8cd/74WliDxkZKsqWjyJAQfaIgD3JBHr80Ijir1vBBal7KiWnuuEtl3zD0Bw=="
+        length="11105326"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

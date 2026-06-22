@@ -46,8 +46,27 @@ brew install --cask my-monkeys/tap/opensuperwhisper
 > Use the full `my-monkeys/tap/` path — the bare `opensuperwhisper` resolves to the original
 > (unmaintained) cask in homebrew-cask, not this fork.
 
-## Auto-update (Sparkle) — not yet wired
+## Auto-update (Sparkle)
 
-The in-app "Check for Updates" (Settings → Updates, and the menu-bar item) compares the running
-version against the latest GitHub release and links to it. Full in-place auto-update via Sparkle
-would build on the Developer-ID signing above; not implemented yet.
+The app embeds **Sparkle**. The menu-bar **"Check for Updates…"** runs Sparkle's verified
+in-place download + install; the Settings → Updates tab still shows the GitHub release-note history.
+
+- Feed: `SUFeedURL` in Info.plist → `appcast.xml` at the repo root (served via
+  `https://raw.githubusercontent.com/my-monkeys/OpenSuperWhisper/master/appcast.xml`).
+- Signing key: an EdDSA keypair; the **public** key is `SUPublicEDKey` in Info.plist, the **private**
+  key lives in the login keychain (generated once via Sparkle's `generate_keys`).
+
+**Per release**, after building the notarized DMG (and before/with publishing it), append an item to
+`appcast.xml`:
+
+```sh
+# sign the DMG with the EdDSA private key (from the keychain)
+/path/to/Sparkle/bin/sign_update OpenSuperWhisper-$VERSION.dmg
+#   → sparkle:edSignature="…" length="…"
+```
+
+Add an `<item>` to `appcast.xml` with the new `<sparkle:shortVersionString>`, `<sparkle:version>`
+(= `CURRENT_PROJECT_VERSION`), the release-tag `<link>`, and an `<enclosure>` whose `url` is the
+GitHub release DMG, with the `sparkle:edSignature` and `length` from `sign_update`. Commit
+`appcast.xml` to `master` so the feed updates. (The Sparkle CLI tools come from the
+[Sparkle release tarball](https://github.com/sparkle-project/Sparkle/releases).)
