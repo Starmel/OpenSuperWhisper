@@ -39,6 +39,27 @@ xcodebuild \
   -derivedDataPath build \
   build | xcpretty --simple --color
 
+# Sparkle embeds nested helpers (Updater.app, Autoupdate, XPC services) that each need a
+# Developer-ID signature with hardened runtime + secure timestamp; then the outer app must be
+# re-signed (re-signing nested code invalidates the bundle seal). Sign inside-out.
+SPARKLE_FW="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
+if [ -d "${SPARKLE_FW}" ]; then
+  echo "Re-signing Sparkle helpers..."
+  SPK="${SPARKLE_FW}/Versions/Current"
+  for comp in \
+    "${SPK}/XPCServices/Downloader.xpc" \
+    "${SPK}/XPCServices/Installer.xpc" \
+    "${SPK}/Autoupdate" \
+    "${SPK}/Updater.app"; do
+    [ -e "${comp}" ] && codesign -f -o runtime --timestamp -s "${CODE_SIGN_IDENTITY}" "${comp}"
+  done
+  codesign -f -o runtime --timestamp -s "${CODE_SIGN_IDENTITY}" "${SPARKLE_FW}"
+  codesign -f -o runtime --timestamp \
+    --entitlements "OpenSuperWhisper/OpenSuperWhisper.entitlements" \
+    -s "${CODE_SIGN_IDENTITY}" "${APP_PATH}"
+  codesign --verify --strict --verbose=1 "${APP_PATH}"
+fi
+
 rm -f "${ZIP_PATH}"
 
 current_dir=$(pwd)
