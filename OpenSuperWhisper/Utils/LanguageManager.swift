@@ -18,13 +18,16 @@ enum LanguageManager {
         }
     }
 
-    /// Relaunch the app so the new language is loaded.
+    /// Relaunch the app so the new language is loaded. A detached shell waits for this process to
+    /// fully exit, then reopens the app — guaranteeing a single fresh instance (no race / no double
+    /// instance from launching a second copy while the first is still alive).
     static func relaunch() {
-        let url = Bundle.main.bundleURL
-        let config = NSWorkspace.OpenConfiguration()
-        config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
-        }
+        let path = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "while /bin/kill -0 \(pid) >/dev/null 2>&1; do /bin/sleep 0.1; done; /usr/bin/open \"\(path)\""]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 }
