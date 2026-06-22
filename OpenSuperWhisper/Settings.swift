@@ -792,7 +792,7 @@ struct Settings {
 /// A small "ⓘ" button that reveals a longer explanation in a popover, so setting rows can
 /// show a short caption by default and keep the full details one click away.
 struct InfoButton: View {
-    let text: String
+    let text: LocalizedStringKey
     @State private var isShown = false
 
     var body: some View {
@@ -819,9 +819,9 @@ struct InfoButton: View {
 /// A standard setting row: title (+ optional ⓘ with full details), a short caption, and a
 /// trailing control (e.g. a Toggle).
 struct SettingRow<Trailing: View>: View {
-    let title: String
-    let caption: String
-    var info: String? = nil
+    let title: LocalizedStringKey
+    let caption: LocalizedStringKey
+    var info: LocalizedStringKey? = nil
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {

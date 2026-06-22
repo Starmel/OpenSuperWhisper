@@ -1,99 +1,2156 @@
 {
-  "sourceLanguage" : "en",
-  "version" : "1.0",
-  "strings" : {
-    "Add Word" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter un mot" } } }
+  "sourceLanguage": "en",
+  "strings": {
+    "AI Cleanup": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nettoyage par IA"
+          }
+        }
+      }
     },
-    "Advanced" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Avancé" } } }
+    "Accessibility Access": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accès à l'accessibilité"
+          }
+        }
+      }
     },
-    "App Language" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue de l’app" } } }
+    "Add Space After Sentence": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une espace après la phrase"
+          }
+        }
+      }
     },
-    "English" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Anglais" } } }
+    "Add Word": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un mot"
+          }
+        }
+      }
     },
-    "Relaunch Now" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Relancer" } } }
+    "Advanced": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avancé"
+          }
+        }
+      }
     },
-    "Relaunch to apply the new language." : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Relancez pour appliquer la nouvelle langue." } } }
+    "App Language": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue de l'app"
+          }
+        }
+      }
     },
-    "System" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Système" } } }
+    "Appends a space when transcription ends with punctuation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute une espace lorsque la transcription se termine par une ponctuation"
+          }
+        }
+      }
     },
-    "Cancel" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } } }
+    "Are you sure you want to delete all recordings? This action cannot be undone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous vraiment supprimer tous les enregistrements ? Cette action est irréversible."
+          }
+        }
+      }
     },
-    "Check for Updates" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher des mises à jour" } } }
+    "Auto-paste Transcription": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coller automatiquement la transcription"
+          }
+        }
+      }
     },
-    "Check for Updates…" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher des mises à jour…" } } }
+    "Automatically paste into the focused app": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coller automatiquement dans l'app active"
+          }
+        }
+      }
     },
-    "Couldn't check for updates. Check your connection and try again." : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de vérifier les mises à jour. Vérifiez votre connexion et réessayez." } } }
+    "Automatically pause media playback when recording starts": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre automatiquement la lecture des médias en pause au démarrage de l'enregistrement"
+          }
+        }
+      }
     },
-    "Done" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } } }
+    "Automatically remove recordings older than the chosen age": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer automatiquement les enregistrements plus anciens que l'âge choisi"
+          }
+        }
+      }
     },
-    "Download" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Télécharger" } } }
+    "Available in your command (also piped as JSON on stdin):": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible dans votre commande (aussi transmis en JSON sur stdin) :"
+          }
+        }
+      }
     },
-    "General" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Général" } } }
+    "Balanced speed and accuracy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Équilibre entre vitesse et précision"
+          }
+        }
+      }
     },
-    "History" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Historique" } } }
+    "Beam Size:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largeur du faisceau :"
+          }
+        }
+      }
     },
-    "Language" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } } }
+    "Beam search can provide better results but is slower": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recherche en faisceau peut donner de meilleurs résultats mais est plus lente"
+          }
+        }
+      }
     },
-    "Later" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Plus tard" } } }
+    "Both limits can be active at the same time. Cleanup runs automatically when you change these settings and after each new transcription, and the age limit is also re-checked periodically in the background. Recordings that are still being processed are never deleted.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les deux limites peuvent être actives en même temps. Le nettoyage s'exécute automatiquement lorsque vous modifiez ces réglages et après chaque nouvelle transcription ; la limite d'âge est également revérifiée périodiquement en arrière-plan. Les enregistrements encore en cours de traitement ne sont jamais supprimés."
+          }
+        }
+      }
     },
-    "Loading release notes…" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement des notes de version…" } } }
+    "Bottom": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bas"
+          }
+        }
+      }
     },
-    "Loading Parakeet Model..." : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement du modèle Parakeet…" } } }
+    "Briefly show the indicator at this position": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher brièvement l'indicateur à cette position"
+          }
+        }
+      }
     },
-    "Loading Whisper Model..." : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement du modèle Whisper…" } } }
+    "Cancel": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        }
+      }
     },
-    "Microphone" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Microphone" } } }
+    "Case-insensitive regex of filler words to remove.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expression régulière (insensible à la casse) des mots de remplissage à supprimer."
+          }
+        }
+      }
     },
-    "Model" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Modèle" } } }
+    "Center": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre"
+          }
+        }
+      }
     },
-    "No microphones available" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun microphone disponible" } } }
+    "Check for Updates": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher des mises à jour"
+          }
+        }
+      }
     },
-    "Open Folder" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir le dossier" } } }
+    "Check for Updates…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher des mises à jour…"
+          }
+        }
+      }
     },
-    "Quit" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Quitter" } } }
+    "Checking…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérification…"
+          }
+        }
+      }
     },
-    "Transcription" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Transcription" } } }
+    "Choose how to trigger recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez comment déclencher l'enregistrement"
+          }
+        }
+      }
     },
-    "Updates" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mises à jour" } } }
+    "Clean up with a local LLM (Ollama)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nettoyer avec un LLM local (Ollama)"
+          }
+        }
+      }
     },
-    "Version" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Version" } } }
+    "Clipboard & Paste": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presse-papiers et collage"
+          }
+        }
+      }
     },
-    "What's New" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nouveautés" } } }
+    "Connected — model ready": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecté — modèle prêt"
+          }
+        }
+      }
     },
-    "You're on the latest version." : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vous avez déjà la dernière version." } } }
+    "Connecting...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connexion..."
+          }
+        }
+      }
     },
-    "You're up to date" : {
-      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vous êtes à jour" } } }
+    "Continue": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer"
+          }
+        }
+      }
+    },
+    "Converting...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversion..."
+          }
+        }
+      }
+    },
+    "Copied — press ⌘V to paste": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copié — appuyez sur ⌘V pour coller"
+          }
+        }
+      }
+    },
+    "Copy entire text": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier tout le texte"
+          }
+        }
+      }
+    },
+    "Copy to Clipboard": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier dans le presse-papiers"
+          }
+        }
+      }
+    },
+    "Couldn't check for updates. Check your connection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de rechercher des mises à jour. Vérifiez votre connexion et réessayez."
+          }
+        }
+      }
+    },
+    "Custom Dictionary": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionnaire personnalisé"
+          }
+        }
+      }
+    },
+    "Days": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jours"
+          }
+        }
+      }
+    },
+    "Debug Mode": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode débogage"
+          }
+        }
+      }
+    },
+    "Debug Options": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options de débogage"
+          }
+        }
+      }
+    },
+    "Decoding Strategy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stratégie de décodage"
+          }
+        }
+      }
+    },
+    "Delete All": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout supprimer"
+          }
+        }
+      }
+    },
+    "Delete All Recordings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer tous les enregistrements"
+          }
+        }
+      }
+    },
+    "Delete Old Recordings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer les anciens enregistrements"
+          }
+        }
+      }
+    },
+    "Delete after": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer après"
+          }
+        }
+      }
+    },
+    "Delete all recordings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer tous les enregistrements"
+          }
+        }
+      }
+    },
+    "Directory:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossier :"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminé"
+          }
+        }
+      }
+    },
+    "Download": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger"
+          }
+        }
+      }
+    },
+    "Download Error": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreur de téléchargement"
+          }
+        }
+      }
+    },
+    "Download Models": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger des modèles"
+          }
+        }
+      }
+    },
+    "Download a model to get started": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargez un modèle pour commencer"
+          }
+        }
+      }
+    },
+    "Drop audio file here to transcribe": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déposez un fichier audio ici pour le transcrire"
+          }
+        }
+      }
+    },
+    "Drop audio files to transcribe": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déposez des fichiers audio à transcrire"
+          }
+        }
+      }
+    },
+    "Enable & Save": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer et enregistrer"
+          }
+        }
+      }
+    },
+    "Enable additional logging and debugging information": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer la journalisation et les informations de débogage supplémentaires"
+          }
+        }
+      }
+    },
+    "Engine": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moteur"
+          }
+        }
+      }
+    },
+    "English-only, higher recall": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anglais uniquement, meilleur rappel"
+          }
+        }
+      }
+    },
+    "Failed": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec"
+          }
+        }
+      }
+    },
+    "Fastest processing": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement le plus rapide"
+          }
+        }
+      }
+    },
+    "Fastest processing and English-only, higher recall": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement le plus rapide, anglais uniquement, meilleur rappel"
+          }
+        }
+      }
+    },
+    "Fastest processing and accurate": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement le plus rapide et précis"
+          }
+        }
+      }
+    },
+    "Filler Words": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mots de remplissage"
+          }
+        }
+      }
+    },
+    "Fix punctuation & obvious errors via a local model after transcribing.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corrige la ponctuation et les erreurs évidentes via un modèle local après la transcription."
+          }
+        }
+      }
+    },
+    "General": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Général"
+          }
+        }
+      }
+    },
+    "Grant Access": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accorder l'accès"
+          }
+        }
+      }
+    },
+    "Heard": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendu"
+          }
+        }
+      }
+    },
+    "Heard word": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mot entendu"
+          }
+        }
+      }
+    },
+    "Hebrew-optimized model by ivrit.ai. Selecting it sets the language to Hebrew.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle optimisé pour l'hébreu par ivrit.ai. Le sélectionner règle la langue sur l'hébreu."
+          }
+        }
+      }
+    },
+    "High accuracy, best quality": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haute précision, meilleure qualité"
+          }
+        }
+      }
+    },
+    "Higher values make the output more random": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Des valeurs plus élevées rendent la sortie plus aléatoire"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique"
+          }
+        }
+      }
+    },
+    "Hold the shortcut to record, release to stop": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez le raccourci pour enregistrer, relâchez pour arrêter"
+          }
+        }
+      }
+    },
+    "Hold to Record": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenir pour enregistrer"
+          }
+        }
+      }
+    },
+    "Hours": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heures"
+          }
+        }
+      }
+    },
+    "In queue...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En file d'attente..."
+          }
+        }
+      }
+    },
+    "Indicator position": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position de l'indicateur"
+          }
+        }
+      }
+    },
+    "Initial Prompt": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invite initiale"
+          }
+        }
+      }
+    },
+    "Keep at most": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserver au maximum"
+          }
+        }
+      }
+    },
+    "Keep only the most recent recordings & transcriptions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne conserver que les enregistrements et transcriptions les plus récents"
+          }
+        }
+      }
+    },
+    "Keep transcription in clipboard after recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserver la transcription dans le presse-papiers après l'enregistrement"
+          }
+        }
+      }
+    },
+    "Key Combination": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combinaison de touches"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue"
+          }
+        }
+      }
+    },
+    "Language Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages de langue"
+          }
+        }
+      }
+    },
+    "Language of the app interface. Relaunch to apply.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue de l'interface de l'app. Relancez pour appliquer."
+          }
+        }
+      }
+    },
+    "Launch at Login": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lancer à l'ouverture de session"
+          }
+        }
+      }
+    },
+    "Launch without the main window — open it from the menu bar icon.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer sans la fenêtre principale — ouvrez-la depuis l'icône de la barre de menus."
+          }
+        }
+      }
+    },
+    "Launch your own script when a transcription completes.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lancer votre propre script à la fin d'une transcription."
+          }
+        }
+      }
+    },
+    "Launches straight into the menu bar with no window shown. Open the window anytime from the menu bar icon. Takes effect on next launch.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarre directement dans la barre de menus sans afficher de fenêtre. Ouvrez la fenêtre à tout moment depuis l'icône de la barre de menus. Prend effet au prochain lancement."
+          }
+        }
+      }
+    },
+    "Left ⇧ Shift": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⇧ Majuscule gauche"
+          }
+        }
+      }
+    },
+    "Left ⌃ Control": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃ Contrôle gauche"
+          }
+        }
+      }
+    },
+    "Left ⌘ Command": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘ Commande gauche"
+          }
+        }
+      }
+    },
+    "Left ⌥ Option": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥ Option gauche"
+          }
+        }
+      }
+    },
+    "Limit Number of Recordings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limiter le nombre d'enregistrements"
+          }
+        }
+      }
+    },
+    "Live transcription": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription en direct"
+          }
+        }
+      }
+    },
+    "Loading Parakeet Model...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement du modèle Parakeet..."
+          }
+        }
+      }
+    },
+    "Loading Whisper Model...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement du modèle Whisper..."
+          }
+        }
+      }
+    },
+    "Loading release notes…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement des notes de version…"
+          }
+        }
+      }
+    },
+    "Lower system volume while recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baisser le volume système pendant l'enregistrement"
+          }
+        }
+      }
+    },
+    "Lower the system output volume while recording, then restore it": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baisser le volume de sortie système pendant l'enregistrement, puis le rétablir"
+          }
+        }
+      }
+    },
+    "Microphone Access": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accès au microphone"
+          }
+        }
+      }
+    },
+    "Model": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle"
+          }
+        }
+      }
+    },
+    "Model Parameters": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paramètres du modèle"
+          }
+        }
+      }
+    },
+    "Models Directory:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossier des modèles :"
+          }
+        }
+      }
+    },
+    "Modifier Key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche de modification"
+          }
+        }
+      }
+    },
+    "More info": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus d'infos"
+          }
+        }
+      }
+    },
+    "Multilingual, 25 languages": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multilingue, 25 langues"
+          }
+        }
+      }
+    },
+    "Multiple files will be queued": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plusieurs fichiers seront mis en file d'attente"
+          }
+        }
+      }
+    },
+    "Near cursor": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Près du curseur"
+          }
+        }
+      }
+    },
+    "Near cursor (default) shows it just above your text caret. Top, Center or Bottom pin it to the middle of the screen instead.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« Près du curseur » (par défaut) l'affiche juste au-dessus de votre curseur de texte. « Haut », « Centre » ou « Bas » le fixent plutôt au milieu de l'écran."
+          }
+        }
+      }
+    },
+    "No Speech Threshold:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuil d'absence de parole :"
+          }
+        }
+      }
+    },
+    "No microphones available": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun microphone disponible"
+          }
+        }
+      }
+    },
+    "No recordings yet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun enregistrement pour l'instant"
+          }
+        }
+      }
+    },
+    "No results found": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun résultat trouvé"
+          }
+        }
+      }
+    },
+    "No speech detected": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune parole détectée"
+          }
+        }
+      }
+    },
+    "No words yet. Add one below.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun mot pour l'instant. Ajoutez-en un ci-dessous."
+          }
+        }
+      }
+    },
+    "None": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune"
+          }
+        }
+      }
+    },
+    "Notch": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encoche"
+          }
+        }
+      }
+    },
+    "Notify When No Paste Target": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avertir en l'absence de cible de collage"
+          }
+        }
+      }
+    },
+    "Number of beams to use in beam search": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de faisceaux à utiliser dans la recherche en faisceau"
+          }
+        }
+      }
+    },
+    "Ollama endpoint": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point d'accès Ollama"
+          }
+        }
+      }
+    },
+    "One-tap to toggle recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une seule pression pour activer ou arrêter l'enregistrement"
+          }
+        }
+      }
+    },
+    "Open Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le dossier"
+          }
+        }
+      }
+    },
+    "Open Input Monitoring Settings…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les réglages de Surveillance de la saisie…"
+          }
+        }
+      }
+    },
+    "Open models directory": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le dossier des modèles"
+          }
+        }
+      }
+    },
+    "Open transcriptions directory": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le dossier des transcriptions"
+          }
+        }
+      }
+    },
+    "Optional text to guide the model's transcription": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte facultatif pour guider la transcription du modèle"
+          }
+        }
+      }
+    },
+    "Output Options": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options de sortie"
+          }
+        }
+      }
+    },
+    "Parakeet Model": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle Parakeet"
+          }
+        }
+      }
+    },
+    "Pause media during recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre les médias en pause pendant l'enregistrement"
+          }
+        }
+      }
+    },
+    "Pause other apps' playback while recording, then resume.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre en pause la lecture des autres apps pendant l'enregistrement, puis la reprendre."
+          }
+        }
+      }
+    },
+    "Play a notification sound when recording begins": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Émettre un son de notification au début de l'enregistrement"
+          }
+        }
+      }
+    },
+    "Play sound when recording starts": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Émettre un son au démarrage de l'enregistrement"
+          }
+        }
+      }
+    },
+    "Post-Record Hook": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Action après enregistrement"
+          }
+        }
+      }
+    },
+    "Preferred spelling": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orthographe préférée"
+          }
+        }
+      }
+    },
+    "Press": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur"
+          }
+        }
+      }
+    },
+    "Press your new shortcut combination...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur votre nouvelle combinaison de raccourci..."
+          }
+        }
+      }
+    },
+    "Preview": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu"
+          }
+        }
+      }
+    },
+    "Preview your speech in the indicator as you talk (Parakeet only).": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualisez votre parole dans l'indicateur à mesure que vous parlez (Parakeet uniquement)."
+          }
+        }
+      }
+    },
+    "Privacy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confidentialité"
+          }
+        }
+      }
+    },
+    "Pro Tip:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Astuce :"
+          }
+        }
+      }
+    },
+    "Processing...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement..."
+          }
+        }
+      }
+    },
+    "Quit": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitter"
+          }
+        }
+      }
+    },
+    "Recording Behavior": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comportement d'enregistrement"
+          }
+        }
+      }
+    },
+    "Recording Trigger": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déclencheur d'enregistrement"
+          }
+        }
+      }
+    },
+    "Recording…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrement…"
+          }
+        }
+      }
+    },
+    "Regenerate transcription": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Régénérer la transcription"
+          }
+        }
+      }
+    },
+    "Relaunch Now": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relancer maintenant"
+          }
+        }
+      }
+    },
+    "Relaunch to apply the new language.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relancez pour appliquer la nouvelle langue."
+          }
+        }
+      }
+    },
+    "Remove filler words": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer les mots de remplissage"
+          }
+        }
+      }
+    },
+    "Remove this entry": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer cette entrée"
+          }
+        }
+      }
+    },
+    "Removes matches of the regex below (case-insensitive) from the transcription, then tidies the spacing. Off by default; the inserted text is otherwise unchanged.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprime de la transcription les correspondances de l'expression régulière ci-dessous (insensible à la casse), puis nettoie les espaces. Désactivé par défaut ; le texte inséré est sinon inchangé."
+          }
+        }
+      }
+    },
+    "Replace recognized words with a preferred spelling. Matching is case-insensitive and limited to whole words. With Whisper, the replacements are also used to bias recognition.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplace les mots reconnus par l'orthographe de votre choix. La correspondance est insensible à la casse et limitée aux mots entiers. Avec Whisper, les remplacements servent aussi à orienter la reconnaissance."
+          }
+        }
+      }
+    },
+    "Replace with": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplacer par"
+          }
+        }
+      }
+    },
+    "Required Permissions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisations requises"
+          }
+        }
+      }
+    },
+    "Required for audio recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requis pour l'enregistrement audio"
+          }
+        }
+      }
+    },
+    "Required for global keyboard shortcuts": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requis pour les raccourcis clavier globaux"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réessayer"
+          }
+        }
+      }
+    },
+    "Right ⇧ Shift": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⇧ Majuscule droite"
+          }
+        }
+      }
+    },
+    "Right ⌃ Control": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃ Contrôle droite"
+          }
+        }
+      }
+    },
+    "Right ⌘ Command": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘ Commande droite"
+          }
+        }
+      }
+    },
+    "Right ⌥ Option": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥ Option droite"
+          }
+        }
+      }
+    },
+    "Run a command after each transcription": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exécuter une commande après chaque transcription"
+          }
+        }
+      }
+    },
+    "Save Transcription History": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer l'historique des transcriptions"
+          }
+        }
+      }
+    },
+    "Search in transcriptions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher dans les transcriptions"
+          }
+        }
+      }
+    },
+    "Select": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner"
+          }
+        }
+      }
+    },
+    "Select microphone": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner un microphone"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages"
+          }
+        }
+      }
+    },
+    "Settings...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages..."
+          }
+        }
+      }
+    },
+    "Shortcut": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourci"
+          }
+        }
+      }
+    },
+    "Show Timestamps": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les horodatages"
+          }
+        }
+      }
+    },
+    "Show less": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher moins"
+          }
+        }
+      }
+    },
+    "Show more": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher plus"
+          }
+        }
+      }
+    },
+    "Show the transcription live while recording (Parakeet only)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher la transcription en direct pendant l'enregistrement (Parakeet uniquement)"
+          }
+        }
+      }
+    },
+    "Single Modifier Key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche de modification unique"
+          }
+        }
+      }
+    },
+    "Speech Recognition Engine": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moteur de reconnaissance vocale"
+          }
+        }
+      }
+    },
+    "Start OpenSuperWhisper automatically when you log in.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lancer OpenSuperWhisper automatiquement à l'ouverture de votre session."
+          }
+        }
+      }
+    },
+    "Start in the Menu Bar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer dans la barre de menus"
+          }
+        }
+      }
+    },
+    "Startup": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrage"
+          }
+        }
+      }
+    },
+    "Strip um, uh, er… from transcriptions before inserting.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retire les « euh », « hum », « ben »… des transcriptions avant insertion."
+          }
+        }
+      }
+    },
+    "Suppress Blank Audio": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignorer les silences"
+          }
+        }
+      }
+    },
+    "System": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Système"
+          }
+        }
+      }
+    },
+    "Tap the record button below to get started": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur le bouton d'enregistrement ci-dessous pour commencer"
+          }
+        }
+      }
+    },
+    "Temperature:": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Température :"
+          }
+        }
+      }
+    },
+    "Temporarily reduce the output volume, then restore it.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réduire temporairement le volume de sortie, puis le rétablir."
+          }
+        }
+      }
+    },
+    "Test connection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tester la connexion"
+          }
+        }
+      }
+    },
+    "Test the connection to Ollama": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tester la connexion à Ollama"
+          }
+        }
+      }
+    },
+    "The text appears after a short delay and is a rough live preview — it may differ from the final result. The text that actually gets inserted always comes from the full, accurate transcription, not from this preview.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le texte apparaît après un court délai et constitue un aperçu approximatif en direct — il peut différer du résultat final. Le texte réellement inséré provient toujours de la transcription complète et précise, pas de cet aperçu."
+          }
+        }
+      }
+    },
+    "Threshold for detecting speech vs. silence": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuil de détection entre parole et silence"
+          }
+        }
+      }
+    },
+    "Top": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haut"
+          }
+        }
+      }
+    },
+    "Transcribing...": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription..."
+          }
+        }
+      }
+    },
+    "Transcription History Disabled": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique des transcriptions désactivé"
+          }
+        }
+      }
+    },
+    "Transcription Language": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue de transcription"
+          }
+        }
+      }
+    },
+    "Transcription failed": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de la transcription"
+          }
+        }
+      }
+    },
+    "Transcription saving is currently disabled. Would you like to enable it so this recording can be saved?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sauvegarde des transcriptions est actuellement désactivée. Souhaitez-vous l'activer afin que cet enregistrement puisse être conservé ?"
+          }
+        }
+      }
+    },
+    "Transcriptions Directory": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossier des transcriptions"
+          }
+        }
+      }
+    },
+    "Translate to English": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduire en anglais"
+          }
+        }
+      }
+    },
+    "Try different search terms": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Essayez d'autres termes de recherche"
+          }
+        }
+      }
+    },
+    "Updates": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mises à jour"
+          }
+        }
+      }
+    },
+    "Use Asian Autocorrect": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correction automatique pour les langues asiatiques"
+          }
+        }
+      }
+    },
+    "Use Beam Search": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utiliser la recherche en faisceau"
+          }
+        }
+      }
+    },
+    "Very fast processing": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement très rapide"
+          }
+        }
+      }
+    },
+    "Volume while recording": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume pendant l'enregistrement"
+          }
+        }
+      }
+    },
+    "Welcome to": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bienvenue dans"
+          }
+        }
+      }
+    },
+    "What's New": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouveautés"
+          }
+        }
+      }
+    },
+    "When disabled, audio recordings and transcriptions are not saved to disk. Only the current transcription is kept in memory for pasting.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lorsque cette option est désactivée, les enregistrements audio et les transcriptions ne sont pas sauvegardés sur le disque. Seule la transcription en cours est conservée en mémoire pour le collage."
+          }
+        }
+      }
+    },
+    "Where the recording indicator appears.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emplacement où apparaît l'indicateur d'enregistrement."
+          }
+        }
+      }
+    },
+    "Whisper Model": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle Whisper"
+          }
+        }
+      }
+    },
+    "You can change this later in Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pourrez modifier ce réglage plus tard dans les Réglages"
+          }
+        }
+      }
+    },
+    "You're on the latest version.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous disposez de la dernière version."
+          }
+        }
+      }
+    },
+    "anywhere": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "n'importe où"
+          }
+        }
+      }
+    },
+    "recordings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enregistrements"
+          }
+        }
+      }
+    },
+    "to quickly record and paste text": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pour enregistrer et coller du texte rapidement"
+          }
+        }
+      }
+    },
+    "to show mini recorder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pour afficher le mini-enregistreur"
+          }
+        }
+      }
+    },
+    "⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ Ce mode nécessite l'autorisation de surveillance de la saisie. macOS l'exige pour détecter globalement l'appui sur une touche de modification unique. Seuls les événements des touches de modification (⌘, ⌥, ⇧, ⌃, Fn) sont surveillés — aucune frappe normale n'est capturée."
+          }
+        }
+      }
     }
-  }
+  },
+  "version": "1.0"
 }
