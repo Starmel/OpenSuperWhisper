@@ -1054,7 +1054,7 @@ struct SettingsView: View {
                             }
                             .padding(.top, 8)
                         }
-                    } else {
+                    } else if viewModel.selectedEngine == "fluidaudio" {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Parakeet Model")
                                 .font(.headline)
