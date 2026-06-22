@@ -8,6 +8,21 @@
     "Advanced" : {
       "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Avancé" } } }
     },
+    "App Language" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue de l’app" } } }
+    },
+    "English" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Anglais" } } }
+    },
+    "Relaunch Now" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Relancer" } } }
+    },
+    "Relaunch to apply the new language." : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Relancez pour appliquer la nouvelle langue." } } }
+    },
+    "System" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Système" } } }
+    },
     "Cancel" : {
       "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } } }
     },

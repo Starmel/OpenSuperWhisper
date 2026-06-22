@@ -858,6 +858,8 @@ struct SettingsView: View {
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
+    @State private var appLanguage = LanguageManager.selected
+    @State private var langNeedsRelaunch = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -2066,6 +2068,45 @@ struct SettingsView: View {
                         Toggle("", isOn: $viewModel.startHidden)
                             .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                             .labelsHidden()
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Interface Language
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Language")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    SettingRow(
+                        title: "App Language",
+                        caption: "Language of the app interface. Relaunch to apply.",
+                        info: "Overrides your Mac's language for OpenSuperWhisper only. \"System\" follows your Mac's language. This is separate from the transcription language."
+                    ) {
+                        Picker("", selection: $appLanguage) {
+                            Text("System").tag("system")
+                            Text("English").tag("en")
+                            Text("Français").tag("fr")
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 140)
+                        .labelsHidden()
+                        .onChange(of: appLanguage) { _, newValue in
+                            LanguageManager.selected = newValue
+                            langNeedsRelaunch = true
+                        }
+                    }
+
+                    if langNeedsRelaunch {
+                        HStack {
+                            Text("Relaunch to apply the new language.")
+                                .font(.caption).foregroundColor(.secondary)
+                            Spacer()
+                            Button("Relaunch Now") { LanguageManager.relaunch() }
+                        }
                     }
                 }
                 .padding()
