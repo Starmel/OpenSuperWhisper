@@ -2180,6 +2180,126 @@
           }
         }
       }
+    },
+    "macOS doesn't let the app detect what was playing, so if media was already paused it may start playing when you stop â if that bothers you, use the volume option below instead.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS ne permet pas à l'app de savoir ce qui était en lecture ; donc si un média était déjà en pause, il peut se lancer quand vous arrêtez — si ça vous gêne, utilisez plutôt l'option de volume ci-dessous."
+          }
+        }
+      }
+    },
+    "Can't reach Ollama â is it running? (ollama serve)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de joindre Ollama — est-il lancé ? (ollama serve)"
+          }
+        }
+      }
+    },
+    "Model ready": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle prêt"
+          }
+        }
+      }
+    },
+    "SenseVoice Model": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle SenseVoice"
+          }
+        }
+      }
+    },
+    "â ï¸ Single modifier key mode requires Input Monitoring permission (macOS needs it to detect modifier keys globally). Only modifier key events are monitored â no regular keystrokes.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ Le mode touche unique nécessite l'autorisation Surveillance de la saisie (macOS en a besoin pour détecter les touches de modification globalement). Seuls les événements de touches de modification sont surveillés — aucune frappe normale."
+          }
+        }
+      }
+    },
+    "Show a âcopied â press âVâ notice if no editable field is focused": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher un avis « copié — appuyez sur ⌘V » si aucun champ éditable n'est sélectionné"
+          }
+        }
+      }
+    },
+    "Runs via /bin/sh -c after each successful transcription, in the background. Your command receives the data as environment variables â OSW_TEXT, OSW_AUDIO_PATH (when history is on), OSW_TIMESTAMP, OSW_DURATION â and a JSON object on stdin with the same fields. Example: echo \"$OSW_TEXT\" >> ~/dictations.txt": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S'exécute via /bin/sh -c après chaque transcription réussie, en arrière-plan. Votre commande reçoit les données dans des variables d'environnement — OSW_TEXT, OSW_AUDIO_PATH (si l'historique est activé), OSW_TIMESTAMP, OSW_DURATION — et un objet JSON sur stdin avec les mêmes champs. Exemple : echo \"$OSW_TEXT\" >> ~/dictations.txt"
+          }
+        }
+      }
+    },
+    "Sends the transcription to your local Ollama server and inserts the cleaned-up result. Requires Ollama running with the model below pulled (e.g. `ollama pull llama3.2`). Adds a little latency. If Ollama isn't reachable, the raw transcription is used unchanged â nothing is lost. Everything stays on your machine.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoie la transcription à votre serveur Ollama local et insère le résultat nettoyé. Nécessite Ollama lancé avec le modèle ci-dessous téléchargé (ex. `ollama pull llama3.2`). Ajoute un peu de latence. Si Ollama est injoignable, la transcription brute est utilisée telle quelle — rien n'est perdu. Tout reste sur votre machine."
+          }
+        }
+      }
+    },
+    "Translate to English (Whisper only)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduire en anglais (Whisper uniquement)"
+          }
+        }
+      }
+    },
+    "Press this key during recording to cancel and discard it without transcribing. Esc is the default; the â/â¥/â combos are there in case Esc conflicts with something else.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur cette touche pendant l'enregistrement pour l'annuler et la supprimer sans transcrire. Échap par défaut ; les combos ⌘/⌥/⌃ sont là si Échap entre en conflit avec autre chose."
+          }
+        }
+      }
+    },
+    "Multilingual (Chinese, Cantonese, English, Japanese, Korean), fully on-device.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multilingue (chinois, cantonais, anglais, japonais, coréen), 100 % en local."
+          }
+        }
+      }
+    },
+    "Overrides your Mac's language for OpenSuperWhisper only. \"System\" follows your Mac's language. This is separate from the transcription language.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplace la langue de votre Mac pour OpenSuperWhisper uniquement. « Système » suit la langue de votre Mac. C'est indépendant de la langue de transcription."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
