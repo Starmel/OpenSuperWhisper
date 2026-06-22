@@ -291,7 +291,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     @objc private func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
-        MainActor.assumeIsolated {
+        Task { @MainActor in
             SparkleUpdater.shared.checkForUpdates()
         }
     }
