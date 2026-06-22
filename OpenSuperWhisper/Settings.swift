@@ -1964,6 +1964,15 @@ struct SettingsView: View {
                             }
                         }
 
+                        SettingRow(
+                            title: "Cancel Shortcut",
+                            caption: "Press while recording to discard it.",
+                            info: "Press this key during recording to cancel and discard it without transcribing. Defaults to Esc — rebind it here if Esc conflicts with something else."
+                        ) {
+                            KeyboardShortcuts.Recorder("", name: .escape)
+                                .frame(width: 150)
+                        }
+
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Hold to Record")
@@ -2343,18 +2352,22 @@ struct ModelDownloadItemView: View {
                     Text(model.name)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     if model.isDownloaded {
                         Image(systemName: "arrow.down.circle.fill")
                             .foregroundColor(.blue)
                             .imageScale(.small)
                     }
                 }
-                
-                Text(model.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
+
+                HStack(spacing: 6) {
+                    Text(model.description)
+                    Text("·")
+                    Text(model.sizeString)
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+
                 if model.downloadProgress > 0 && model.downloadProgress < 1 {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
@@ -2362,9 +2375,9 @@ struct ModelDownloadItemView: View {
                         .padding(.top, 4)
                 }
             }
-            
+
             Spacer()
-            
+
             if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                 Button("Cancel") {
                     viewModel.cancelDownload()

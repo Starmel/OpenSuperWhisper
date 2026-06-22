@@ -232,7 +232,7 @@ class IndicatorViewModel: ObservableObject {
                 } catch {
                     print("Error transcribing audio: \(error)")
                     await MainActor.run {
-                        self.showError("Transcription failed")
+                        self.showError("Transcription failed: \(error.localizedDescription)")
                     }
                     return
                 }
