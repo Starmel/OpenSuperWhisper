@@ -201,6 +201,16 @@
         }
       }
     },
+    "Cancel Shortcut": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourci d'annulation"
+          }
+        }
+      }
+    },
     "Case-insensitive regex of filler words to remove.": {
       "localizations": {
         "fr": {
@@ -1357,6 +1367,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Appuyez sur"
+          }
+        }
+      }
+    },
+    "Press this key during recording to cancel and discard it without transcribing. Defaults to Esc — rebind it here if Esc conflicts with something else.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur cette touche pendant l'enregistrement pour l'annuler et la supprimer sans transcrire. Par défaut Échap — réassignez-la ici si Échap entre en conflit avec autre chose."
+          }
+        }
+      }
+    },
+    "Press while recording to discard it.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez pendant l'enregistrement pour l'annuler."
           }
         }
       }

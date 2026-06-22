@@ -206,7 +206,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         transcriptionLanguageItem.submenu = languageSubmenu
         menu.addItem(transcriptionLanguageItem)
-        
+
+        let translateItem = NSMenuItem(title: NSLocalizedString("Translate to English", comment: ""),
+                                       action: #selector(toggleTranslateToEnglish), keyEquivalent: "")
+        translateItem.target = self
+        translateItem.state = AppPreferences.shared.translateToEnglish ? .on : .off
+        menu.addItem(translateItem)
+
         // Listen for language preference changes
         NotificationCenter.default.addObserver(
             self,
@@ -288,6 +294,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         MainActor.assumeIsolated {
             SparkleUpdater.shared.checkForUpdates()
         }
+    }
+
+    @objc private func toggleTranslateToEnglish() {
+        AppPreferences.shared.translateToEnglish.toggle()
+        updateStatusBarMenu()
     }
     
     @objc private func selectMicrophone(_ sender: NSMenuItem) {
