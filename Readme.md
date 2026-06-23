@@ -14,7 +14,8 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 ## Features
 
 - 🎙️ Real-time audio recording and transcription
-- 🧠 Three transcription engines, all on-device: [Whisper](https://github.com/ggerganov/whisper.cpp), [Parakeet](https://github.com/AntinomyCollective/FluidAudio), and [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) (Chinese/Cantonese/English/Japanese/Korean, via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)) — download models directly from the app
+- 🧠 Four transcription engines — three fully on-device ([Whisper](https://github.com/ggerganov/whisper.cpp), [Parakeet](https://github.com/AntinomyCollective/FluidAudio), [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) for Chinese/Cantonese/English/Japanese/Korean) plus [**Groq**](https://groq.com) (optional cloud, ultra-fast whisper-large-v3 — uploads audio, needs a free API key)
+- 🌍 Interface localized in **English, French, German, Spanish, Italian and Brazilian Portuguese**
 - ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
 - ✊ Hold-to-record mode — hold the shortcut to record, release to stop
 - 📁 Drag & drop audio files for transcription with queue processing
@@ -110,6 +111,8 @@ Contributions are welcome! Please feel free to submit pull requests or create is
 - [x] Internationalization / localization — initial French
 - [x] Intel macOS compatibility ([#15](https://github.com/Starmel/OpenSuperWhisper/issues/15)) — separate x86_64 build (Whisper + Parakeet)
 - [x] CLI ([#150](https://github.com/Starmel/OpenSuperWhisper/issues/150)) — `opensuperwhisper transcribe <file>`
+- [x] Groq STT provider ([#64](https://github.com/Starmel/OpenSuperWhisper/issues/64)) — cloud whisper-large-v3
+- [x] Localization — English, French, German, Spanish, Italian, Portuguese (BR)
 - [ ] Agent mode ([#14](https://github.com/Starmel/OpenSuperWhisper/issues/14))
 
 ## License
