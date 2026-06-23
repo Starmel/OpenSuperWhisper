@@ -2152,9 +2152,13 @@ struct SettingsView: View {
                             Text("System").tag("system")
                             Text("English").tag("en")
                             Text("Français").tag("fr")
+                            Text("Deutsch").tag("de")
+                            Text("Español").tag("es")
+                            Text("Italiano").tag("it")
+                            Text("Português (BR)").tag("pt-BR")
                         }
                         .pickerStyle(.menu)
-                        .frame(width: 140)
+                        .frame(width: 150)
                         .labelsHidden()
                         .onChange(of: appLanguage) { _, newValue in
                             LanguageManager.selected = newValue
