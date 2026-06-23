@@ -325,7 +325,7 @@ struct ContentView: View {
     @StateObject private var viewModel = ContentViewModel()
     @StateObject private var permissionsManager = PermissionsManager()
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isSettingsPresented = false
+    @Environment(\.openWindow) private var openSettingsWindow
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var showDeleteConfirmation = false
@@ -642,7 +642,7 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
-                                    isSettingsPresented.toggle()
+                                    openSettingsWindow(id: "settings")
                                 }) {
                                     Image(systemName: "gear")
                                         .font(.title3)
@@ -710,11 +710,8 @@ struct ContentView: View {
             }
         }
         .fileDropHandler()
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsView()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            isSettingsPresented = true
+            openSettingsWindow(id: "settings")
         }
         .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
             if shouldClear {

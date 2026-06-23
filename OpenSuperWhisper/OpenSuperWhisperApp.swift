@@ -56,6 +56,13 @@ struct OpenSuperWhisperApp: App {
             }
         }
         .handlesExternalEvents(matching: Set(arrayLiteral: "openMainWindow"))
+
+        // Dedicated, movable & closable settings window (sidebar layout).
+        Window("Settings", id: "settings") {
+            SettingsView()
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 780, height: 600)
     }
 
     init() {
@@ -201,7 +208,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let menu = NSMenu()
         
         menu.addItem(NSMenuItem(title: "OpenSuperWhisper", action: #selector(openApp), keyEquivalent: "o"))
-        
+
         let transcriptionLanguageItem = NSMenuItem(title: NSLocalizedString("Language", comment: ""), action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
         
@@ -300,6 +307,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         menu.addItem(NSMenuItem.separator())
 
+        // No "," keyEquivalent: it makes macOS treat this as the standard Settings
+        // command and auto-adds a gear icon, which the other plain items don't have.
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: "")
+        settingsItem.target = self
+        settingsItem.image = nil
+        menu.addItem(settingsItem)
+
         let updateItem = NSMenuItem(title: NSLocalizedString("Check for Updates…", comment: ""), action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
@@ -335,7 +349,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @objc private func openApp() {
         showMainWindow()
     }
-    
+
+    @objc private func openSettings() {
+        showMainWindow()
+        NotificationCenter.default.post(name: .openSettings, object: nil)
+    }
+
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
     }

@@ -843,6 +843,32 @@ struct SettingRow<Trailing: View>: View {
     }
 }
 
+/// The settings tabs, shown as a vertical sidebar in the dedicated settings window.
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general, model, transcription, history, advanced, updates
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .model: return "Engine & Model"
+        case .transcription: return "Transcription"
+        case .history: return "History"
+        case .advanced: return "Advanced"
+        case .updates: return "Updates"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .general: return "slider.horizontal.3"
+        case .model: return "cpu"
+        case .transcription: return "text.bubble"
+        case .history: return "clock.arrow.circlepath"
+        case .advanced: return "gearshape"
+        case .updates: return "sparkles"
+        }
+    }
+}
+
 struct SettingsView: View {
     struct HookVariable { let name: String; let description: String }
     static let postRecordHookVariables = [
@@ -856,7 +882,7 @@ struct SettingsView: View {
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
-    @State private var selectedTab = 0
+    @State private var selectedTab: SettingsTab = .general
     @State private var previousModelURL: URL?
     @State private var appLanguage = LanguageManager.selected
     @State private var langNeedsRelaunch = false
@@ -894,53 +920,65 @@ struct SettingsView: View {
         }
     }
 
-    var body: some View {
-        TabView(selection: $selectedTab) {
+    /// Content for the currently-selected sidebar tab.
+    @ViewBuilder private var detailContent: some View {
+        switch selectedTab {
+        case .general:       shortcutSettings
+        case .model:         modelSettings
+        case .transcription: transcriptionSettings
+        case .history:       storageSettings
+        case .advanced:      advancedSettings
+        case .updates:       UpdatesView()
+        }
+    }
 
-             // Shortcut Settings
-            shortcutSettings
-                .tabItem {
-                    Label("General", systemImage: "slider.horizontal.3")
-                }
-                .tag(0)
-            // Model Settings
-            modelSettings
-                .tabItem {
-                    Label("Model", systemImage: "cpu")
-                }
-                .tag(1)
-            
-            // Transcription Settings
-            transcriptionSettings
-                .tabItem {
-                    Label("Transcription", systemImage: "text.bubble")
-                }
-                .tag(2)
-
-            // Storage / Retention Settings
-            storageSettings
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-                .tag(3)
-
-            // Advanced Settings
-            advancedSettings
-                .tabItem {
-                    Label("Advanced", systemImage: "gear")
-                }
-                .tag(4)
-
-            // Updates / What's New
-            UpdatesView()
-                .tabItem {
-                    Label("Updates", systemImage: "sparkles")
-                }
-                .tag(5)
+    /// One row in the left sidebar (drawer).
+    private func sidebarRow(_ tab: SettingsTab) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 20, alignment: .center)
+                Text(tab.title)
+                    .font(.system(size: 13))
+                Spacer(minLength: 0)
             }
-        .padding()
-        .frame(width: 550, height: 600)
-        .background(Color(.windowBackgroundColor))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .foregroundStyle(selectedTab == tab ? Color.white : Color.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(selectedTab == tab ? Color.accentColor : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Vertical sidebar (drawer) listing the tabs — a plain stack so it
+            // can never collapse the way a NavigationSplitView sidebar does.
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(SettingsTab.allCases) { tab in
+                    sidebarRow(tab)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(width: 212)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(.regularMaterial)
+
+            Divider()
+
+            detailContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Color(.windowBackgroundColor))
+        }
+        .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button("Done") {
