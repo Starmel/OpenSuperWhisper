@@ -887,6 +887,8 @@ struct SettingsView: View {
             return "Most accurate, ~99 languages, and can translate to English. Runs fully on-device."
         case "sensevoice":
             return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
+        case "groq":
+            return "Cloud — extremely fast whisper-large-v3. ⚠️ Audio is sent to Groq's servers (NOT on-device). Needs a free API key."
         default:
             return "Fast, multilingual (25 languages), with a live preview as you speak. Runs fully on-device."
         }
@@ -1008,6 +1010,7 @@ struct SettingsView: View {
 #if arch(arm64)
                         Text("SenseVoice").tag("sensevoice")
 #endif
+                        Text("Groq").tag("groq")
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
@@ -1023,6 +1026,9 @@ struct SettingsView: View {
                         SenseVoiceModelSection()
                     }
 #endif
+                    if viewModel.selectedEngine == "groq" {
+                        GroqSettingsSection()
+                    }
 
                     if viewModel.selectedEngine == "whisper" {
                         VStack(alignment: .leading, spacing: 16) {

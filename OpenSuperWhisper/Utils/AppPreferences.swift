@@ -43,7 +43,16 @@ final class AppPreferences {
     // Engine settings
     @UserDefault(key: "selectedEngine", defaultValue: "whisper")
     var selectedEngine: String
-    
+
+    @UserDefault(key: "groqModel", defaultValue: "whisper-large-v3-turbo")
+    var groqModel: String
+
+    /// Groq API key — kept in the Keychain (a secret), not in UserDefaults.
+    var groqAPIKey: String? {
+        get { Keychain.read("groqAPIKey") }
+        set { Keychain.set(newValue, for: "groqAPIKey") }
+    }
+
     // Model settings
     var selectedModelPath: String? {
         get {

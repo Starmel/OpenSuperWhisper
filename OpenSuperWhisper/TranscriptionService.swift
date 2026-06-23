@@ -58,6 +58,8 @@ class TranscriptionService: ObservableObject {
                 // SenseVoice (sherpa-onnx/onnxruntime) ships arm64-only; fall back on Intel.
                 engine = await WhisperEngine()
 #endif
+            } else if selectedEngine == "groq" {
+                engine = GroqEngine()
             } else {
                 engine = await WhisperEngine()
             }

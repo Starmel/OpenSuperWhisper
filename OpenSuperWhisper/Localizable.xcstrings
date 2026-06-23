@@ -2390,6 +2390,76 @@
           }
         }
       }
+    },
+    "Cloud — extremely fast whisper-large-v3. ⚠️ Audio is sent to Groq's servers (NOT on-device). Needs a free API key.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud — whisper-large-v3 ultra-rapide. ⚠️ L'audio est envoyé aux serveurs de Groq (PAS en local). Nécessite une clé API gratuite."
+          }
+        }
+      }
+    },
+    "Audio is uploaded to Groq's servers — this engine is not on-device.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'audio est envoyé aux serveurs de Groq — ce moteur n'est pas en local."
+          }
+        }
+      }
+    },
+    "API Key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clé API"
+          }
+        }
+      }
+    },
+    "Get a free key": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtenir une clé gratuite"
+          }
+        }
+      }
+    },
+    "whisper-large-v3-turbo — fastest": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "whisper-large-v3-turbo — le plus rapide"
+          }
+        }
+      }
+    },
+    "whisper-large-v3 — supports translation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "whisper-large-v3 — gère la traduction"
+          }
+        }
+      }
+    },
+    "Turbo is fastest (transcription only). whisper-large-v3 also honours Translate to English.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turbo est le plus rapide (transcription seule). whisper-large-v3 gère aussi « Traduire en anglais »."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
