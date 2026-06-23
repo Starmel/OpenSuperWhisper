@@ -58,6 +58,13 @@ class TranscriptionService: ObservableObject {
                 // SenseVoice (sherpa-onnx/onnxruntime) ships arm64-only; fall back on Intel.
                 engine = await WhisperEngine()
 #endif
+            } else if selectedEngine == "moonshine" {
+#if arch(arm64)
+                engine = MoonshineEngine()
+#else
+                // Moonshine (sherpa-onnx/onnxruntime) ships arm64-only; fall back on Intel.
+                engine = await WhisperEngine()
+#endif
             } else if selectedEngine == "groq" {
                 engine = GroqEngine()
             } else {

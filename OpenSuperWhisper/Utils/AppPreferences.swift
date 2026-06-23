@@ -44,6 +44,10 @@ final class AppPreferences {
     @UserDefault(key: "selectedEngine", defaultValue: "whisper")
     var selectedEngine: String
 
+    /// Selected Moonshine language (one model per language; English by default).
+    @UserDefault(key: "moonshineLanguage", defaultValue: "en")
+    var moonshineLanguage: String
+
     @UserDefault(key: "groqModel", defaultValue: "whisper-large-v3-turbo")
     var groqModel: String
 

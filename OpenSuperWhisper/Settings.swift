@@ -24,7 +24,10 @@ class SettingsViewModel: ObservableObject {
     @Published var fluidAudioModelVersion: String {
         didSet {
             AppPreferences.shared.fluidAudioModelVersion = fluidAudioModelVersion
-            if selectedEngine == "fluidaudio" {
+            // Clicking a Parakeet model activates the Parakeet engine (browse ≠ select).
+            if selectedEngine != "fluidaudio" {
+                selectedEngine = "fluidaudio"
+            } else {
                 Task { @MainActor in
                     TranscriptionService.shared.reloadEngine()
                 }
@@ -47,6 +50,8 @@ class SettingsViewModel: ObservableObject {
     /// on a routine reload.
     func selectModel(_ url: URL) {
         selectedModelURL = url
+        // Clicking a Whisper model is what activates the Whisper engine (browse ≠ select).
+        if selectedEngine != "whisper" { selectedEngine = "whisper" }
         if let lang = SettingsDownloadableModels.preferredLanguage(forFilename: url.lastPathComponent),
            selectedLanguage != lang {
             selectedLanguage = lang
@@ -883,6 +888,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab: SettingsTab = .general
+    /// The engine whose models are currently being *browsed* (navigation only — the active engine
+    /// in `viewModel.selectedEngine` changes only when the user clicks a model).
+    @State private var browseEngine: String = AppPreferences.shared.selectedEngine
     @State private var previousModelURL: URL?
     @State private var appLanguage = LanguageManager.selected
     @State private var langNeedsRelaunch = false
@@ -907,12 +915,38 @@ struct SettingsView: View {
     }
 
     /// One-line description of the selected engine, to help users choose.
-    private var engineBlurb: LocalizedStringKey {
-        switch viewModel.selectedEngine {
+    /// Engine → display name for the "active engine" indicator.
+    private func engineDisplayName(_ engine: String) -> String {
+        switch engine {
+        case "fluidaudio": return "Parakeet"
+        case "whisper": return "Whisper"
+        case "sensevoice": return "SenseVoice"
+        case "moonshine": return "Moonshine · \(MoonshineModelManager.displayName(for: AppPreferences.shared.moonshineLanguage))"
+        case "groq": return "Groq"
+        default: return engine
+        }
+    }
+
+    /// Short engine name (no model/language suffix) for compact controls.
+    private func engineShortName(_ engine: String) -> String {
+        switch engine {
+        case "fluidaudio": return "Parakeet"
+        case "whisper": return "Whisper"
+        case "sensevoice": return "SenseVoice"
+        case "moonshine": return "Moonshine"
+        case "groq": return "Groq"
+        default: return engine
+        }
+    }
+
+    private func engineBlurb(for engine: String) -> LocalizedStringKey {
+        switch engine {
         case "whisper":
             return "Most accurate, ~99 languages, and can translate to English. Runs fully on-device."
         case "sensevoice":
             return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
+        case "moonshine":
+            return "A tiny, fast model — choose one language below (English, Vietnamese, Chinese, Japanese, Spanish, Arabic, Ukrainian). Runs fully on-device."
         case "groq":
             return "Cloud — extremely fast whisper-large-v3. ⚠️ Audio is sent to Groq's servers (NOT on-device). Needs a free API key."
         default:
@@ -974,40 +1008,45 @@ struct SettingsView: View {
 
             Divider()
 
-            detailContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(Color(.windowBackgroundColor))
-        }
-        .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Button("Done") {
-                    if viewModel.selectedEngine == "whisper" {
-                        if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
-                            TranscriptionService.shared.reloadModel(with: modelPath)
+            VStack(spacing: 0) {
+                detailContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                Divider()
+
+                // Footer lives inside the detail column so it never runs under the sidebar.
+                HStack {
+                    Link(destination: URL(string: "https://github.com/my-monkeys/OpenSuperWhisper")!) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star")
+                                .font(.system(size: 10))
+                            Text("GitHub")
+                                .font(.system(size: 11))
                         }
+                        .foregroundColor(.secondary)
                     }
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                
-                Spacer()
-                
-                Link(destination: URL(string: "https://github.com/my-monkeys/OpenSuperWhisper")!) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "star")
-                            .font(.system(size: 10))
-                        Text("GitHub")
-                            .font(.system(size: 11))
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button("Done") {
+                        if viewModel.selectedEngine == "whisper" {
+                            if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
+                                TranscriptionService.shared.reloadModel(with: modelPath)
+                            }
+                        }
+                        dismiss()
                     }
-                    .foregroundColor(.secondary)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
                 }
-                .buttonStyle(.plain)
+                .padding()
+                .background(Color(.windowBackgroundColor))
             }
-            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.windowBackgroundColor))
         }
+        .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
         .onAppear {
             previousModelURL = viewModel.selectedModelURL
             launchAtLogin.refresh()
@@ -1042,33 +1081,78 @@ struct SettingsView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Picker("Engine", selection: $viewModel.selectedEngine) {
-                        Text("Parakeet").tag("fluidaudio")
-                        Text("Whisper").tag("whisper")
-#if arch(arm64)
-                        Text("SenseVoice").tag("sensevoice")
-#endif
-                        Text("Groq").tag("groq")
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.bottom, 8)
+                    // Active engine + model — right under the title, always visible while browsing.
+                    Label("Active: \(engineDisplayName(viewModel.selectedEngine))",
+                          systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
 
-                    Text(engineBlurb)
+                    // Centered Parakeet / Whisper / Autre. "Autre" reveals an engine dropdown below.
+                    HStack {
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { ["fluidaudio", "whisper"].contains(browseEngine) ? browseEngine : "other" },
+                            set: { newValue in
+                                if newValue == "other" {
+                                    if !["moonshine", "sensevoice", "groq"].contains(browseEngine) {
+#if arch(arm64)
+                                        browseEngine = "moonshine"
+#else
+                                        browseEngine = "groq"
+#endif
+                                    }
+                                } else {
+                                    browseEngine = newValue
+                                }
+                            }
+                        )) {
+                            Text("Parakeet").tag("fluidaudio")
+                            Text("Whisper").tag("whisper")
+                            Text("Autre").tag("other")
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+
+                    if !["fluidaudio", "whisper"].contains(browseEngine) {
+                        HStack {
+                            Text("Engine:").foregroundColor(.secondary)
+                            Picker("", selection: $browseEngine) {
+#if arch(arm64)
+                                Text("Moonshine").tag("moonshine")
+                                Text("SenseVoice").tag("sensevoice")
+#endif
+                                Text("Groq").tag("groq")
+                            }
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                            Spacer()
+                        }
+                        .padding(.top, 4)
+                    }
+
+
+                    Text(engineBlurb(for: browseEngine))
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 8)
 
 #if arch(arm64)
-                    if viewModel.selectedEngine == "sensevoice" {
-                        SenseVoiceModelSection()
+                    if browseEngine == "sensevoice" {
+                        SenseVoiceModelSection(viewModel: viewModel)
+                    }
+                    if browseEngine == "moonshine" {
+                        MoonshineModelSection(viewModel: viewModel)
                     }
 #endif
-                    if viewModel.selectedEngine == "groq" {
-                        GroqSettingsSection()
+                    if browseEngine == "groq" {
+                        GroqSettingsSection(viewModel: viewModel)
                     }
 
-                    if viewModel.selectedEngine == "whisper" {
+                    if browseEngine == "whisper" {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Whisper Model")
                                 .font(.headline)
@@ -1134,7 +1218,7 @@ struct SettingsView: View {
                             }
                             .padding(.top, 8)
                         }
-                    } else if viewModel.selectedEngine == "fluidaudio" {
+                    } else if browseEngine == "fluidaudio" {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Parakeet Model")
                                 .font(.headline)
@@ -2422,7 +2506,9 @@ struct FluidAudioModelDownloadItemView: View {
         .cornerRadius(8)
         .contentShape(Rectangle())
         .onTapGesture {
-            if model.isDownloaded && !isSelected {
+            // Activate on tap whenever this isn't already the *active* model — even if it's the
+            // selected version but Parakeet isn't the active engine (browse ≠ select).
+            if model.isDownloaded && !isActive {
                 viewModel.fluidAudioModelVersion = model.version
             }
         }
@@ -2538,7 +2624,9 @@ struct ModelDownloadItemView: View {
         .cornerRadius(8)
         .contentShape(Rectangle())
         .onTapGesture {
-            if model.isDownloaded && !isSelected {
+            // Activate on tap whenever this isn't the active model (works even if it's the selected
+            // file but Whisper isn't the active engine).
+            if model.isDownloaded && !isActive {
                 let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
                 viewModel.selectModel(URL(fileURLWithPath: modelPath))
             }
