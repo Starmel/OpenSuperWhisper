@@ -115,7 +115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         setupStatusBarItem()
 
-        if let window = NSApplication.shared.windows.first {
+        if let window = NSApplication.shared.windows.first(where: { $0.title != "Settings" }) {
             self.mainWindow = window
             window.delegate = self
 
@@ -392,8 +392,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     func showMainWindow() {
         NSApplication.shared.setActivationPolicy(.regular)
-        
-        if let window = mainWindow {
+
+        // Never bring up the Settings window here — it's a separate scene. Use the
+        // stored ref only if it isn't Settings, else find the real main window.
+        let target = mainWindow.flatMap { $0.title == "Settings" ? nil : $0 }
+            ?? NSApplication.shared.windows.first { $0.styleMask.contains(.titled) && $0.title != "Settings" }
+        if let window = target {
             if !window.isVisible {
                 window.makeKeyAndOrderFront(nil)
             }
