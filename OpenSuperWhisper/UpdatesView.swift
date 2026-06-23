@@ -47,7 +47,13 @@ struct UpdatesView: View {
                     Image(systemName: "arrow.down.circle.fill").foregroundColor(.green)
                     Text("Update available: \(update.tagName)")
                         .font(.subheadline)
-                    Button("Download") { NSWorkspace.shared.open(update.htmlURL) }
+                    Spacer()
+                    // Install in place via Sparkle (download + verify + relaunch), not a web page.
+                    Button("Install Update") { SparkleUpdater.shared.checkForUpdates() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    // The release page on GitHub, for those who want to read it first.
+                    Button("View on GitHub") { NSWorkspace.shared.open(update.htmlURL) }
                         .controlSize(.small)
                 }
             } else if let statusMessage {

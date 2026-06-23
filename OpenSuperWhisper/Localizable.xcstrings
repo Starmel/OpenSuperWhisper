@@ -2370,6 +2370,26 @@
           }
         }
       }
+    },
+    "Install Update": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer la mise à jour"
+          }
+        }
+      }
+    },
+    "View on GitHub": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir sur GitHub"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
