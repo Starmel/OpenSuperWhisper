@@ -8,6 +8,12 @@
 OpenSuperWhisper is a macOS application that provides real-time audio transcription using the Whisper model. It offers a seamless way to record and transcribe audio with customizable settings and keyboard shortcuts.
 
 <p align="center">
+  <a href="https://opensuperwhisper.com"><img src="https://img.shields.io/badge/Website-opensuperwhisper.com-1f3bff?style=for-the-badge" alt="opensuperwhisper.com" /></a>
+  <br />
+  <strong><a href="https://opensuperwhisper.com">opensuperwhisper.com</a></strong> — compare the engines head-to-head, see the real benchmark scores, and follow the <a href="https://opensuperwhisper.com/changelog">changelog</a>.
+</p>
+
+<p align="center">
 <img src="docs/image.png" width="400" /> <img src="docs/image_indicator.png" width="400" />
 </p>
 
