@@ -921,7 +921,6 @@ struct SettingsView: View {
         case "fluidaudio": return "Parakeet"
         case "whisper": return "Whisper"
         case "sensevoice": return "SenseVoice"
-        case "moonshine": return "Moonshine · \(MoonshineModelManager.displayName(for: AppPreferences.shared.moonshineLanguage))"
         case "groq": return "Groq"
         default: return engine
         }
@@ -933,7 +932,6 @@ struct SettingsView: View {
         case "fluidaudio": return "Parakeet"
         case "whisper": return "Whisper"
         case "sensevoice": return "SenseVoice"
-        case "moonshine": return "Moonshine"
         case "groq": return "Groq"
         default: return engine
         }
@@ -945,8 +943,6 @@ struct SettingsView: View {
             return "Most accurate, ~99 languages, and can translate to English. Runs fully on-device."
         case "sensevoice":
             return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
-        case "moonshine":
-            return "A tiny, fast model — choose one language below (English, Vietnamese, Chinese, Japanese, Spanish, Arabic, Ukrainian). Runs fully on-device."
         case "groq":
             return "Cloud — extremely fast whisper-large-v3. ⚠️ Audio is sent to Groq's servers (NOT on-device). Needs a free API key."
         default:
@@ -1094,9 +1090,9 @@ struct SettingsView: View {
                             get: { ["fluidaudio", "whisper"].contains(browseEngine) ? browseEngine : "other" },
                             set: { newValue in
                                 if newValue == "other" {
-                                    if !["moonshine", "sensevoice", "groq"].contains(browseEngine) {
+                                    if !["sensevoice", "groq"].contains(browseEngine) {
 #if arch(arm64)
-                                        browseEngine = "moonshine"
+                                        browseEngine = "sensevoice"
 #else
                                         browseEngine = "groq"
 #endif
@@ -1121,7 +1117,6 @@ struct SettingsView: View {
                             Text("Engine:").foregroundColor(.secondary)
                             Picker("", selection: $browseEngine) {
 #if arch(arm64)
-                                Text("Moonshine").tag("moonshine")
                                 Text("SenseVoice").tag("sensevoice")
 #endif
                                 Text("Groq").tag("groq")
@@ -1143,9 +1138,6 @@ struct SettingsView: View {
 #if arch(arm64)
                     if browseEngine == "sensevoice" {
                         SenseVoiceModelSection(viewModel: viewModel)
-                    }
-                    if browseEngine == "moonshine" {
-                        MoonshineModelSection(viewModel: viewModel)
                     }
 #endif
                     if browseEngine == "groq" {
