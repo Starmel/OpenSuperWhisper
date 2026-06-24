@@ -14,33 +14,36 @@ enum CLI {
 
     Usage:
       OpenSuperWhisper transcribe <audio-file> [--json]
+      OpenSuperWhisper bench <dir-of-wavs>
 
     Options:
       --json       Print a JSON object ({ "file", "text" }) instead of plain text.
       -h, --help   Show this help.
 
-    Transcription uses the engine and settings configured in the app. Set up a model in the app
-    at least once before using the CLI.
+    `bench` loads the configured model once and transcribes every .wav in the directory, printing a
+    JSON array of { "file", "ms" (transcription time), "text" } — used to benchmark engines.
+
+    Both use the engine and settings configured in the app. Set up a model in the app first.
     """
 
     /// Returns true if these arguments are a CLI invocation (and the GUI should not launch).
     static func shouldHandle(_ args: [String]) -> Bool {
         guard args.count >= 2 else { return false }
-        return ["transcribe", "--help", "-h"].contains(args[1])
+        return ["transcribe", "bench", "--help", "-h"].contains(args[1])
     }
 
     static func run(_ args: [String]) -> Never {
         if args.count >= 2, args[1] == "--help" || args[1] == "-h" {
             print(usage); exit(0)
         }
-        guard args.count >= 3, args[1] == "transcribe" else {
+        let mode = args[1]
+        guard mode == "transcribe" || mode == "bench", args.count >= 3 else {
             fail(usage, code: 2)
         }
-
         let json = args.dropFirst(3).contains("--json")
-        let url = URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            fail("error: file not found: \(url.path)")
+        let target = URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath)
+        guard FileManager.default.fileExists(atPath: target.path) else {
+            fail("error: not found: \(target.path)")
         }
 
         // The engines + FluidAudio's logger print to stdout. Keep stdout clean & pipeable by
@@ -56,24 +59,53 @@ enum CLI {
             let service = TranscriptionService.shared
             // Wait for the configured engine to finish loading (model load can take a moment).
             var waited = 0.0
-            while service.isLoading && waited < 60 {
+            while service.isLoading && waited < 120 {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 waited += 0.1
             }
             if let engineError = service.engineError {
                 fail("error: \(engineError)\n(set up a model in the app first)")
             }
-            do {
-                let text = try await service.transcribeAudio(url: url, settings: Settings())
-                emit(text, file: url.path, json: json)
+            if mode == "transcribe" {
+                do {
+                    let text = try await service.transcribeAudio(url: target, settings: Settings())
+                    emit(text, file: target.path, json: json)
+                    exit(0)
+                } catch {
+                    fail("error: \(error.localizedDescription)")
+                }
+            } else {
+                await runBench(dir: target, service: service)
                 exit(0)
-            } catch {
-                fail("error: \(error.localizedDescription)")
             }
         }
         // Keep the process alive on the main dispatch queue (where the @MainActor task runs) until
         // the task calls exit(). dispatchMain() never returns, satisfying the -> Never contract.
         dispatchMain()
+    }
+
+    /// Transcribe every .wav in `dir` with the already-loaded engine, timing each transcription.
+    /// Prints a JSON array of { file, ms, text } — the model is loaded once, so timings reflect
+    /// steady-state transcription speed (not per-run model load).
+    @MainActor
+    private static func runBench(dir: URL, service: TranscriptionService) async {
+        let files = ((try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "wav" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var results: [[String: Any]] = []
+        for file in files {
+            let start = CFAbsoluteTimeGetCurrent()
+            let text = (try? await service.transcribeAudio(url: file, settings: Settings())) ?? ""
+            let ms = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+            results.append([
+                "file": file.lastPathComponent, "ms": ms,
+                "text": text.trimmingCharacters(in: .whitespacesAndNewlines),
+            ])
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: results, options: [.sortedKeys])) ?? Data()
+        resultOut.write(data)
+        resultOut.write(Data("\n".utf8))
     }
 
     /// The real stdout (engine/library logs are redirected away from it during a run).
