@@ -27,4 +27,27 @@ enum TextInserter {
         }
         return result
     }
+
+    /// Types `text` into the focused app as Unicode keyboard events. Each chunk
+    /// is sent as one key-down/key-up pair carrying the Unicode string; modifier
+    /// flags are cleared so a still-held hotkey can't combine with the input.
+    static func type(_ text: String) {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+
+        for chunk in chunks(of: text) {
+            guard
+                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else { continue }
+
+            var units = chunk
+            keyDown.flags = []
+            keyUp.flags = []
+            keyDown.keyboardSetUnicodeString(stringLength: units.count, unicodeString: &units)
+            keyUp.keyboardSetUnicodeString(stringLength: units.count, unicodeString: &units)
+
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+        }
+    }
 }
