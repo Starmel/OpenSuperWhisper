@@ -1525,7 +1525,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Copy to Clipboard")
                                     .font(.subheadline)
-                                Text("Keep transcription in clipboard after recording")
+                                Text("Also place the transcription on the clipboard")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -1539,7 +1539,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Auto-paste Transcription")
                                     .font(.subheadline)
-                                Text("Automatically paste into the focused app")
+                                Text("Type the transcription into the focused app")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

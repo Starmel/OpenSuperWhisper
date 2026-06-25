@@ -257,23 +257,28 @@ class IndicatorViewModel: ObservableObject {
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
 
-        if prefs.autoPasteTranscription {
-            // Check the focus target BEFORE pasting (our own Cmd+V could change it).
-            let targetMissing = prefs.notifyWhenNoPasteTarget
-                && FocusUtils.focusedElementIsEditable() == false
-
-            // Keep the text on the clipboard whenever we'll warn, so "press ⌘V" is
-            // actionable even if "copy to clipboard" is turned off.
-            if targetMissing || prefs.autoCopyToClipboard {
-                ClipboardUtil.insertTextAndKeepInClipboard(finalText)
-            } else {
-                ClipboardUtil.insertText(finalText)
-            }
-            return targetMissing
-        } else if prefs.autoCopyToClipboard {
+        // Optional, independent clipboard stash (never the insertion mechanism).
+        if prefs.autoCopyToClipboard {
             ClipboardUtil.copyToClipboard(finalText)
         }
-        // If both are false, do nothing
+
+        guard prefs.autoPasteTranscription else { return false }
+
+        // Decide whether there is an editable target BEFORE inserting. Biased
+        // toward "present": only `false` when we are confident there is none.
+        let targetMissing = prefs.notifyWhenNoPasteTarget
+            && FocusUtils.focusedElementIsEditable() == false
+
+        if targetMissing {
+            // No field to type into: make sure the text is on the clipboard so the
+            // "press ⌘V" notice is actionable, then skip typing into a non-target.
+            if !prefs.autoCopyToClipboard {
+                ClipboardUtil.copyToClipboard(finalText)
+            }
+            return true
+        }
+
+        TextInserter.type(finalText)
         return false
     }
     
