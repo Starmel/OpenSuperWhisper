@@ -66,6 +66,7 @@ struct OpenSuperWhisperApp: App {
     }
 
     init() {
+        MainThreadWatchdog.shared.start()
         _ = ShortcutManager.shared
         _ = MicrophoneService.shared
         WhisperModelManager.shared.ensureDefaultModelPresent()

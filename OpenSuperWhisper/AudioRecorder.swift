@@ -124,6 +124,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     func startRecording() {
+        Diag.mark("recorder.startRecording (canRecord=\(canRecord))")
         guard canRecord else {
             print("Cannot start recording - no audio input available")
             return
@@ -154,7 +155,9 @@ class AudioRecorder: NSObject, ObservableObject {
 
         #if os(macOS)
         if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
-            _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
+            Diag.measure("setAsSystemDefaultInput") {
+                _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
+            }
             print("Set system default input to: \(activeMic.displayName)")
 
             if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
@@ -163,7 +166,9 @@ class AudioRecorder: NSObject, ObservableObject {
         }
         #endif
 
-        let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
+        let requiresConnection = Diag.measure("isActiveMicrophoneRequiresConnection") {
+            MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
+        }
         updateRecordingState(isRecording: false, isConnecting: requiresConnection)
         startRecordingWithRecorder(fileURL: fileURL, monitorConnection: requiresConnection)
     }
@@ -185,10 +190,12 @@ class AudioRecorder: NSObject, ObservableObject {
         
         do {
             primedRecorder = nil  // release primed recorder just before starting; hardware stays warm
-            audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
-            audioRecorder?.delegate = self
-            audioRecorder?.isMeteringEnabled = monitorConnection
-            audioRecorder?.record()
+            try Diag.measure("AVAudioRecorder init+record") {
+                audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
+                audioRecorder?.delegate = self
+                audioRecorder?.isMeteringEnabled = monitorConnection
+                audioRecorder?.record()
+            }
             if monitorConnection {
                 startConnectionMonitoring()
             } else {

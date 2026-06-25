@@ -268,7 +268,7 @@ class IndicatorViewModel: ObservableObject {
         // Decide whether there is an editable target BEFORE inserting. Biased
         // toward "present": only `false` when we are confident there is none.
         let targetMissing = prefs.notifyWhenNoPasteTarget
-            && FocusUtils.focusedElementIsEditable() == false
+            && Diag.measure("focusedElementIsEditable") { FocusUtils.focusedElementIsEditable() } == false
 
         if targetMissing {
             // No field to type into: make sure the text is on the clipboard so the
@@ -279,7 +279,7 @@ class IndicatorViewModel: ObservableObject {
             return true
         }
 
-        TextInserter.type(finalText)
+        Diag.measure("TextInserter.type") { TextInserter.type(finalText) }
         return false
     }
     

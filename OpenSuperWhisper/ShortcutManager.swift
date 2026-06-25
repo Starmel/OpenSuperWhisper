@@ -104,19 +104,20 @@ class ShortcutManager {
         
         Task { @MainActor in
             if self.activeVm == nil {
+                Diag.mark("keyDown → start recording")
                 let cursorPosition = FocusUtils.getCurrentCursorPosition()
-                let indicatorPoint: NSPoint?
+                var caret: CGRect? = nil
                 // Only "cursor" mode needs the caret; other positions anchor to
                 // screen geometry, so skip the synchronous AX caret query (a
                 // main-thread hang risk) when its result would be discarded.
-                if FocusUtils.shouldAnchorToCaret(indicatorPosition: AppPreferences.shared.indicatorPosition),
-                   let caret = FocusUtils.getCaretRect() {
-                    indicatorPoint = FocusUtils.convertAXPointToCocoa(caret.origin)
-                } else {
-                    indicatorPoint = cursorPosition
+                if FocusUtils.shouldAnchorToCaret(indicatorPosition: AppPreferences.shared.indicatorPosition) {
+                    caret = Diag.measure("getCaretRect") { FocusUtils.getCaretRect() }
                 }
-                let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
-                vm.startRecording()
+                let indicatorPoint: NSPoint? = caret.map { FocusUtils.convertAXPointToCocoa($0.origin) } ?? cursorPosition
+                let vm = Diag.measure("IndicatorWindowManager.show") {
+                    IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
+                }
+                Diag.measure("vm.startRecording") { vm.startRecording() }
                 self.activeVm = vm
             } else if !self.holdMode {
                 IndicatorWindowManager.shared.stopRecording()
