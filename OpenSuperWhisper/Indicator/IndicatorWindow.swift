@@ -249,9 +249,9 @@ class IndicatorViewModel: ObservableObject {
         }
     }
     
-    /// Returns `true` when auto-paste ran but no editable field was focused, so the
-    /// caller can surface a "copied — press ⌘V" notice. The paste is always attempted
-    /// (never suppressed), so a wrong detection can never swallow a working paste.
+    /// Returns `true` when auto-paste ran but no editable field was focused,
+    /// so the caller can surface a "copied — press ⌘V" notice. When no target
+    /// is found, typing is skipped and the text is left on the clipboard.
     @discardableResult
     func insertText(_ text: String) -> Bool {
         let finalText = Self.applyPostProcessing(text)
