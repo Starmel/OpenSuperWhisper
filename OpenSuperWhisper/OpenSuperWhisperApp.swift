@@ -405,8 +405,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             window.orderFrontRegardless()
             NSApplication.shared.activate(ignoringOtherApps: true)
         } else {
-            let url = URL(string: "openSuperWhisper://openMainWindow")!
-            NSWorkspace.shared.open(url)
+            // No window exists (the WindowGroup window was closed, or macOS didn't
+            // open it at launch — seen on macOS 26/27). Re-opening the app bundle
+            // triggers the reopen handler, which makes SwiftUI re-create the window.
+            // (The old `openSuperWhisper://` scheme was never declared in Info.plist,
+            // so that fallback silently failed — hence the menu item doing nothing.)
+            NSWorkspace.shared.open(Bundle.main.bundleURL)
         }
     }
 }
