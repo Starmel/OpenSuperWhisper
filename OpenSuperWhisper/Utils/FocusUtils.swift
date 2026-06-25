@@ -14,15 +14,31 @@ import KeyboardShortcuts
 import SwiftUI
 
 class FocusUtils {
-    
+
+    /// Hard ceiling for any synchronous Accessibility request. These calls are
+    /// IPC to the frontmost app; without a timeout a wedged target (a busy
+    /// browser/Electron app) blocks the calling thread — and since the global
+    /// hotkey tap runs on the main run loop, that freezes the whole app and the
+    /// recording shortcut (#freeze). Half a second is far longer than a healthy
+    /// AX reply and short enough to fall back gracefully.
+    private static let axMessagingTimeout: Float = 0.5
+
     static func getCurrentCursorPosition() -> NSPoint {
         return NSEvent.mouseLocation
     }
-    
+
+    /// The indicator only needs the text caret position in "cursor" mode; every
+    /// other position anchors to screen geometry. Used to skip the costly AX
+    /// caret query (a main-thread hang risk) when it would be discarded anyway.
+    static func shouldAnchorToCaret(indicatorPosition: String) -> Bool {
+        return indicatorPosition == "cursor"
+    }
+
     static func getCaretRect() -> CGRect? {
         // Получаем системный элемент для доступа ко всему UI
         let systemElement = AXUIElementCreateSystemWide()
-        
+        AXUIElementSetMessagingTimeout(systemElement, axMessagingTimeout)
+
         // Получаем фокусированный элемент
         var focusedElement: CFTypeRef? // Keep as CFTypeRef? if you prefer
         let errorFocused = AXUIElementCopyAttributeValue(systemElement,
@@ -41,6 +57,7 @@ class FocusUtils {
         }
         
         let element = focusedElementCF as! AXUIElement
+        AXUIElementSetMessagingTimeout(element, axMessagingTimeout)
         // Получаем выделенный текстовый диапазон у фокусированного элемента
         var selectedTextRange: AnyObject?
         let errorRange = AXUIElementCopyAttributeValue(element,
@@ -95,7 +112,8 @@ class FocusUtils {
     
     static func getFocusedWindowScreen() -> NSScreen? {
         let systemWideElement = AXUIElementCreateSystemWide()
-        
+        AXUIElementSetMessagingTimeout(systemWideElement, axMessagingTimeout)
+
         var focusedWindow: AnyObject?
         let result = AXUIElementCopyAttributeValue(systemWideElement,
                                                    kAXFocusedWindowAttribute as CFString,
@@ -174,6 +192,7 @@ class FocusUtils {
         guard AXIsProcessTrusted() else { return nil }
 
         let systemElement = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemElement, axMessagingTimeout)
         var focused: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(systemElement,
                                                 kAXFocusedUIElementAttribute as CFString,
@@ -182,6 +201,7 @@ class FocusUtils {
             return classifyEditability(hasFocusedElement: false, valueIsSettable: false, role: nil)
         }
         let element = focusedCF as! AXUIElement
+        AXUIElementSetMessagingTimeout(element, axMessagingTimeout)
 
         var settable: DarwinBoolean = false
         AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)

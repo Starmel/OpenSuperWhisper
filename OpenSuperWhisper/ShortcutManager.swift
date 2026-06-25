@@ -106,7 +106,11 @@ class ShortcutManager {
             if self.activeVm == nil {
                 let cursorPosition = FocusUtils.getCurrentCursorPosition()
                 let indicatorPoint: NSPoint?
-                if let caret = FocusUtils.getCaretRect() {
+                // Only "cursor" mode needs the caret; other positions anchor to
+                // screen geometry, so skip the synchronous AX caret query (a
+                // main-thread hang risk) when its result would be discarded.
+                if FocusUtils.shouldAnchorToCaret(indicatorPosition: AppPreferences.shared.indicatorPosition),
+                   let caret = FocusUtils.getCaretRect() {
                     indicatorPoint = FocusUtils.convertAXPointToCocoa(caret.origin)
                 } else {
                     indicatorPoint = cursorPosition

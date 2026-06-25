@@ -107,14 +107,15 @@ class IndicatorViewModel: ObservableObject {
             return
         }
         
-        if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
-            state = .connecting
-            stopBlinking()
-        } else {
-            state = .recording
-            startBlinking()
-        }
-        
+        // Show recording immediately and optimistically. Whether the mic needs a
+        // connection is decided off the main thread inside `recorder.startRecording()`
+        // (it touches AVFoundation/CoreAudio, which can stall); the recorder then
+        // publishes `isConnecting`/`isRecording` and the Combine bindings above
+        // flip this to `.connecting` when needed. Querying it here would put that
+        // blocking call on the main thread — and the hotkey tap runs there (#freeze).
+        state = .recording
+        startBlinking()
+
         Task.detached { [recorder] in
             recorder.startRecording()
         }
