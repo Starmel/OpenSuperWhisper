@@ -32,20 +32,30 @@ rm -rf build
 mkdir -p build
 
 # autocorrect: universal, pinned to deployment target 14.0 (the SDK default is far higher).
-echo "Building autocorrect-swift (universal)..."
-RUSTC_BIN="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc"
-(
-  cd asian-autocorrect
-  RUSTFLAGS="-C link-arg=-mmacosx-version-min=14.0" MACOSX_DEPLOYMENT_TARGET=14.0 RUSTC="$RUSTC_BIN" \
-    "$HOME/.cargo/bin/cargo" build -p autocorrect-swift --release --target x86_64-apple-darwin
-  RUSTFLAGS="-C link-arg=-mmacosx-version-min=14.0" MACOSX_DEPLOYMENT_TARGET=14.0 \
-    cargo build -p autocorrect-swift --release --target aarch64-apple-darwin
-)
-lipo -create \
-  ./asian-autocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib \
-  ./asian-autocorrect/target/x86_64-apple-darwin/release/libautocorrect_swift.dylib \
-  -output ./build/libautocorrect_swift.dylib
-install_name_tool -id "@rpath/libautocorrect_swift.dylib" ./build/libautocorrect_swift.dylib
+#
+# The macOS 26/27 beta toolchain links the Rust dylib with a mis-aligned LINKEDIT string pool
+# that ld then rejects for the arm64 slice ("mis-aligned LINKEDIT string pool"), breaking the
+# universal build. Until that's fixed upstream, reuse a known-good prebuilt universal dylib when
+# one is vendored (the autocorrect source rarely changes); otherwise build from source.
+if [ -f vendor/libautocorrect_swift.dylib ]; then
+  echo "Using vendored prebuilt autocorrect-swift (beta-toolchain workaround)..."
+  cp vendor/libautocorrect_swift.dylib ./build/libautocorrect_swift.dylib
+else
+  echo "Building autocorrect-swift (universal)..."
+  RUSTC_BIN="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc"
+  (
+    cd asian-autocorrect
+    RUSTFLAGS="-C link-arg=-mmacosx-version-min=14.0" MACOSX_DEPLOYMENT_TARGET=14.0 RUSTC="$RUSTC_BIN" \
+      "$HOME/.cargo/bin/cargo" build -p autocorrect-swift --release --target x86_64-apple-darwin
+    RUSTFLAGS="-C link-arg=-mmacosx-version-min=14.0" MACOSX_DEPLOYMENT_TARGET=14.0 \
+      cargo build -p autocorrect-swift --release --target aarch64-apple-darwin
+  )
+  lipo -create \
+    ./asian-autocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib \
+    ./asian-autocorrect/target/x86_64-apple-darwin/release/libautocorrect_swift.dylib \
+    -output ./build/libautocorrect_swift.dylib
+  install_name_tool -id "@rpath/libautocorrect_swift.dylib" ./build/libautocorrect_swift.dylib
+fi
 codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libautocorrect_swift.dylib
 
 echo "Copying libomp.dylib (universal)..."
