@@ -265,27 +265,27 @@ class IndicatorViewModel: ObservableObject {
 
         guard prefs.autoPasteTranscription else { return false }
 
-        // Decide whether there is an editable target BEFORE inserting. Biased
-        // toward "present": only `false` when we are confident there is none.
+        if prefs.pasteInsteadOfTyping {
+            // Paste is universal: ⌘V lands in any text field, including apps the accessibility
+            // check can't read (Messages, Electron), and is a harmless no-op otherwise (the text
+            // is on the clipboard). So no editable-target gate — it only ever produces false
+            // negatives that wrongly suppress a valid paste (#paste-messages).
+            if !prefs.autoCopyToClipboard { ClipboardUtil.copyToClipboard(finalText) }
+            Diag.measure("TextInserter.paste") { TextInserter.paste() }
+            return false
+        }
+
+        // Typing mode: synthetic keystrokes go wherever focus is, so only type when we're
+        // confident there's an editable target; otherwise stash on the clipboard and notify ⌘V.
         let targetMissing = prefs.notifyWhenNoPasteTarget
             && Diag.measure("focusedElementIsEditable") { FocusUtils.focusedElementIsEditable() } == false
-
         if targetMissing {
-            // No field to type into: make sure the text is on the clipboard so the
-            // "press ⌘V" notice is actionable, then skip typing into a non-target.
             if !prefs.autoCopyToClipboard {
                 ClipboardUtil.copyToClipboard(finalText)
             }
             return true
         }
-
-        if prefs.pasteInsteadOfTyping {
-            // ⌘V needs the text on the clipboard; ensure it's there (no restore → race-free).
-            if !prefs.autoCopyToClipboard { ClipboardUtil.copyToClipboard(finalText) }
-            Diag.measure("TextInserter.paste") { TextInserter.paste() }
-        } else {
-            Diag.measure("TextInserter.type") { TextInserter.type(finalText) }
-        }
+        Diag.measure("TextInserter.type") { TextInserter.type(finalText) }
         return false
     }
     

@@ -56,14 +56,21 @@ enum TextInserter {
     /// the text on the clipboard first.
     static func paste() {
         guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
-        let vKey: CGKeyCode = 9 // kVK_ANSI_V
+        let cmdKey: CGKeyCode = 0x37 // kVK_Command
+        let vKey: CGKeyCode = 0x09   // kVK_ANSI_V
         guard
-            let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
-            let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+            let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: cmdKey, keyDown: true),
+            let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
+            let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false),
+            let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: cmdKey, keyDown: false)
         else { return }
-        down.flags = .maskCommand
-        up.flags = .maskCommand
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+        // Post the real ⌘ key around V (not just the .maskCommand flag) so apps that read the
+        // physical modifier state — not only the event flags — still register the paste.
+        vDown.flags = .maskCommand
+        vUp.flags = .maskCommand
+        cmdDown.post(tap: .cghidEventTap)
+        vDown.post(tap: .cghidEventTap)
+        vUp.post(tap: .cghidEventTap)
+        cmdUp.post(tap: .cghidEventTap)
     }
 }

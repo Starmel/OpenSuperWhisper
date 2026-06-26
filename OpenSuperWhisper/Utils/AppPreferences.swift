@@ -206,9 +206,10 @@ final class AppPreferences {
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
 
-    /// Insert by pasting (⌘V) instead of synthesizing keystrokes. Universal — works in apps that
-    /// ignore synthetic Unicode typing (Messages, Electron, …) — at the cost of using the clipboard.
-    @UserDefault(key: "pasteInsteadOfTyping", defaultValue: false)
+    /// Insert by pasting (⌘V) — the default, because it's universal: it lands in any text field,
+    /// including apps that ignore synthetic Unicode typing (Messages, Electron, …). Turn it off to
+    /// type the transcription instead (preserves the clipboard, but fails in those apps).
+    @UserDefault(key: "pasteInsteadOfTyping", defaultValue: true)
     var pasteInsteadOfTyping: Bool
 
     /// When auto-paste is on but no editable field is focused, show a brief
