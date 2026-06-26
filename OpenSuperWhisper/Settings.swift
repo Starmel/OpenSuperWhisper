@@ -265,6 +265,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pasteInsteadOfTyping: Bool {
+        didSet {
+            AppPreferences.shared.pasteInsteadOfTyping = pasteInsteadOfTyping
+        }
+    }
+
     @Published var notifyWhenNoPasteTarget: Bool {
         didSet {
             AppPreferences.shared.notifyWhenNoPasteTarget = notifyWhenNoPasteTarget
@@ -398,6 +404,7 @@ class SettingsViewModel: ObservableObject {
         self.postRecordHookCommand = prefs.postRecordHookCommand
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
+        self.pasteInsteadOfTyping = prefs.pasteInsteadOfTyping
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
         self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
         self.reduceVolumeOnRecord = prefs.reduceVolumeOnRecord
@@ -1545,6 +1552,20 @@ struct SettingsView: View {
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.autoPasteTranscription)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Paste instead of typing")
+                                    .font(.subheadline)
+                                Text("Insert via ⌘V — works in apps that ignore synthetic typing (Messages, Electron…); uses the clipboard")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.pasteInsteadOfTyping)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }

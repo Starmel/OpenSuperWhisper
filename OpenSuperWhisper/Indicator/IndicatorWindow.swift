@@ -279,7 +279,13 @@ class IndicatorViewModel: ObservableObject {
             return true
         }
 
-        Diag.measure("TextInserter.type") { TextInserter.type(finalText) }
+        if prefs.pasteInsteadOfTyping {
+            // ⌘V needs the text on the clipboard; ensure it's there (no restore → race-free).
+            if !prefs.autoCopyToClipboard { ClipboardUtil.copyToClipboard(finalText) }
+            Diag.measure("TextInserter.paste") { TextInserter.paste() }
+        } else {
+            Diag.measure("TextInserter.type") { TextInserter.type(finalText) }
+        }
         return false
     }
     

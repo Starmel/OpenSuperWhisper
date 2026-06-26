@@ -50,4 +50,20 @@ enum TextInserter {
             keyUp.post(tap: .cghidEventTap)
         }
     }
+
+    /// Pastes the current clipboard into the focused app via a synthetic ⌘V. Universal — works in
+    /// apps that ignore synthetic Unicode typing (Messages, Electron, …). The caller must have put
+    /// the text on the clipboard first.
+    static func paste() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let vKey: CGKeyCode = 9 // kVK_ANSI_V
+        guard
+            let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+        else { return }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+    }
 }
