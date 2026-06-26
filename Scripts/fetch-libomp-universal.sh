@@ -50,6 +50,9 @@ api "https://ghcr.io/v2/homebrew/core/libomp/blobs/$LAYER" -o "$tmp_tgz"
 tar xf "$tmp_tgz" -C "$tdir"
 X86="$(find "$tdir" -name libomp.dylib | head -1)"
 [ -f "$X86" ] || { echo "x86_64 libomp.dylib not in bottle"; exit 1; }
+# A prior build leaves $OUT read-only (lipo inherits the Homebrew dylib's 0444 mode), which would
+# make the next `lipo -create` fail with "could not write to file". Remove it first.
+rm -f "$OUT"
 lipo -create "$ARM_OMP" "$X86" -output "$OUT"
 rm -rf "$tdir" "$tmp_tgz"
 
