@@ -1,15 +1,18 @@
 import AVFoundation
 import AppKit
+import CoreGraphics
 import Foundation
 
 enum Permission {
     case microphone
     case accessibility
+    case inputMonitoring
 }
 
 class PermissionsManager: ObservableObject {
     @Published var isMicrophonePermissionGranted = false
     @Published var isAccessibilityPermissionGranted = false
+    @Published var isInputMonitoringPermissionGranted = false
 
     private var permissionCheckTimer: Timer?
     private var windowObservers: [NSObjectProtocol] = []
@@ -17,6 +20,7 @@ class PermissionsManager: ObservableObject {
     init() {
         checkMicrophonePermission()
         checkAccessibilityPermission()
+        checkInputMonitoringPermission()
 
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
@@ -73,6 +77,7 @@ class PermissionsManager: ObservableObject {
         permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.checkMicrophonePermission()
             self?.checkAccessibilityPermission()
+            self?.checkInputMonitoringPermission()
         }
     }
 
@@ -99,6 +104,23 @@ class PermissionsManager: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.isAccessibilityPermissionGranted = granted
         }
+    }
+
+    func checkInputMonitoringPermission() {
+        let granted = CGPreflightListenEventAccess()
+        DispatchQueue.main.async { [weak self] in
+            self?.isInputMonitoringPermissionGranted = granted
+        }
+    }
+
+    /// Prompts the user the first time; afterward macOS only toggles via System Settings.
+    @discardableResult
+    func requestInputMonitoringPermission() -> Bool {
+        let granted = CGRequestListenEventAccess()
+        DispatchQueue.main.async { [weak self] in
+            self?.isInputMonitoringPermissionGranted = granted
+        }
+        return granted
     }
 
     func requestMicrophonePermissionOrOpenSystemPreferences() {
@@ -131,6 +153,9 @@ class PermissionsManager: ObservableObject {
         case .accessibility:
             urlString =
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        case .inputMonitoring:
+            urlString =
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         }
 
         if let url = URL(string: urlString) {

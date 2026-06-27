@@ -123,13 +123,71 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    @Published var modifierOnlyHotkey: ModifierKey {
+    @Published var singleKeyTriggers: [TriggerKey] {
         didSet {
-            AppPreferences.shared.modifierOnlyHotkey = modifierOnlyHotkey.rawValue
+            AppPreferences.shared.singleKeyTriggers = singleKeyTriggers
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
     }
-    
+
+    /// Add a single-key trigger. If it's a modifier key whose flag overlaps an existing
+    /// combo's modifiers, clear those combos so one physical press can't fire recording
+    /// twice (Carbon combo handler + event-tap monitor). Returns true if a combo was cleared.
+    @discardableResult
+    func addSingleKeyTrigger(_ key: TriggerKey) -> Bool {
+        guard !singleKeyTriggers.contains(where: { $0.id == key.id }) else { return false }
+        let clearedCombo = clearCombosOverlapping(key)
+        singleKeyTriggers.append(key)
+        return clearedCombo
+    }
+
+    /// The aggregate `NSEvent.ModifierFlags` for a modifier-kind trigger key, or nil
+    /// for regular keys. Single source of truth for the single-key/combo overlap guards.
+    static func modifierFlag(for key: TriggerKey) -> NSEvent.ModifierFlags? {
+        guard key.kind == .modifier,
+              let modifier = ModifierKey.allCases.first(where: { $0.keyCode == key.keyCode })
+        else { return nil }
+        return modifier.modifierFlag
+    }
+
+    /// Clear any combo whose modifiers include the modifier represented by `key`.
+    private func clearCombosOverlapping(_ key: TriggerKey) -> Bool {
+        guard let flag = SettingsViewModel.modifierFlag(for: key) else { return false }
+        var cleared = false
+        for name in KeyboardShortcuts.Name.recordComboPool {
+            if let shortcut = KeyboardShortcuts.getShortcut(for: name),
+               shortcut.modifiers.contains(flag) {
+                KeyboardShortcuts.setShortcut(nil, for: name)
+                cleared = true
+            }
+        }
+        return cleared
+    }
+
+    func removeSingleKeyTrigger(_ key: TriggerKey) {
+        singleKeyTriggers.removeAll { $0.id == key.id }
+    }
+
+    /// Combo slots that currently hold a shortcut, for rendering.
+    var usedComboNames: [KeyboardShortcuts.Name] {
+        KeyboardShortcuts.Name.recordComboPool.filter { KeyboardShortcuts.getShortcut(for: $0) != nil }
+    }
+
+    /// Next empty combo slot, or nil if the pool is full.
+    var nextFreeComboName: KeyboardShortcuts.Name? {
+        KeyboardShortcuts.Name.recordComboPool.first { KeyboardShortcuts.getShortcut(for: $0) == nil }
+    }
+
+    /// Key codes currently bound as combos, used to reject duplicate single keys.
+    var comboKeyCodes: Set<UInt16> {
+        Set(KeyboardShortcuts.Name.recordComboPool.compactMap {
+            KeyboardShortcuts.getShortcut(for: $0).map { UInt16($0.carbonKeyCode) }
+        })
+    }
+
+    /// Maximum triggers per list.
+    static let maxTriggers = 4
+
     @Published var holdToRecord: Bool {
         didSet {
             AppPreferences.shared.holdToRecord = holdToRecord
@@ -170,7 +228,7 @@ class SettingsViewModel: ObservableObject {
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
-        self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
+        self.singleKeyTriggers = prefs.singleKeyTriggers
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
@@ -535,9 +593,12 @@ struct Settings {
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @Environment(\.dismiss) var dismiss
-    @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
+    @State private var showingCapture = false
+    @State private var comboRefresh = 0
+    @State private var comboWarning: String?
+    @StateObject private var permissions = PermissionsManager()
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -1106,130 +1167,233 @@ struct SettingsView: View {
         }
     }
     
-    private var useModifierKey: Bool {
-        viewModel.modifierOnlyHotkey != .none
-    }
-    
     private var shortcutSettings: some View {
         Form {
-            VStack(spacing: 20) {
-                // Recording Trigger
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Recording Trigger")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(alignment: .leading, spacing: 16) {
-                        Picker("", selection: Binding(
-                            get: { useModifierKey },
-                            set: { newValue in
-                                if !newValue {
-                                    viewModel.modifierOnlyHotkey = .none
-                                } else if viewModel.modifierOnlyHotkey == .none {
-                                    viewModel.modifierOnlyHotkey = .leftCommand
-                                }
-                            }
-                        )) {
-                            Text("Key Combination").tag(false)
-                            Text("Single Modifier Key").tag(true)
-                        }
-                        .pickerStyle(.segmented)
-                        
-                        if useModifierKey {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Modifier Key")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    Picker("", selection: $viewModel.modifierOnlyHotkey) {
-                                        ForEach(ModifierKey.allCases.filter { $0 != .none }) { key in
-                                            Text(key.displayName).tag(key)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .frame(width: 200)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(Color(.textBackgroundColor).opacity(0.5))
-                                .cornerRadius(8)
-                                
-                                Text("One-tap to toggle recording")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-
-                                Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                                    .padding(.top, 4)
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Shortcut")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    KeyboardShortcuts.Recorder("", name: .toggleRecord)
-                                        .frame(width: 150)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(Color(.textBackgroundColor).opacity(0.5))
-                                .cornerRadius(8)
-                                
-                                if isRecordingNewShortcut {
-                                    Text("Press your new shortcut combination...")
-                                        .foregroundColor(.secondary)
-                                        .font(.subheadline)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
-                
-                // Recording Behavior
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Recording Behavior")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Hold to Record")
-                                    .font(.subheadline)
-                                Text("Hold the shortcut to record, release to stop")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $viewModel.holdToRecord)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
-                        }
-                        
-                        HStack {
-                            Text("Play sound when recording starts")
-                                .font(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.playSoundOnRecordStart)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
-                                .help("Play a notification sound when recording begins")
-                        }
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
+            VStack(alignment: .leading, spacing: 20) {
+                keyCombinationsSection
+                singleKeysSection
+                recordingBehaviorSection
             }
             .padding()
         }
+        .sheet(isPresented: $showingCapture) {
+            SingleKeyCaptureView(
+                onCapture: { key in
+                    if viewModel.addSingleKeyTrigger(key) {
+                        comboWarning = "Cleared a key combination that used the same modifier."
+                        comboRefresh += 1
+                    }
+                },
+                existing: viewModel.singleKeyTriggers,
+                existingComboKeyCodes: viewModel.comboKeyCodes
+            )
+        }
+    }
+
+    private var keyCombinationsSection: some View {
+        // `comboRefresh` is read so SwiftUI re-evaluates the used/free slots when a
+        // recorder's onChange bumps it.
+        let _ = comboRefresh
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Key Combinations")
+                .font(.headline)
+                .foregroundColor(.primary)
+            Text("Recommended — needs no extra permission. A key plus modifiers (e.g. ⌥Space), or a function key like F13.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            ForEach(viewModel.usedComboNames, id: \.rawValue) { name in
+                HStack {
+                    KeyboardShortcuts.Recorder("", name: name, onChange: { handleComboRecorded($0, for: name) })
+                        .frame(minWidth: 160)
+                    Spacer()
+                    Button(role: .destructive) {
+                        KeyboardShortcuts.setShortcut(nil, for: name)
+                        comboRefresh += 1
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove this key combination")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.textBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+            }
+
+            if let next = viewModel.nextFreeComboName {
+                HStack {
+                    Text("Add combination")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    KeyboardShortcuts.Recorder("", name: next, onChange: { handleComboRecorded($0, for: next) })
+                        .frame(minWidth: 160)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            } else {
+                Text("All \(SettingsViewModel.maxTriggers) combination slots are in use.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if let comboWarning {
+                Text(comboWarning)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.controlBackgroundColor).opacity(0.3))
+        .cornerRadius(12)
+    }
+
+    private var singleKeysSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Single Keys")
+                .font(.headline)
+                .foregroundColor(.primary)
+            Text("Tap one key (e.g. Fn or Right ⌘) to toggle recording. Needs Input Monitoring permission, because macOS can’t see a bare keypress otherwise.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if !viewModel.singleKeyTriggers.isEmpty && !permissions.isInputMonitoringPermissionGranted {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Input Monitoring is off — single keys won’t trigger until you grant it.")
+                        .font(.caption)
+                    Spacer()
+                    Button("Grant") {
+                        permissions.requestInputMonitoringPermission()
+                        permissions.openSystemPreferences(for: .inputMonitoring)
+                    }
+                    .accessibilityLabel("Grant Input Monitoring permission")
+                    .accessibilityHint("Opens the System Settings privacy pane")
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(8)
+            }
+
+            if viewModel.singleKeyTriggers.isEmpty {
+                Text("No single keys added.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            ForEach(viewModel.singleKeyTriggers) { key in
+                HStack(spacing: 6) {
+                    Text(key.symbol)
+                    Text(key.displayName)
+                    Spacer()
+                    Button(role: .destructive) {
+                        viewModel.removeSingleKeyTrigger(key)
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove \(key.displayName)")
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.textBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+            }
+
+            Button {
+                addKeyTapped()
+            } label: {
+                Label("Add Key", systemImage: "plus")
+            }
+            .disabled(viewModel.singleKeyTriggers.count >= SettingsViewModel.maxTriggers)
+
+            if viewModel.singleKeyTriggers.count >= SettingsViewModel.maxTriggers {
+                Text("Maximum \(SettingsViewModel.maxTriggers) single keys reached.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.controlBackgroundColor).opacity(0.3))
+        .cornerRadius(12)
+    }
+
+    /// Reject a combo that collides with a single-key trigger, so one physical press can't
+    /// fire recording twice (Carbon combo handler + event-tap monitor): either its base key
+    /// matches a single key, or its modifiers include a single modifier-key trigger.
+    private func handleComboRecorded(_ shortcut: KeyboardShortcuts.Shortcut?, for name: KeyboardShortcuts.Name) {
+        comboRefresh += 1
+        guard let shortcut else {
+            comboWarning = nil
+            return
+        }
+        let keyCode = UInt16(shortcut.carbonKeyCode)
+        let baseKeyCollides = viewModel.singleKeyTriggers.contains { $0.keyCode == keyCode }
+        let modifierCollides = viewModel.singleKeyTriggers.contains { key in
+            guard let flag = SettingsViewModel.modifierFlag(for: key) else { return false }
+            return shortcut.modifiers.contains(flag)
+        }
+        if baseKeyCollides || modifierCollides {
+            KeyboardShortcuts.setShortcut(nil, for: name)
+            comboWarning = "That key is already used by a single key trigger."
+            comboRefresh += 1
+        } else {
+            comboWarning = nil
+        }
+    }
+
+    /// Gate the capture sheet on permission: prompt first if missing, only open when granted.
+    private func addKeyTapped() {
+        if permissions.isInputMonitoringPermissionGranted {
+            showingCapture = true
+        } else {
+            permissions.requestInputMonitoringPermission()
+            permissions.openSystemPreferences(for: .inputMonitoring)
+        }
+    }
+
+    private var recordingBehaviorSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recording Behavior")
+                .font(.headline)
+                .foregroundColor(.primary)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hold to Record")
+                            .font(.subheadline)
+                        Text("Hold the trigger key to record, release to stop")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $viewModel.holdToRecord)
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                }
+
+                HStack {
+                    Text("Play sound when recording starts")
+                        .font(.subheadline)
+                    Spacer()
+                    Toggle("", isOn: $viewModel.playSoundOnRecordStart)
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                        .help("Play a notification sound when recording begins")
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.controlBackgroundColor).opacity(0.3))
+        .cornerRadius(12)
     }
 }
 

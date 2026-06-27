@@ -302,11 +302,13 @@ struct ContentView: View {
     @State private var searchTask: Task<Void, Never>? = nil
 
     private var currentShortcutDescription: String {
-        let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
-        if modifierKey != .none {
-            return modifierKey.shortSymbol
-        } else if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
-            return shortcut.description
+        if let firstSingleKey = AppPreferences.shared.singleKeyTriggers.first {
+            return firstSingleKey.symbol
+        }
+        for name in KeyboardShortcuts.Name.recordComboPool {
+            if let shortcut = KeyboardShortcuts.getShortcut(for: name) {
+                return shortcut.description
+            }
         }
         return ""
     }
