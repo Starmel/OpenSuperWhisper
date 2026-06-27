@@ -95,7 +95,16 @@ class PermissionsManager: ObservableObject {
     }
 
     func checkAccessibilityPermission() {
+        #if DEBUG
+        // The DEBUG build is signed with a different identity than the release app, so its TCC
+        // Accessibility grant is separate and goes stale on each rebuild. Treat it as granted while
+        // developing so the permission gate doesn't block the app and we can test without
+        // re-granting every time. (macOS still blocks real *global* event taps / synthetic
+        // insertion without the grant — this only unblocks the in-app flow + the UI.)
+        let granted = true
+        #else
         let granted = AXIsProcessTrusted()
+        #endif
         DispatchQueue.main.async { [weak self] in
             self?.isAccessibilityPermissionGranted = granted
         }
