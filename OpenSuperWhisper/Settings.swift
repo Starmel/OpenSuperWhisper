@@ -95,12 +95,14 @@ class SettingsViewModel: ObservableObject {
     }
 
     /// Reset the language to a supported one when the current engine/model can't transcribe the
-    /// previously selected one (e.g. switching to English-only Parakeet v2) (#155).
-    private func clampLanguageToSupported() {
+    /// previously selected one (e.g. switching to a model without that language) (#155). Prefers
+    /// Auto-detect, then English, then whatever the model lists first — so the picker is never blank.
+    func clampLanguageToSupported() {
         let supported = supportedLanguages
-        if !supported.contains(selectedLanguage) {
-            selectedLanguage = supported.first ?? "auto"
-        }
+        guard !supported.contains(selectedLanguage) else { return }
+        selectedLanguage = supported.first(where: { $0 == "auto" })
+            ?? supported.first(where: { $0 == "en" })
+            ?? supported.first ?? "auto"
     }
 
     @Published var suppressBlankAudio: Bool {
@@ -1338,6 +1340,11 @@ struct SettingsView: View {
                                     .tag(code)
                             }
                         }
+                        // Recreate the picker when the engine's language set changes, so its
+                        // selection never gets stuck blank on a value that left the list; and
+                        // clamp the stored language to a supported one when this view appears.
+                        .id(viewModel.supportedLanguages)
+                        .onAppear { viewModel.clampLanguageToSupported() }
                         .pickerStyle(.menu)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
