@@ -882,7 +882,7 @@ struct SettingRow<Trailing: View>: View {
 
 /// The settings tabs, shown as a vertical sidebar in the dedicated settings window.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, model, transcription, history, advanced, updates
+    case general, model, transcription, history, advanced, updates, feedback
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -892,6 +892,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "History"
         case .advanced: return "Advanced"
         case .updates: return "Updates"
+        case .feedback: return "Feedback"
         }
     }
     var icon: String {
@@ -902,6 +903,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         case .advanced: return "gearshape"
         case .updates: return "sparkles"
+        case .feedback: return "heart.text.square"
         }
     }
 }
@@ -991,7 +993,69 @@ struct SettingsView: View {
         case .history:       storageSettings
         case .advanced:      advancedSettings
         case .updates:       UpdatesView()
+        case .feedback:      feedbackSettings
         }
+    }
+
+    /// "Feedback" tab — recruit beta testers and route every kind of report (#beta).
+    private var feedbackSettings: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Help us improve")
+                        .font(.title2).bold()
+                    Text("OpenSuperWhisper gets better with your feedback. Hit a bug, or have an idea? Tell us — every report helps make it more stable.")
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                feedbackLink(
+                    title: "Report a bug",
+                    subtitle: "On GitHub — steps to reproduce, your macOS version & engine, logs if you have them",
+                    icon: "ladybug",
+                    url: "https://github.com/my-monkeys/OpenSuperWhisper/issues/new")
+                feedbackLink(
+                    title: "Send feedback or an idea",
+                    subtitle: "A quick form on opensuperwhisper.com — no account needed",
+                    icon: "bubble.left.and.bubble.right",
+                    url: "https://opensuperwhisper.com/#feedback")
+                feedbackLink(
+                    title: "Try a beta build",
+                    subtitle: "Early features before they ship, on GitHub Releases",
+                    icon: "testtube.2",
+                    url: "https://github.com/my-monkeys/OpenSuperWhisper/releases")
+
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func feedbackLink(title: String, subtitle: String, icon: String, url: String) -> some View {
+        Button {
+            if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(.accentColor)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    Text(subtitle).font(.caption).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.controlBackgroundColor))
+            .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
     }
 
     /// One row in the left sidebar (drawer).
