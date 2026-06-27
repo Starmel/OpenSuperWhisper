@@ -76,6 +76,16 @@ The transcription goes to stdout (engine logs go to stderr), so it pipes cleanly
   (x86_64) build ships Whisper + Parakeet; SenseVoice is Apple-Silicon-only (its onnxruntime
   dependency ships arm64-only).
 
+## 🧪 Beta testing — we need you
+
+The surest way to make OpenSuperWhisper **safer and more stable** is real-world testing — so we're looking for **beta testers**. Try a pre-release build and tell us everything that breaks, feels off, or could be better:
+
+- **Grab a beta** — the latest pre-release builds are under [**Releases**](https://github.com/my-monkeys/OpenSuperWhisper/releases) (marked *Pre-release*). They install alongside the stable app and don't change your auto-updates.
+- **Report a bug** (technical) — [open an issue](https://github.com/my-monkeys/OpenSuperWhisper/issues/new) with steps to reproduce, your macOS version, the engine/model in use, and logs if you have them.
+- **Send feedback** (everyone, no account needed) — use the feedback form on **[opensuperwhisper.com](https://opensuperwhisper.com)**.
+
+Every report, however small, helps us build something solid. 🍌
+
 ## Support
 
 If you encounter any issues or have questions, please:
