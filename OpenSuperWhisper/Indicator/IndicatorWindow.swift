@@ -106,7 +106,15 @@ class IndicatorViewModel: ObservableObject {
             showBusyMessage()
             return
         }
-        
+
+        // No input device — surface it instead of optimistically showing "recording" and silently
+        // capturing nothing (#157). `getActiveMicrophone()` reads the cached device, so this stays
+        // off the blocking AVFoundation path that the hotkey tap must avoid (#freeze).
+        guard MicrophoneService.shared.getActiveMicrophone() != nil else {
+            showError("No microphone available")
+            return
+        }
+
         // Show recording immediately and optimistically. Whether the mic needs a
         // connection is decided off the main thread inside `recorder.startRecording()`
         // (it touches AVFoundation/CoreAudio, which can stall); the recorder then

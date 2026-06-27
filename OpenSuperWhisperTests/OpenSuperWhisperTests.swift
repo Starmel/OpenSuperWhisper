@@ -229,13 +229,18 @@ final class MicrophoneServiceBluetoothTests: XCTestCase {
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
     
-    func testBluetoothDetection_MACAddress() {
+    func testBluetoothDetection_MACAddress() throws {
         let device = MicrophoneService.AudioDevice(
             id: "00-22-BB-71-21-0A:input",
             name: "Amiron wireless",
             manufacturer: "Apple",
             isBuiltIn: false
         )
+        // A bare MAC-address UID is only classified by querying the live CoreAudio transport type,
+        // so the assertion is meaningful only when that physical device is connected — otherwise
+        // skip rather than fail, which is what made this flaky in headless CI (#157).
+        try XCTSkipUnless((MicrophoneService.shared.getCoreAudioDeviceID(for: device) ?? 0) != 0,
+                          "Requires the physical Bluetooth device to be connected")
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
     
@@ -263,13 +268,17 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device) || MicrophoneService.shared.isContinuityMicrophone(device))
     }
     
-    func testRequiresConnection_Bluetooth() {
+    func testRequiresConnection_Bluetooth() throws {
         let device = MicrophoneService.AudioDevice(
             id: "00-22-BB-71-21-0A:input",
             name: "Amiron wireless",
             manufacturer: "Apple",
             isBuiltIn: false
         )
+        // Classified via the live CoreAudio transport type — only meaningful with the physical
+        // device connected; skip rather than fail when it isn't (#157).
+        try XCTSkipUnless((MicrophoneService.shared.getCoreAudioDeviceID(for: device) ?? 0) != 0,
+                          "Requires the physical Bluetooth device to be connected")
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
     
@@ -282,6 +291,44 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
         )
         XCTAssertFalse(MicrophoneService.shared.isContinuityMicrophone(device))
         XCTAssertFalse(MicrophoneService.shared.isBluetoothMicrophone(device))
+    }
+}
+
+// MARK: - Engine Capabilities Tests
+
+final class EngineCapabilitiesTests: XCTestCase {
+    func testTranslation_whisperAlwaysSupported() {
+        XCTAssertTrue(EngineCapabilities.supportsTranslation(engine: "whisper", groqModel: "anything"))
+    }
+
+    func testTranslation_groqOnlyOnLargeV3() {
+        XCTAssertTrue(EngineCapabilities.supportsTranslation(engine: "groq", groqModel: "whisper-large-v3"))
+        XCTAssertFalse(EngineCapabilities.supportsTranslation(engine: "groq", groqModel: "whisper-large-v3-turbo"))
+    }
+
+    func testTranslation_parakeetAndSenseVoiceNever() {
+        XCTAssertFalse(EngineCapabilities.supportsTranslation(engine: "fluidaudio", groqModel: ""))
+        XCTAssertFalse(EngineCapabilities.supportsTranslation(engine: "sensevoice", groqModel: ""))
+    }
+
+    func testLanguages_parakeetV2IsEnglishOnly() {
+        XCTAssertEqual(EngineCapabilities.supportedLanguages(engine: "fluidaudio", fluidAudioModelVersion: "v2"), ["en"])
+    }
+
+    func testLanguages_parakeetV3IsMultilingual() {
+        let langs = EngineCapabilities.supportedLanguages(engine: "fluidaudio", fluidAudioModelVersion: "v3")
+        XCTAssertGreaterThan(langs.count, 1)
+        XCTAssertTrue(langs.contains("fr"))
+    }
+
+    func testLanguages_senseVoiceLimitedSet() {
+        XCTAssertEqual(EngineCapabilities.supportedLanguages(engine: "sensevoice", fluidAudioModelVersion: ""),
+                       ["auto", "zh", "en", "ja", "ko", "yue"])
+    }
+
+    func testLanguages_whisperUsesFullSet() {
+        XCTAssertEqual(EngineCapabilities.supportedLanguages(engine: "whisper", fluidAudioModelVersion: ""),
+                       LanguageUtil.availableLanguages)
     }
 }
 

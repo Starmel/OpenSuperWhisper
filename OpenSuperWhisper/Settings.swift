@@ -15,6 +15,7 @@ class SettingsViewModel: ObservableObject {
             } else {
                 initializeFluidAudioModels()
             }
+            clampLanguageToSupported()
             Task { @MainActor in
                 TranscriptionService.shared.reloadEngine()
             }
@@ -28,6 +29,7 @@ class SettingsViewModel: ObservableObject {
             if selectedEngine != "fluidaudio" {
                 selectedEngine = "fluidaudio"
             } else {
+                clampLanguageToSupported()
                 Task { @MainActor in
                     TranscriptionService.shared.reloadEngine()
                 }
@@ -77,6 +79,27 @@ class SettingsViewModel: ObservableObject {
     @Published var translateToEnglish: Bool {
         didSet {
             AppPreferences.shared.translateToEnglish = translateToEnglish
+        }
+    }
+
+    /// Whether the selected engine + model can translate to English (#124). When false the
+    /// "Translate to English" toggle is disabled — Parakeet/SenseVoice (and Groq's turbo model)
+    /// ignore the flag, so showing an active toggle is misleading.
+    var canTranslate: Bool {
+        EngineCapabilities.supportsTranslation(engine: selectedEngine, groqModel: AppPreferences.shared.groqModel)
+    }
+
+    /// Languages the selected engine+model can transcribe — filters the language picker (#155).
+    var supportedLanguages: [String] {
+        EngineCapabilities.supportedLanguages(engine: selectedEngine, fluidAudioModelVersion: fluidAudioModelVersion)
+    }
+
+    /// Reset the language to a supported one when the current engine/model can't transcribe the
+    /// previously selected one (e.g. switching to English-only Parakeet v2) (#155).
+    private func clampLanguageToSupported() {
+        let supported = supportedLanguages
+        if !supported.contains(selectedLanguage) {
+            selectedLanguage = supported.first ?? "auto"
         }
     }
 
@@ -1310,7 +1333,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                         
                         Picker("Language", selection: $viewModel.selectedLanguage) {
-                            ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                            ForEach(viewModel.supportedLanguages, id: \.self) { code in
                                 Text(LanguageUtil.languageNames[code] ?? code)
                                     .tag(code)
                             }
@@ -1322,13 +1345,22 @@ struct SettingsView: View {
                         .cornerRadius(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         
-                        HStack {
-                            Text("Translate to English")
-                                .font(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.translateToEnglish)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text("Translate to English")
+                                    .font(.subheadline)
+                                    .foregroundColor(viewModel.canTranslate ? .primary : .secondary)
+                                Spacer()
+                                Toggle("", isOn: $viewModel.translateToEnglish)
+                                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                    .labelsHidden()
+                                    .disabled(!viewModel.canTranslate)
+                            }
+                            if !viewModel.canTranslate {
+                                Text("Only Whisper and Groq (large-v3) translate; the current engine ignores this.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .padding(.top, 4)
                         

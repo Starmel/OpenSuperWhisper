@@ -67,7 +67,7 @@ final class GroqEngine: TranscriptionEngine {
     }
 
     func getSupportedLanguages() -> [String] {
-        ["auto", "en", "fr", "es", "de", "it", "pt", "nl", "ru", "zh", "ja", "ko", "ar", "hi", "tr", "pl", "uk"]
+        EngineCapabilities.supportedLanguages(engine: "groq", fluidAudioModelVersion: "")
     }
 }
 

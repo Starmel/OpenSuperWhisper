@@ -213,8 +213,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let transcriptionLanguageItem = NSMenuItem(title: NSLocalizedString("Language", comment: ""), action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
         
-        // Add language options
-        for languageCode in LanguageUtil.availableLanguages {
+        // Add language options — only those the active engine/model can transcribe (#155).
+        let menuLanguages = EngineCapabilities.supportedLanguages(
+            engine: AppPreferences.shared.selectedEngine,
+            fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion)
+        for languageCode in menuLanguages {
             let languageName = LanguageUtil.languageNames[languageCode] ?? languageCode
             let languageItem = NSMenuItem(title: languageName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
             languageItem.target = self
@@ -230,8 +233,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // language (#124), and Groq translates only on whisper-large-v3 (not turbo). Off those, gray
         // the item out and say why instead of silently ignoring it.
         let engine = AppPreferences.shared.selectedEngine
-        let translateSupported = engine == "whisper"
-            || (engine == "groq" && AppPreferences.shared.groqModel == "whisper-large-v3")
+        let translateSupported = EngineCapabilities.supportsTranslation(
+            engine: engine, groqModel: AppPreferences.shared.groqModel)
         let translateItem = NSMenuItem(
             title: translateSupported
                 ? NSLocalizedString("Translate to English", comment: "")

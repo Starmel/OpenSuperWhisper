@@ -56,7 +56,9 @@ final class SenseVoiceEngine: TranscriptionEngine {
 
     func cancelTranscription() { isCancelled = true }
 
-    func getSupportedLanguages() -> [String] { ["auto", "zh", "en", "ja", "ko", "yue"] }
+    func getSupportedLanguages() -> [String] {
+        EngineCapabilities.supportedLanguages(engine: "sensevoice", fluidAudioModelVersion: "")
+    }
 
     /// Reads any audio file and returns 16 kHz mono float32 samples (SenseVoice's required input).
     private static func read16kMonoFloat(url: URL) throws -> [Float] {
