@@ -223,15 +223,24 @@ final class AppPreferences {
     @UserDefault(key: "submitOnVoiceCommand", defaultValue: false)
     var submitOnVoiceCommand: Bool
 
-    /// Detects a trailing "press enter" voice command. Returns the text with the command (and any
-    /// trailing punctuation it leaves behind) removed, plus whether the command was present.
-    ///
-    /// Only matches at the very end of the dictation, so "press enter" used mid-sentence as content
-    /// ("tell him to press enter") is left untouched. The leading separator we consume is whitespace
-    /// or a comma — a preceding sentence period ("Send this. Press enter.") is kept. No-op (returns
-    /// the text unchanged with `submit: false`) unless `submitOnVoiceCommand` is on.
+    /// Detects a trailing "press enter" voice command, gated by `submitOnVoiceCommand`. Returns the
+    /// text with the command removed, plus whether it was present. No-op (text unchanged,
+    /// `submit: false`) when the preference is off. The matching itself is in `parseSubmitCommand`.
     func stripSubmitCommand(_ text: String) -> (text: String, submit: Bool) {
         guard submitOnVoiceCommand else { return (text, false) }
+        return Self.parseSubmitCommand(text)
+    }
+
+    /// Pure regex extraction behind `stripSubmitCommand` (unit-tested directly). Strips a trailing
+    /// "press enter" — optionally preceded by whitespace/commas and followed by trailing
+    /// whitespace/punctuation — anchored to the end of the text.
+    ///
+    /// Because it only anchors to the end, "press enter" earlier in a sentence ("press enter to
+    /// continue reading") is left alone. A phrase that genuinely *ends* in "press enter"
+    /// ("tell him to press enter") IS stripped — an accepted ambiguity of an end-of-utterance voice
+    /// command. A preceding sentence period ("Send this. Press enter.") is kept (only whitespace/
+    /// commas are consumed before the command).
+    static func parseSubmitCommand(_ text: String) -> (text: String, submit: Bool) {
         let pattern = "[\\s,]*press[\\s,]+enter[\\s\\p{P}]*$"
         guard let range = text.range(
             of: pattern, options: [.regularExpression, .caseInsensitive]) else {
