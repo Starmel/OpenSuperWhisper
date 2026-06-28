@@ -530,10 +530,16 @@ struct IndicatorWindow: View {
         .scaleEffect(viewModel.isVisible ? 1 : (isNotchMode ? 0.85 : 0.5), anchor: isNotchMode ? .top : .center)
         .offset(y: viewModel.isVisible ? 0 : (isNotchMode ? -20 : 20))
         .opacity(viewModel.isVisible ? 1 : 0)
+        // Entrance only: scale/offset/opacity are render transforms that don't change the
+        // view's layout size, so they're safe to animate.
         .animation(.spring(response: 0.35, dampingFraction: 0.72), value: viewModel.isVisible)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: bubbleWidth)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: streaming.confirmedText)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: streaming.volatileText)
+        // NOTE: Do NOT add implicit animations on values that change the bubble's *size*
+        // (bubbleWidth, the streaming caption text, height, etc.). This window is hosted with
+        // `sizingOptions = .preferredContentSize`, so it resizes to fit this content. Animating
+        // the size makes SwiftUI drive an animated window resize (NSHostingView
+        // .updateAnimatedWindowSize), which on macOS 26 re-enters layout synchronously and
+        // recurses until the main-thread stack overflows (crash: "Thread stack size exceeded
+        // due to excessive recursion"). Let size changes snap in a single layout pass instead.
         .onAppear {
             viewModel.isVisible = true
         }
