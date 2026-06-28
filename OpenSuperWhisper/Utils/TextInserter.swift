@@ -73,4 +73,20 @@ enum TextInserter {
         vUp.post(tap: .cghidEventTap)
         cmdUp.post(tap: .cghidEventTap)
     }
+
+    /// Presses Return in the focused app — used by the "press enter" voice command to submit a
+    /// message or prompt after the dictated text has been inserted. Modifier flags are cleared so a
+    /// still-held hotkey can't turn it into a shortcut (⌘↩, ⇧↩, …).
+    static func pressReturn() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let returnKey: CGKeyCode = 0x24 // kVK_Return
+        guard
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: false)
+        else { return }
+        keyDown.flags = []
+        keyUp.flags = []
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
 }

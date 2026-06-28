@@ -188,8 +188,14 @@ class IndicatorViewModel: ObservableObject {
                     // Optional LLM cleanup (no-op when disabled; returns the raw text on failure).
                     text = await LLMPostProcessor.process(text)
 
+                    // Trailing "press enter" voice command (opt-in): strip it from the text and
+                    // remember to press Return after insertion, submitting the message/prompt.
+                    let (strippedText, shouldSubmit) = AppPreferences.shared.stripSubmitCommand(text)
+                    text = strippedText
+                    let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
                     var hookAudioPath: String? = nil
-                    if AppPreferences.shared.saveTranscriptionHistory {
+                    if hasText && AppPreferences.shared.saveTranscriptionHistory {
                         // Create a new Recording instance
                         let timestamp = Date()
                         let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -227,9 +233,20 @@ class IndicatorViewModel: ObservableObject {
                         try? FileManager.default.removeItem(at: tempURL)
                     }
 
-                    let pasteTargetMissing = insertText(text)
+                    let pasteTargetMissing = hasText ? insertText(text) : false
                     print("Transcription result: \(text)")
-                    PostRecordHook.runIfEnabled(text: text, audioPath: hookAudioPath, timestamp: Date(), duration: 0)
+                    if hasText {
+                        PostRecordHook.runIfEnabled(text: text, audioPath: hookAudioPath, timestamp: Date(), duration: 0)
+                    }
+
+                    // Submit only when auto-paste actually inserted text somewhere (or the user said
+                    // just "press enter" to submit existing content). A Return with no paste target
+                    // would fire into whatever happens to be focused. The short settle delay lets the
+                    // pasted text land in the field before Return reaches it.
+                    if shouldSubmit && AppPreferences.shared.autoPasteTranscription && !pasteTargetMissing {
+                        try? await Task.sleep(nanoseconds: 120_000_000)
+                        TextInserter.pressReturn()
+                    }
                     await MainActor.run {
                         if pasteTargetMissing {
                             self.showInfo("Copied — press ⌘V to paste")

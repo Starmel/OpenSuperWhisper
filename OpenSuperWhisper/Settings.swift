@@ -302,6 +302,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var submitOnVoiceCommand: Bool {
+        didSet {
+            AppPreferences.shared.submitOnVoiceCommand = submitOnVoiceCommand
+        }
+    }
+
     @Published var pauseMediaOnRecord: Bool {
         didSet {
             AppPreferences.shared.pauseMediaOnRecord = pauseMediaOnRecord
@@ -431,6 +437,7 @@ class SettingsViewModel: ObservableObject {
         self.autoPasteTranscription = prefs.autoPasteTranscription
         self.pasteInsteadOfTyping = prefs.pasteInsteadOfTyping
         self.notifyWhenNoPasteTarget = prefs.notifyWhenNoPasteTarget
+        self.submitOnVoiceCommand = prefs.submitOnVoiceCommand
         self.pauseMediaOnRecord = prefs.pauseMediaOnRecord
         self.reduceVolumeOnRecord = prefs.reduceVolumeOnRecord
         self.reduceVolumeLevel = prefs.reduceVolumeLevel
@@ -1683,6 +1690,20 @@ struct SettingsView: View {
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.notifyWhenNoPasteTarget)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Submit on “press enter”")
+                                    .font(.subheadline)
+                                Text("Saying “press enter” at the end removes it from the text and presses Return — submitting in Claude Code, Slack, etc.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.submitOnVoiceCommand)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }

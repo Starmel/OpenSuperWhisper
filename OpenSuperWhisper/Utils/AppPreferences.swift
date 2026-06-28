@@ -217,6 +217,29 @@ final class AppPreferences {
     @UserDefault(key: "notifyWhenNoPasteTarget", defaultValue: true)
     var notifyWhenNoPasteTarget: Bool
 
+    /// When on, a trailing "press enter" in the dictation is removed from the text and a Return
+    /// key is pressed after the text is inserted — submitting the message/prompt (Claude Code,
+    /// Slack, …). Opt-in: a stray Return can submit a form prematurely. See `stripSubmitCommand`.
+    @UserDefault(key: "submitOnVoiceCommand", defaultValue: false)
+    var submitOnVoiceCommand: Bool
+
+    /// Detects a trailing "press enter" voice command. Returns the text with the command (and any
+    /// trailing punctuation it leaves behind) removed, plus whether the command was present.
+    ///
+    /// Only matches at the very end of the dictation, so "press enter" used mid-sentence as content
+    /// ("tell him to press enter") is left untouched. The leading separator we consume is whitespace
+    /// or a comma — a preceding sentence period ("Send this. Press enter.") is kept. No-op (returns
+    /// the text unchanged with `submit: false`) unless `submitOnVoiceCommand` is on.
+    func stripSubmitCommand(_ text: String) -> (text: String, submit: Bool) {
+        guard submitOnVoiceCommand else { return (text, false) }
+        let pattern = "[\\s,]*press[\\s,]+enter[\\s\\p{P}]*$"
+        guard let range = text.range(
+            of: pattern, options: [.regularExpression, .caseInsensitive]) else {
+            return (text, false)
+        }
+        return (String(text[..<range.lowerBound]), true)
+    }
+
     /// Pause currently-playing media while recording, then resume. Opt-in (default
     /// off): it uses the private MediaRemote API and changes system playback.
     @UserDefault(key: "pauseMediaOnRecord", defaultValue: false)
