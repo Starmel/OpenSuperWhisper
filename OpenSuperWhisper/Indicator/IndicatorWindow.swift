@@ -200,7 +200,9 @@ class IndicatorViewModel: ObservableObject {
                     options: [.regularExpression, .caseInsensitive]
                 )
             }
-            result = result.trimmingCharacters(in: .whitespaces)
+            result = result
+                .replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
         }
 
         if AppPreferences.shared.addSpaceAfterSentence,
