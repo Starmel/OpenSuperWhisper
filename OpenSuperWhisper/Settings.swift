@@ -2415,6 +2415,7 @@ struct SettingsView: View {
                             Text("Español").tag("es")
                             Text("Italiano").tag("it")
                             Text("Português (BR)").tag("pt-BR")
+                            Text("Tiếng Việt").tag("vi")
                         }
                         .pickerStyle(.menu)
                         .frame(width: 150)

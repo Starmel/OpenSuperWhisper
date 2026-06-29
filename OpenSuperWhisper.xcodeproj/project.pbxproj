@@ -522,6 +522,7 @@
 				es,
 				it,
 				"pt-BR",
+				vi,
 				Base,
 			);
 			mainGroup = CE57B01F2D52C7BB00929AF3;

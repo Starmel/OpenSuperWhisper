@@ -32,6 +32,12 @@
             "state": "translated",
             "value": "Limpeza por IA"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dọn dẹp AI"
+          }
         }
       }
     },
@@ -65,6 +71,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acesso de Acessibilidade"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Truy cập Hỗ trợ tiếp cận"
           }
         }
       }
@@ -100,6 +112,12 @@
             "state": "translated",
             "value": "Adicionar espaço após a frase"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thêm dấu cách sau câu"
+          }
         }
       }
     },
@@ -133,6 +151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adicionar palavra"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thêm từ"
           }
         }
       }
@@ -168,6 +192,12 @@
             "state": "translated",
             "value": "Avançado"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nâng cao"
+          }
         }
       }
     },
@@ -201,6 +231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idioma do app"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngôn ngữ ứng dụng"
           }
         }
       }
@@ -236,6 +272,12 @@
             "state": "translated",
             "value": "Acrescenta um espaço quando a transcrição termina com pontuação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thêm dấu cách khi bản phiên âm kết thúc bằng dấu câu"
+          }
         }
       }
     },
@@ -269,6 +311,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tem certeza de que deseja excluir todas as gravações? Esta ação não pode ser desfeita."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bạn có chắc muốn xóa tất cả các bản ghi? Hành động này không thể hoàn tác."
           }
         }
       }
@@ -304,6 +352,12 @@
             "state": "translated",
             "value": "Colar transcrição automaticamente"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tự động dán bản phiên âm"
+          }
         }
       }
     },
@@ -337,6 +391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Colar automaticamente no app em foco"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tự động dán vào ứng dụng đang hoạt động"
           }
         }
       }
@@ -372,6 +432,12 @@
             "state": "translated",
             "value": "Pausar automaticamente a reprodução de mídia ao iniciar a gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tự động tạm dừng phát lại media khi bắt đầu ghi âm"
+          }
         }
       }
     },
@@ -405,6 +471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remover automaticamente gravações mais antigas que a idade escolhida"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tự động xóa các bản ghi cũ hơn thời gian đã chọn"
           }
         }
       }
@@ -440,6 +512,12 @@
             "state": "translated",
             "value": "Disponíveis no seu comando (também enviados como JSON via stdin):"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Có thể dùng trong lệnh của bạn (cũng được truyền qua JSON trên stdin):"
+          }
         }
       }
     },
@@ -473,6 +551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Velocidade e precisão equilibradas"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cân bằng tốc độ và độ chính xác"
           }
         }
       }
@@ -508,6 +592,12 @@
             "state": "translated",
             "value": "Tamanho do feixe:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kích thước chùm tia:"
+          }
         }
       }
     },
@@ -541,6 +631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "A busca em feixe pode dar resultados melhores, mas é mais lenta"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tìm kiếm theo chùm có thể cho kết quả tốt hơn nhưng chậm hơn"
           }
         }
       }
@@ -576,6 +672,12 @@
             "state": "translated",
             "value": "Os dois limites podem estar ativos ao mesmo tempo. A limpeza roda automaticamente quando você altera estas configurações e após cada nova transcrição, e o limite de idade também é reverificado periodicamente em segundo plano. Gravações que ainda estão sendo processadas nunca são excluídas."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cả hai giới hạn có thể hoạt động cùng lúc. Dọn dẹp chạy tự động khi bạn thay đổi các cài đặt này và sau mỗi lần phiên âm mới; giới hạn thời gian cũng được kiểm tra lại định kỳ ở nền. Bản ghi đang được xử lý sẽ không bao giờ bị xóa."
+          }
         }
       }
     },
@@ -609,6 +711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inferior"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dưới cùng"
           }
         }
       }
@@ -644,6 +752,12 @@
             "state": "translated",
             "value": "Mostrar brevemente o indicador nesta posição"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị chỉ báo ngắn gọn tại vị trí này"
+          }
         }
       }
     },
@@ -677,6 +791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancelar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hủy"
           }
         }
       }
@@ -712,6 +832,12 @@
             "state": "translated",
             "value": "Atalho de cancelamento"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phím tắt hủy"
+          }
         }
       }
     },
@@ -745,6 +871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Regex (sem diferenciar maiúsculas) das palavras de preenchimento a remover."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Biểu thức chính quy (không phân biệt chữ hoa/thường) của các từ đệm cần xóa."
           }
         }
       }
@@ -780,6 +912,12 @@
             "state": "translated",
             "value": "Centro"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giữa"
+          }
         }
       }
     },
@@ -813,6 +951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verificar atualizações"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kiểm tra cập nhật"
           }
         }
       }
@@ -848,6 +992,12 @@
             "state": "translated",
             "value": "Verificar atualizações…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kiểm tra cập nhật…"
+          }
         }
       }
     },
@@ -881,6 +1031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verificando…"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang kiểm tra…"
           }
         }
       }
@@ -916,6 +1072,12 @@
             "state": "translated",
             "value": "Escolha como acionar a gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chọn cách kích hoạt ghi âm"
+          }
         }
       }
     },
@@ -949,6 +1111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limpar com um LLM local (Ollama)"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dọn dẹp bằng LLM cục bộ (Ollama)"
           }
         }
       }
@@ -984,6 +1152,12 @@
             "state": "translated",
             "value": "Área de transferência e colagem"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bảng nhớ tạm & Dán"
+          }
         }
       }
     },
@@ -1017,6 +1191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conectado — modelo pronto"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đã kết nối — mô hình sẵn sàng"
           }
         }
       }
@@ -1052,6 +1232,12 @@
             "state": "translated",
             "value": "Conectando..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang kết nối..."
+          }
         }
       }
     },
@@ -1085,6 +1271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Continuar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tiếp tục"
           }
         }
       }
@@ -1120,6 +1312,12 @@
             "state": "translated",
             "value": "Convertendo..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang chuyển đổi..."
+          }
         }
       }
     },
@@ -1153,6 +1351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copiado — pressione ⌘V para colar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đã sao chép — nhấn ⌘V để dán"
           }
         }
       }
@@ -1188,6 +1392,12 @@
             "state": "translated",
             "value": "Copiar todo o texto"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sao chép toàn bộ văn bản"
+          }
         }
       }
     },
@@ -1221,6 +1431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copiar para a área de transferência"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sao chép vào Bảng nhớ tạm"
           }
         }
       }
@@ -1256,6 +1472,12 @@
             "state": "translated",
             "value": "Não foi possível verificar atualizações. Verifique sua conexão e tente novamente."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không thể kiểm tra cập nhật. Kiểm tra kết nối và thử lại."
+          }
         }
       }
     },
@@ -1289,6 +1511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dicionário personalizado"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Từ điển tùy chỉnh"
           }
         }
       }
@@ -1324,6 +1552,12 @@
             "state": "translated",
             "value": "Dias"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngày"
+          }
         }
       }
     },
@@ -1357,6 +1591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modo de depuração"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chế độ gỡ lỗi"
           }
         }
       }
@@ -1392,6 +1632,12 @@
             "state": "translated",
             "value": "Opções de depuração"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tùy chọn gỡ lỗi"
+          }
         }
       }
     },
@@ -1425,6 +1671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Estratégia de decodificação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chiến lược giải mã"
           }
         }
       }
@@ -1460,6 +1712,12 @@
             "state": "translated",
             "value": "Excluir tudo"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa tất cả"
+          }
         }
       }
     },
@@ -1493,6 +1751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Excluir todas as gravações"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa tất cả bản ghi"
           }
         }
       }
@@ -1528,6 +1792,12 @@
             "state": "translated",
             "value": "Excluir gravações antigas"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa bản ghi cũ"
+          }
         }
       }
     },
@@ -1561,6 +1831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Excluir após"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa sau"
           }
         }
       }
@@ -1596,6 +1872,12 @@
             "state": "translated",
             "value": "Excluir todas as gravações"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa tất cả bản ghi"
+          }
         }
       }
     },
@@ -1629,6 +1911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diretório:"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thư mục:"
           }
         }
       }
@@ -1664,6 +1952,12 @@
             "state": "translated",
             "value": "Concluído"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xong"
+          }
         }
       }
     },
@@ -1697,6 +1991,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tải xuống"
           }
         }
       }
@@ -1732,6 +2032,12 @@
             "state": "translated",
             "value": "Erro de download"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lỗi tải xuống"
+          }
         }
       }
     },
@@ -1765,6 +2071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixar modelos"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tải xuống mô hình"
           }
         }
       }
@@ -1800,6 +2112,12 @@
             "state": "translated",
             "value": "Baixe um modelo para começar"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tải xuống một mô hình để bắt đầu"
+          }
         }
       }
     },
@@ -1833,6 +2151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Solte um arquivo de áudio aqui para transcrever"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thả tệp âm thanh vào đây để phiên âm"
           }
         }
       }
@@ -1868,6 +2192,12 @@
             "state": "translated",
             "value": "Solte arquivos de áudio para transcrever"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thả tệp âm thanh để phiên âm"
+          }
         }
       }
     },
@@ -1901,6 +2231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ativar e salvar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bật & Lưu"
           }
         }
       }
@@ -1936,6 +2272,12 @@
             "state": "translated",
             "value": "Ativar registro e informações de depuração adicionais"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bật ghi nhật ký và thông tin gỡ lỗi bổ sung"
+          }
         }
       }
     },
@@ -1969,6 +2311,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Motor"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Công cụ"
           }
         }
       }
@@ -2004,6 +2352,12 @@
             "state": "translated",
             "value": "Somente inglês, maior recall"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chỉ tiếng Anh, độ nhớ lại cao hơn"
+          }
         }
       }
     },
@@ -2037,6 +2391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Falhou"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thất bại"
           }
         }
       }
@@ -2072,6 +2432,12 @@
             "state": "translated",
             "value": "Processamento mais rápido"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xử lý nhanh nhất"
+          }
         }
       }
     },
@@ -2105,6 +2471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Processamento mais rápido e somente inglês, maior recall"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xử lý nhanh nhất, chỉ tiếng Anh, độ nhớ cao hơn"
           }
         }
       }
@@ -2140,6 +2512,12 @@
             "state": "translated",
             "value": "Processamento mais rápido e preciso"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xử lý nhanh nhất và chính xác"
+          }
         }
       }
     },
@@ -2173,6 +2551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Palavras de preenchimento"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Từ đệm"
           }
         }
       }
@@ -2208,6 +2592,12 @@
             "state": "translated",
             "value": "Corrige pontuação e erros óbvios com um modelo local após transcrever."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sửa dấu câu và lỗi rõ ràng qua mô hình cục bộ sau khi phiên âm."
+          }
         }
       }
     },
@@ -2241,6 +2631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Geral"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chung"
           }
         }
       }
@@ -2276,6 +2672,12 @@
             "state": "translated",
             "value": "Conceder acesso"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cấp quyền truy cập"
+          }
         }
       }
     },
@@ -2309,6 +2711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvido"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đã nghe thấy"
           }
         }
       }
@@ -2344,6 +2752,12 @@
             "state": "translated",
             "value": "Palavra ouvida"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Từ nghe được"
+          }
         }
       }
     },
@@ -2377,6 +2791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modelo otimizado para hebraico pela ivrit.ai. Selecioná-lo define o idioma como hebraico."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình tối ưu hóa cho Tiếng Do Thái bởi ivrit.ai. Chọn mô hình này sẽ đặt ngôn ngữ thành Tiếng Do Thái."
           }
         }
       }
@@ -2412,6 +2832,12 @@
             "state": "translated",
             "value": "Alta precisão, melhor qualidade"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Độ chính xác cao, chất lượng tốt nhất"
+          }
         }
       }
     },
@@ -2445,6 +2871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Valores mais altos tornam a saída mais aleatória"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giá trị cao hơn làm cho đầu ra ngẫu nhiên hơn"
           }
         }
       }
@@ -2480,6 +2912,12 @@
             "state": "translated",
             "value": "Histórico"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lịch sử"
+          }
         }
       }
     },
@@ -2513,6 +2951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Segure o atalho para gravar, solte para parar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giữ phím tắt để ghi âm, thả ra để dừng"
           }
         }
       }
@@ -2548,6 +2992,12 @@
             "state": "translated",
             "value": "Segurar para gravar"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giữ để ghi âm"
+          }
         }
       }
     },
@@ -2581,6 +3031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Horas"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giờ"
           }
         }
       }
@@ -2616,6 +3072,12 @@
             "state": "translated",
             "value": "Na fila..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang trong hàng đợi..."
+          }
         }
       }
     },
@@ -2649,6 +3111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Posição do indicador"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Vị trí chỉ báo"
           }
         }
       }
@@ -2684,6 +3152,12 @@
             "state": "translated",
             "value": "Prompt inicial"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gợi ý ban đầu"
+          }
         }
       }
     },
@@ -2717,6 +3191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Manter no máximo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giữ tối đa"
           }
         }
       }
@@ -2752,6 +3232,12 @@
             "state": "translated",
             "value": "Manter apenas as gravações e transcrições mais recentes"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chỉ giữ lại bản ghi và bản phiên âm gần nhất"
+          }
         }
       }
     },
@@ -2785,6 +3271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Manter a transcrição na área de transferência após a gravação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giữ bản phiên âm trong bảng nhớ tạm sau khi ghi âm"
           }
         }
       }
@@ -2820,6 +3312,12 @@
             "state": "translated",
             "value": "Combinação de teclas"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tổ hợp phím"
+          }
         }
       }
     },
@@ -2853,6 +3351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idioma"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngôn ngữ"
           }
         }
       }
@@ -2888,6 +3392,12 @@
             "state": "translated",
             "value": "Configurações de idioma"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cài đặt ngôn ngữ"
+          }
         }
       }
     },
@@ -2921,6 +3431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idioma da interface do app. Reinicie para aplicar."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngôn ngữ giao diện ứng dụng. Khởi động lại để áp dụng."
           }
         }
       }
@@ -2956,6 +3472,12 @@
             "state": "translated",
             "value": "Abrir ao iniciar sessão"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động khi đăng nhập"
+          }
         }
       }
     },
@@ -2989,6 +3511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicie sem a janela principal — abra-a pelo ícone na barra de menus."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi chạy mà không có cửa sổ chính — mở từ biểu tượng thanh menu."
           }
         }
       }
@@ -3024,6 +3552,12 @@
             "state": "translated",
             "value": "Execute seu próprio script quando uma transcrição for concluída."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chạy tập lệnh của bạn khi hoàn thành phiên âm."
+          }
         }
       }
     },
@@ -3057,6 +3591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicia direto na barra de menus, sem nenhuma janela. Abra a janela a qualquer momento pelo ícone na barra de menus. Tem efeito na próxima inicialização."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động thẳng vào thanh menu mà không hiển thị cửa sổ. Mở cửa sổ bất kỳ lúc nào từ biểu tượng thanh menu. Có hiệu lực ở lần khởi động tiếp theo."
           }
         }
       }
@@ -3092,6 +3632,12 @@
             "state": "translated",
             "value": "⇧ Shift esquerdo"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⇧ Shift trái"
+          }
         }
       }
     },
@@ -3125,6 +3671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⌃ Control esquerdo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌃ Control trái"
           }
         }
       }
@@ -3160,6 +3712,12 @@
             "state": "translated",
             "value": "⌘ Command esquerdo"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌘ Command trái"
+          }
         }
       }
     },
@@ -3193,6 +3751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⌥ Option esquerdo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌥ Option trái"
           }
         }
       }
@@ -3228,6 +3792,12 @@
             "state": "translated",
             "value": "Limitar número de gravações"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giới hạn số lượng bản ghi"
+          }
         }
       }
     },
@@ -3261,6 +3831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcrição ao vivo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phiên âm trực tiếp"
           }
         }
       }
@@ -3296,6 +3872,12 @@
             "state": "translated",
             "value": "Carregando modelo Parakeet..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang tải mô hình Parakeet..."
+          }
         }
       }
     },
@@ -3329,6 +3911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Carregando modelo Whisper..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang tải mô hình Whisper..."
           }
         }
       }
@@ -3364,6 +3952,12 @@
             "state": "translated",
             "value": "Carregando notas da versão…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang tải ghi chú phiên bản…"
+          }
         }
       }
     },
@@ -3397,6 +3991,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixar o volume do sistema durante a gravação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giảm âm lượng hệ thống khi ghi âm"
           }
         }
       }
@@ -3432,6 +4032,12 @@
             "state": "translated",
             "value": "Baixe o volume de saída do sistema durante a gravação e depois restaure-o"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Giảm âm lượng đầu ra hệ thống khi ghi âm, rồi khôi phục lại"
+          }
         }
       }
     },
@@ -3465,6 +4071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acesso ao microfone"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Truy cập Micrô"
           }
         }
       }
@@ -3500,6 +4112,12 @@
             "state": "translated",
             "value": "Modelo"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình"
+          }
         }
       }
     },
@@ -3533,6 +4151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Parâmetros do modelo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tham số mô hình"
           }
         }
       }
@@ -3568,6 +4192,12 @@
             "state": "translated",
             "value": "Diretório de modelos:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thư mục mô hình:"
+          }
         }
       }
     },
@@ -3601,6 +4231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tecla modificadora"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phím bổ trợ"
           }
         }
       }
@@ -3636,6 +4272,12 @@
             "state": "translated",
             "value": "Mais informações"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thêm thông tin"
+          }
         }
       }
     },
@@ -3669,6 +4311,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Multilíngue, 25 idiomas"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đa ngôn ngữ, 25 ngôn ngữ"
           }
         }
       }
@@ -3704,6 +4352,12 @@
             "state": "translated",
             "value": "Vários arquivos serão enfileirados"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhiều tệp sẽ được xếp vào hàng đợi"
+          }
         }
       }
     },
@@ -3737,6 +4391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Perto do cursor"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gần con trỏ"
           }
         }
       }
@@ -3772,6 +4432,12 @@
             "state": "translated",
             "value": "Perto do cursor (padrão) mostra logo acima do cursor de texto. Superior, Centro ou Inferior fixam no meio da tela."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gần con trỏ (mặc định) hiển thị ngay phía trên con trỏ văn bản. Trên, Giữa hoặc Dưới sẽ ghim vào giữa màn hình."
+          }
         }
       }
     },
@@ -3805,6 +4471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limite de ausência de fala:"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngưỡng không có giọng nói:"
           }
         }
       }
@@ -3840,6 +4512,12 @@
             "state": "translated",
             "value": "Nenhum microfone disponível"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không có micrô nào"
+          }
         }
       }
     },
@@ -3873,6 +4551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma gravação ainda"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chưa có bản ghi nào"
           }
         }
       }
@@ -3908,6 +4592,12 @@
             "state": "translated",
             "value": "Nenhum resultado encontrado"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không tìm thấy kết quả"
+          }
         }
       }
     },
@@ -3941,6 +4631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma fala detectada"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không phát hiện giọng nói"
           }
         }
       }
@@ -3976,6 +4672,12 @@
             "state": "translated",
             "value": "Nenhuma palavra ainda. Adicione uma abaixo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chưa có từ nào. Thêm bên dưới."
+          }
         }
       }
     },
@@ -4009,6 +4711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không có"
           }
         }
       }
@@ -4044,6 +4752,12 @@
             "state": "translated",
             "value": "Notch"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tai thỏ"
+          }
         }
       }
     },
@@ -4077,6 +4791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Avisar quando não houver alvo de colagem"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thông báo khi không có vùng dán"
           }
         }
       }
@@ -4112,6 +4832,12 @@
             "state": "translated",
             "value": "Número de feixes a usar na busca em feixe"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Số chùm dùng trong tìm kiếm chùm"
+          }
         }
       }
     },
@@ -4145,6 +4871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Endpoint do Ollama"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Địa chỉ Ollama"
           }
         }
       }
@@ -4180,6 +4912,12 @@
             "state": "translated",
             "value": "Um toque para alternar a gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn một lần để bật/tắt ghi âm"
+          }
         }
       }
     },
@@ -4213,6 +4951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir pasta"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mở thư mục"
           }
         }
       }
@@ -4248,6 +4992,12 @@
             "state": "translated",
             "value": "Abrir configurações de Monitoramento de Entrada…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mở cài đặt Theo dõi đầu vào…"
+          }
         }
       }
     },
@@ -4281,6 +5031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir diretório de modelos"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mở thư mục mô hình"
           }
         }
       }
@@ -4316,6 +5072,12 @@
             "state": "translated",
             "value": "Abrir diretório de transcrições"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mở thư mục bản phiên âm"
+          }
         }
       }
     },
@@ -4349,6 +5111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Texto opcional para guiar a transcrição do modelo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Văn bản tùy chọn để hướng dẫn mô hình phiên âm"
           }
         }
       }
@@ -4384,6 +5152,12 @@
             "state": "translated",
             "value": "Opções de saída"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tùy chọn đầu ra"
+          }
         }
       }
     },
@@ -4417,6 +5191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modelo Parakeet"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình Parakeet"
           }
         }
       }
@@ -4452,6 +5232,12 @@
             "state": "translated",
             "value": "Pausar mídia durante a gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tạm dừng media khi ghi âm"
+          }
         }
       }
     },
@@ -4485,6 +5271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pause a reprodução de outros apps durante a gravação e depois retome."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tạm dừng phát của các ứng dụng khác khi ghi âm, sau đó tiếp tục."
           }
         }
       }
@@ -4520,6 +5312,12 @@
             "state": "translated",
             "value": "Reproduzir um som de notificação quando a gravação começa"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phát âm thanh thông báo khi bắt đầu ghi âm"
+          }
         }
       }
     },
@@ -4553,6 +5351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reproduzir som ao iniciar a gravação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phát âm thanh khi bắt đầu ghi âm"
           }
         }
       }
@@ -4588,6 +5392,12 @@
             "state": "translated",
             "value": "Hook pós-gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hành động sau ghi âm"
+          }
         }
       }
     },
@@ -4621,6 +5431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Grafia preferida"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cách viết ưu tiên"
           }
         }
       }
@@ -4656,6 +5472,12 @@
             "state": "translated",
             "value": "Pressione"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn"
+          }
         }
       }
     },
@@ -4689,6 +5511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pressione esta tecla durante a gravação para cancelá-la e descartá-la sem transcrever. O padrão é Esc — reatribua aqui se Esc conflitar com outra coisa."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn phím này trong khi ghi âm để hủy và bỏ bản ghi mà không phiên âm. Mặc định là Esc — gán lại tại đây nếu Esc xung đột với thứ khác."
           }
         }
       }
@@ -4724,6 +5552,12 @@
             "state": "translated",
             "value": "Pressione durante a gravação para descartá-la."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn trong khi ghi âm để hủy bỏ."
+          }
         }
       }
     },
@@ -4757,6 +5591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pressione sua nova combinação de atalho..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn tổ hợp phím tắt mới của bạn..."
           }
         }
       }
@@ -4792,6 +5632,12 @@
             "state": "translated",
             "value": "Pré-visualização"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xem trước"
+          }
         }
       }
     },
@@ -4825,6 +5671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pré-visualize sua fala no indicador enquanto fala (apenas Parakeet)."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xem trước lời nói của bạn trong chỉ báo khi đang nói (chỉ dành cho Parakeet)."
           }
         }
       }
@@ -4860,6 +5712,12 @@
             "state": "translated",
             "value": "Privacidade"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Quyền riêng tư"
+          }
         }
       }
     },
@@ -4893,6 +5751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dica profissional:"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mẹo hay:"
           }
         }
       }
@@ -4928,6 +5792,12 @@
             "state": "translated",
             "value": "Processando..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang xử lý..."
+          }
         }
       }
     },
@@ -4961,6 +5831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sair"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thoát"
           }
         }
       }
@@ -4996,6 +5872,12 @@
             "state": "translated",
             "value": "Comportamento de gravação"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hành vi ghi âm"
+          }
         }
       }
     },
@@ -5029,6 +5911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gatilho de gravação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kích hoạt ghi âm"
           }
         }
       }
@@ -5064,6 +5952,12 @@
             "state": "translated",
             "value": "Gravando…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang ghi âm…"
+          }
         }
       }
     },
@@ -5097,6 +5991,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Regenerar transcrição"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tạo lại bản phiên âm"
           }
         }
       }
@@ -5132,6 +6032,12 @@
             "state": "translated",
             "value": "Reiniciar agora"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động lại ngay"
+          }
         }
       }
     },
@@ -5165,6 +6071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reinicie para aplicar o novo idioma."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động lại để áp dụng ngôn ngữ mới."
           }
         }
       }
@@ -5200,6 +6112,12 @@
             "state": "translated",
             "value": "Remover palavras de preenchimento"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa từ đệm"
+          }
         }
       }
     },
@@ -5233,6 +6151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remover esta entrada"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa mục này"
           }
         }
       }
@@ -5268,6 +6192,12 @@
             "state": "translated",
             "value": "Remove da transcrição as correspondências do regex abaixo (sem diferenciar maiúsculas) e depois ajusta o espaçamento. Desativado por padrão; fora isso, o texto inserido permanece inalterado."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xóa các kết quả khớp với biểu thức chính quy bên dưới (không phân biệt hoa thường) khỏi bản phiên âm, sau đó dọn dẹp khoảng trắng. Tắt theo mặc định; văn bản được chèn vào sẽ không thay đổi."
+          }
         }
       }
     },
@@ -5301,6 +6231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Substitua palavras reconhecidas por uma grafia preferida. A correspondência não diferencia maiúsculas e se limita a palavras inteiras. Com o Whisper, as substituições também são usadas para influenciar o reconhecimento."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thay thế các từ được nhận dạng bằng cách viết ưu tiên. Khớp không phân biệt hoa thường và chỉ áp dụng cho toàn bộ từ. Với Whisper, các thay thế cũng được dùng để định hướng nhận dạng."
           }
         }
       }
@@ -5336,6 +6272,12 @@
             "state": "translated",
             "value": "Substituir por"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thay thế bằng"
+          }
         }
       }
     },
@@ -5369,6 +6311,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Permissões necessárias"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Quyền hạn cần thiết"
           }
         }
       }
@@ -5404,6 +6352,12 @@
             "state": "translated",
             "value": "Necessário para gravação de áudio"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bắt buộc để ghi âm"
+          }
         }
       }
     },
@@ -5437,6 +6391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Necessário para atalhos de teclado globais"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bắt buộc cho phím tắt bàn phím toàn cục"
           }
         }
       }
@@ -5472,6 +6432,12 @@
             "state": "translated",
             "value": "Tentar novamente"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thử lại"
+          }
         }
       }
     },
@@ -5505,6 +6471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⇧ Shift direito"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⇧ Shift phải"
           }
         }
       }
@@ -5540,6 +6512,12 @@
             "state": "translated",
             "value": "⌃ Control direito"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌃ Control phải"
+          }
         }
       }
     },
@@ -5573,6 +6551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⌘ Command direito"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌘ Command phải"
           }
         }
       }
@@ -5608,6 +6592,12 @@
             "state": "translated",
             "value": "⌥ Option direito"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⌥ Option phải"
+          }
         }
       }
     },
@@ -5641,6 +6631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Executar um comando após cada transcrição"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chạy lệnh sau mỗi lần phiên âm"
           }
         }
       }
@@ -5676,6 +6672,12 @@
             "state": "translated",
             "value": "Salvar histórico de transcrições"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lưu lịch sử bản phiên âm"
+          }
         }
       }
     },
@@ -5709,6 +6711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Buscar nas transcrições"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tìm kiếm trong các bản phiên âm"
           }
         }
       }
@@ -5744,6 +6752,12 @@
             "state": "translated",
             "value": "Selecionar"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chọn"
+          }
         }
       }
     },
@@ -5777,6 +6791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Selecionar microfone"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chọn micrô"
           }
         }
       }
@@ -5812,6 +6832,12 @@
             "state": "translated",
             "value": "Configurações"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cài đặt"
+          }
         }
       }
     },
@@ -5845,6 +6871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Configurações..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cài đặt..."
           }
         }
       }
@@ -5880,6 +6912,12 @@
             "state": "translated",
             "value": "Atalho"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phím tắt"
+          }
         }
       }
     },
@@ -5913,6 +6951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar marcações de tempo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị dấu thời gian"
           }
         }
       }
@@ -5948,6 +6992,12 @@
             "state": "translated",
             "value": "Mostrar menos"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị ít hơn"
+          }
         }
       }
     },
@@ -5981,6 +7031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar mais"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị thêm"
           }
         }
       }
@@ -6016,6 +7072,12 @@
             "state": "translated",
             "value": "Mostrar a transcrição ao vivo durante a gravação (apenas Parakeet)"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị bản phiên âm trực tiếp khi ghi âm (chỉ Parakeet)"
+          }
         }
       }
     },
@@ -6049,6 +7111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tecla modificadora única"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phím bổ trợ đơn"
           }
         }
       }
@@ -6084,6 +7152,12 @@
             "state": "translated",
             "value": "Motor de reconhecimento de fala"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Công cụ nhận dạng giọng nói"
+          }
         }
       }
     },
@@ -6117,6 +7191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Iniciar o OpenSuperWhisper automaticamente quando você fizer login."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tự động khởi chạy OpenSuperWhisper khi bạn đăng nhập."
           }
         }
       }
@@ -6152,6 +7232,12 @@
             "state": "translated",
             "value": "Iniciar na barra de menus"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động trong thanh menu"
+          }
         }
       }
     },
@@ -6185,6 +7271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicialização"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khởi động"
           }
         }
       }
@@ -6220,6 +7312,12 @@
             "state": "translated",
             "value": "Remova um, ã, é… das transcrições antes de inserir."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Loại bỏ \"ừm\", \"ừ\", \"à\"… khỏi bản phiên âm trước khi chèn."
+          }
         }
       }
     },
@@ -6253,6 +7351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Suprimir áudio em branco"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bỏ qua âm thanh trống"
           }
         }
       }
@@ -6288,6 +7392,12 @@
             "state": "translated",
             "value": "Sistema"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hệ thống"
+          }
         }
       }
     },
@@ -6321,6 +7431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toque no botão de gravação abaixo para começar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn nút ghi âm bên dưới để bắt đầu"
           }
         }
       }
@@ -6356,6 +7472,12 @@
             "state": "translated",
             "value": "Temperatura:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhiệt độ:"
+          }
         }
       }
     },
@@ -6389,6 +7511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reduza temporariamente o volume de saída e depois restaure-o."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tạm thời giảm âm lượng đầu ra, sau đó khôi phục lại."
           }
         }
       }
@@ -6424,6 +7552,12 @@
             "state": "translated",
             "value": "Testar conexão"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kiểm tra kết nối"
+          }
         }
       }
     },
@@ -6457,6 +7591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Testar a conexão com o Ollama"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kiểm tra kết nối đến Ollama"
           }
         }
       }
@@ -6492,6 +7632,12 @@
             "state": "translated",
             "value": "O texto aparece após um breve atraso e é uma pré-visualização ao vivo aproximada — pode diferir do resultado final. O texto que de fato é inserido sempre vem da transcrição completa e precisa, não desta pré-visualização."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Văn bản xuất hiện sau một khoảng trễ ngắn và là bản xem trước trực tiếp sơ bộ — có thể khác với kết quả cuối. Văn bản thực sự được chèn luôn đến từ bản phiên âm đầy đủ, chính xác, không phải từ bản xem trước này."
+          }
         }
       }
     },
@@ -6525,6 +7671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limite para detectar fala vs. silêncio"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngưỡng phát hiện giọng nói và im lặng"
           }
         }
       }
@@ -6560,6 +7712,12 @@
             "state": "translated",
             "value": "Superior"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đầu"
+          }
         }
       }
     },
@@ -6593,6 +7751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcrevendo..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang phiên âm..."
           }
         }
       }
@@ -6628,6 +7792,12 @@
             "state": "translated",
             "value": "Histórico de transcrições desativado"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lịch sử bản phiên âm đã tắt"
+          }
         }
       }
     },
@@ -6661,6 +7831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idioma da transcrição"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ngôn ngữ phiên âm"
           }
         }
       }
@@ -6696,6 +7872,12 @@
             "state": "translated",
             "value": "Falha na transcrição"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Phiên âm thất bại"
+          }
         }
       }
     },
@@ -6729,6 +7911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "O salvamento de transcrições está desativado no momento. Deseja ativá-lo para que esta gravação possa ser salva?"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lưu bản phiên âm hiện đang bị tắt. Bạn có muốn bật tính năng này để lưu bản ghi này không?"
           }
         }
       }
@@ -6764,6 +7952,12 @@
             "state": "translated",
             "value": "Diretório de transcrições"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thư mục bản phiên âm"
+          }
         }
       }
     },
@@ -6797,6 +7991,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Traduzir para inglês"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dịch sang tiếng Anh"
           }
         }
       }
@@ -6832,6 +8032,12 @@
             "state": "translated",
             "value": "Tente termos de busca diferentes"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Thử từ khóa tìm kiếm khác"
+          }
         }
       }
     },
@@ -6865,6 +8071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Atualizações"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cập nhật"
           }
         }
       }
@@ -6900,6 +8112,12 @@
             "state": "translated",
             "value": "Usar autocorreção asiática"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sử dụng tự động sửa lỗi châu Á"
+          }
         }
       }
     },
@@ -6933,6 +8151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Usar busca em feixe"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dùng tìm kiếm theo chùm"
           }
         }
       }
@@ -6968,6 +8192,12 @@
             "state": "translated",
             "value": "Processamento muito rápido"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xử lý rất nhanh"
+          }
         }
       }
     },
@@ -7001,6 +8231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volume durante a gravação"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Âm lượng khi ghi âm"
           }
         }
       }
@@ -7036,6 +8272,12 @@
             "state": "translated",
             "value": "Bem-vindo ao"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chào mừng đến với"
+          }
         }
       }
     },
@@ -7069,6 +8311,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Novidades"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Có gì mới"
           }
         }
       }
@@ -7104,6 +8352,12 @@
             "state": "translated",
             "value": "Quando desativado, as gravações de áudio e as transcrições não são salvas no disco. Apenas a transcrição atual é mantida na memória para colagem."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khi tắt, bản ghi âm và bản phiên âm sẽ không được lưu vào đĩa. Chỉ bản phiên âm hiện tại được giữ trong bộ nhớ để dán."
+          }
         }
       }
     },
@@ -7137,6 +8391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Onde o indicador de gravação aparece."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Vị trí hiển thị chỉ báo ghi âm."
           }
         }
       }
@@ -7172,6 +8432,12 @@
             "state": "translated",
             "value": "Modelo Whisper"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình Whisper"
+          }
         }
       }
     },
@@ -7205,6 +8471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você pode alterar isto depois em Configurações"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bạn có thể thay đổi điều này sau trong Cài đặt"
           }
         }
       }
@@ -7240,6 +8512,12 @@
             "state": "translated",
             "value": "Você está na versão mais recente."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bạn đang dùng phiên bản mới nhất."
+          }
         }
       }
     },
@@ -7273,6 +8551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "em qualquer lugar"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bất kỳ đâu"
           }
         }
       }
@@ -7308,6 +8592,12 @@
             "state": "translated",
             "value": "gravações"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bản ghi"
+          }
         }
       }
     },
@@ -7341,6 +8631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "para gravar e colar texto rapidamente"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "để nhanh chóng ghi âm và dán văn bản"
           }
         }
       }
@@ -7376,6 +8672,12 @@
             "state": "translated",
             "value": "para mostrar o mini gravador"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "để hiển thị máy ghi âm thu nhỏ"
+          }
         }
       }
     },
@@ -7409,6 +8711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ Este modo requer a permissão de Monitoramento de Entrada. O macOS exige isto para detectar pressionamentos de teclas modificadoras únicas globalmente. Apenas eventos de teclas modificadoras (⌘, ⌥, ⇧, ⌃, Fn) são monitorados — nenhuma tecla comum é capturada."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⚠️ Chế độ này yêu cầu quyền Theo dõi Đầu vào. macOS cần quyền này để phát hiện toàn cục các lần nhấn phím bổ trợ đơn. Chỉ các sự kiện phím bổ trợ (⌘, ⌥, ⇧, ⌃, Fn) được theo dõi — không có phím thông thường nào bị ghi lại."
           }
         }
       }
@@ -7444,6 +8752,12 @@
             "state": "translated",
             "value": "O macOS não permite que o app detecte o que estava tocando, então, se a mídia já estava pausada, ela pode começar a tocar quando você parar — se isso te incomodar, use a opção de volume abaixo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "macOS không cho phép ứng dụng phát hiện những gì đang phát, vì vậy nếu media đã tạm dừng, nó có thể bắt đầu phát khi bạn dừng ghi âm — nếu điều này làm phiền bạn, hãy dùng tùy chọn âm lượng bên dưới."
+          }
         }
       }
     },
@@ -7477,6 +8791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível conectar ao Ollama — ele está em execução? (ollama serve)"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Không thể kết nối Ollama — nó có đang chạy không? (ollama serve)"
           }
         }
       }
@@ -7512,6 +8832,12 @@
             "state": "translated",
             "value": "Modelo pronto"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình sẵn sàng"
+          }
         }
       }
     },
@@ -7545,6 +8871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modelo SenseVoice"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mô hình SenseVoice"
           }
         }
       }
@@ -7580,6 +8912,12 @@
             "state": "translated",
             "value": "⚠️ O modo de tecla modificadora única requer a permissão de Monitoramento de Entrada (o macOS precisa dela para detectar teclas modificadoras globalmente). Apenas eventos de teclas modificadoras são monitorados — nenhuma tecla comum."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⚠️ Chế độ phím bổ trợ đơn yêu cầu quyền Giám sát đầu vào (macOS cần nó để phát hiện các phím bổ trợ toàn cục). Chỉ các sự kiện phím bổ trợ được giám sát — không có phím bấm thông thường nào."
+          }
         }
       }
     },
@@ -7613,6 +8951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar um aviso “copiado — pressione ⌘V” se nenhum campo editável estiver em foco"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hiển thị thông báo 'đã sao chép — nhấn ⌘V' nếu không có trường chỉnh sửa nào được chọn"
           }
         }
       }
@@ -7648,6 +8992,12 @@
             "state": "translated",
             "value": "Roda via /bin/sh -c após cada transcrição bem-sucedida, em segundo plano. Seu comando recebe os dados como variáveis de ambiente — OSW_TEXT, OSW_AUDIO_PATH (quando o histórico está ativado), OSW_TIMESTAMP, OSW_DURATION — e um objeto JSON no stdin com os mesmos campos. Exemplo: echo \"$OSW_TEXT\" >> ~/dictations.txt"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chạy qua /bin/sh -c sau mỗi lần phiên âm thành công, ở nền. Lệnh của bạn nhận dữ liệu qua biến môi trường â OSW_TEXT, OSW_AUDIO_PATH (khi lịch sử bật), OSW_TIMESTAMP, OSW_DURATION â và một đối tượng JSON trên stdin với các trường tương tự. Ví dụ: echo \"$OSW_TEXT\" >> ~/dictations.txt"
+          }
         }
       }
     },
@@ -7681,6 +9031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Envia a transcrição para o seu servidor Ollama local e insere o resultado limpo. Requer o Ollama em execução com o modelo abaixo baixado (ex.: `ollama pull llama3.2`). Adiciona uma pequena latência. Se o Ollama não estiver acessível, a transcrição bruta é usada sem alterações — nada se perde. Tudo permanece na sua máquina."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gửi bản phiên âm đến máy chủ Ollama cục bộ và chèn kết quả đã được dọn dẹp. Yêu cầu Ollama đang chạy với mô hình bên dưới đã được tải về (ví dụ: `ollama pull llama3.2`). Thêm một chút độ trễ. Nếu Ollama không thể truy cập, bản phiên âm gốc được sử dụng không thay đổi — không có gì bị mất. Mọi thứ đều ở trên máy của bạn."
           }
         }
       }
@@ -7716,6 +9072,12 @@
             "state": "translated",
             "value": "Traduzir para inglês (apenas Whisper)"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dịch sang tiếng Anh (chỉ Whisper)"
+          }
         }
       }
     },
@@ -7749,6 +9111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pressione esta tecla durante a gravação para cancelá-la e descartá-la sem transcrever. Esc é o padrão; as combinações ⌘/⌥/⌃ existem caso Esc conflite com outra coisa."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhấn phím này trong khi ghi âm để hủy và loại bỏ mà không phiên âm. Esc là mặc định; các tổ hợp ⌘/⌥/⌃ có sẵn nếu Esc xung đột với thứ khác."
           }
         }
       }
@@ -7784,6 +9152,12 @@
             "state": "translated",
             "value": "Multilíngue (chinês, cantonês, inglês, japonês, coreano), inteiramente no dispositivo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đa ngôn ngữ (Tiếng Trung, Tiếng Quảng Đông, Tiếng Anh, Tiếng Nhật, Tiếng Hàn), hoàn toàn trên thiết bị."
+          }
         }
       }
     },
@@ -7817,6 +9191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Substitui o idioma do seu Mac apenas para o OpenSuperWhisper. \"Sistema\" segue o idioma do seu Mac. Isto é independente do idioma de transcrição."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ghi đè ngôn ngữ của máy Mac chỉ cho OpenSuperWhisper. \"Hệ thống\" theo ngôn ngữ máy Mac của bạn. Đây là tùy chọn riêng biệt với ngôn ngữ phiên âm."
           }
         }
       }
@@ -7852,6 +9232,12 @@
             "state": "translated",
             "value": "Não baixado · %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chưa tải xuống · %@"
+          }
         }
       }
     },
@@ -7885,6 +9271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Atualização disponível: %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Có bản cập nhật: %@"
           }
         }
       }
@@ -7920,6 +9312,12 @@
             "state": "translated",
             "value": "Baixando: %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang tải xuống: %@"
+          }
         }
       }
     },
@@ -7953,6 +9351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixando… %lld%%"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Đang tải xuống… %lld%%"
           }
         }
       }
@@ -7988,6 +9392,12 @@
             "state": "translated",
             "value": "O mais preciso, ~99 idiomas, e pode traduzir para inglês. Roda inteiramente no dispositivo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Chính xác nhất, ~99 ngôn ngữ, và có thể dịch sang tiếng Anh. Chạy hoàn toàn trên thiết bị."
+          }
         }
       }
     },
@@ -8021,6 +9431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rápido — chinês, cantonês, inglês, japonês, coreano. Roda inteiramente no dispositivo."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhanh — Tiếng Trung, Tiếng Quảng Đông, Tiếng Anh, Tiếng Nhật, Tiếng Hàn. Chạy hoàn toàn trên thiết bị."
           }
         }
       }
@@ -8056,6 +9472,12 @@
             "state": "translated",
             "value": "Rápido, multilíngue (25 idiomas), com pré-visualização ao vivo enquanto você fala. Roda inteiramente no dispositivo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nhanh, đa ngôn ngữ (25 ngôn ngữ), với xem trước trực tiếp khi bạn nói. Chạy hoàn toàn trên thiết bị."
+          }
         }
       }
     },
@@ -8089,6 +9511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Instalar atualização"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cài đặt bản cập nhật"
           }
         }
       }
@@ -8124,6 +9552,12 @@
             "state": "translated",
             "value": "Ver no GitHub"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Xem trên GitHub"
+          }
         }
       }
     },
@@ -8157,6 +9591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nuvem — whisper-large-v3 extremamente rápido. ⚠️ O áudio é enviado aos servidores da Groq (NÃO roda no dispositivo). Requer uma chave de API gratuita."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cloud — whisper-large-v3 cực nhanh. ⚠️ Âm thanh được gửi đến máy chủ của Groq (KHÔNG trên thiết bị). Cần API key miễn phí."
           }
         }
       }
@@ -8192,6 +9632,12 @@
             "state": "translated",
             "value": "O áudio é enviado para os servidores da Groq — este motor não roda no dispositivo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Âm thanh được tải lên máy chủ của Groq — công cụ này không chạy trên thiết bị."
+          }
         }
       }
     },
@@ -8225,6 +9671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chave de API"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Khóa API"
           }
         }
       }
@@ -8260,6 +9712,12 @@
             "state": "translated",
             "value": "Obter uma chave gratuita"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Lấy khóa miễn phí"
+          }
         }
       }
     },
@@ -8293,6 +9751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "whisper-large-v3-turbo — o mais rápido"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "whisper-large-v3-turbo — nhanh nhất"
           }
         }
       }
@@ -8328,6 +9792,12 @@
             "state": "translated",
             "value": "whisper-large-v3 — suporta tradução"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "whisper-large-v3 — hỗ trợ dịch thuật"
+          }
         }
       }
     },
@@ -8361,6 +9831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "O Turbo é o mais rápido (somente transcrição). O whisper-large-v3 também respeita Traduzir para inglês."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Turbo nhanh nhất (chỉ phiên âm). whisper-large-v3 cũng hỗ trợ Dịch sang tiếng Anh."
           }
         }
       }
