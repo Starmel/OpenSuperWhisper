@@ -4,7 +4,7 @@ import FluidAudio
 
 /// Drives live (streaming) transcription on the Parakeet/FluidAudio engine.
 ///
-/// Owns a `StreamingAsrManager` plus its own microphone tap (an `AVAudioEngine`), running in
+/// Owns a `SlidingWindowAsrManager` plus its own microphone tap (an `AVAudioEngine`), running in
 /// parallel with the WAV recorder so playback/history stay intact. Mic buffers are fed to the
 /// manager, which emits `volatileTranscript` (in-progress, may change) and `confirmedTranscript`
 /// (locked-in); we publish their combination for the live caption. On stop, `finish()` returns
@@ -18,7 +18,7 @@ final class StreamingTranscriptionController: ObservableObject {
     @Published private(set) var volatileText: String = ""
 
     private let audioEngine = AVAudioEngine()
-    private var manager: StreamingAsrManager?
+    private var manager: SlidingWindowAsrManager?
     private var updatesTask: Task<Void, Never>?
     private var feederTask: Task<Void, Never>?
     private var bufferContinuation: AsyncStream<AVAudioPCMBuffer>.Continuation?
@@ -41,7 +41,7 @@ final class StreamingTranscriptionController: ObservableObject {
         // nothing for short dictations). First text lands at ~chunk+right ≈ 1.8s, then ~every
         // 1.5s. Intentionally lower quality — the inserted text comes from the accurate file
         // pass, not from here — so we trade accuracy for responsiveness.
-        let previewConfig = StreamingAsrConfig(
+        let previewConfig = SlidingWindowAsrConfig(
             chunkSeconds: 1.5,
             hypothesisChunkSeconds: 0.5,
             leftContextSeconds: 4.0,
@@ -49,9 +49,10 @@ final class StreamingTranscriptionController: ObservableObject {
             minContextForConfirmation: 1.0,
             confirmationThreshold: 0.80
         )
-        let manager = StreamingAsrManager(config: previewConfig)
+        let manager = SlidingWindowAsrManager(config: previewConfig)
         await configureVocabulary(on: manager, boostTerms: boostTerms)
-        try await manager.start(models: models, source: .microphone)
+        try await manager.loadModels(models)
+        try await manager.startStreaming(source: .microphone)
         self.manager = manager
 
         let updates = await manager.transcriptionUpdates
@@ -119,7 +120,7 @@ final class StreamingTranscriptionController: ObservableObject {
         isRunning = false
     }
 
-    private func configureVocabulary(on manager: StreamingAsrManager, boostTerms: [String]) async {
+    private func configureVocabulary(on manager: SlidingWindowAsrManager, boostTerms: [String]) async {
         let terms = boostTerms.filter { !$0.isEmpty }
         guard !terms.isEmpty else { return }
         let vocabularyURL = FileManager.default.temporaryDirectory

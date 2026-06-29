@@ -23,8 +23,7 @@ class FluidAudioEngine: TranscriptionEngine {
         
         let models = try await AsrModels.downloadAndLoad(version: version)
         let manager = AsrManager(config: .default)
-        try await manager.initialize(models: models)
-        await configureCustomVocabulary(on: manager)
+        try await manager.loadModels(models)
 
         asrManager = manager
         asrModels = models
@@ -74,8 +73,10 @@ class FluidAudioEngine: TranscriptionEngine {
             progressTask = nil
         }
         
-        // Perform actual transcription - FluidAudio will emit progress automatically
-        let result = try await asrManager.transcribe(url)
+        // Perform actual transcription - FluidAudio will emit progress automatically.
+        // A fresh TDT decoder state per file keeps transcriptions independent.
+        var decoderState = TdtDecoderState.make(decoderLayers: await asrManager.decoderLayerCount)
+        let result = try await asrManager.transcribe(url, decoderState: &decoderState)
         
         guard !isCancelled else {
             throw CancellationError()
@@ -110,50 +111,6 @@ class FluidAudioEngine: TranscriptionEngine {
     func getSupportedLanguages() -> [String] {
         EngineCapabilities.supportedLanguages(
             engine: "fluidaudio", fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion)
-    }
-
-    /// Boosts the Parakeet decoder toward the custom dictionary's terms (the same
-    /// "replacement" words used for Whisper's prompt-boost — single source via
-    /// `CustomDictionary.boostTerms`). Configured at model load; changing the
-    /// dictionary takes effect on the next engine initialization. The post-
-    /// transcription replacement still applies live, so corrections are immediate.
-    private func configureCustomVocabulary(on manager: AsrManager) async {
-        let prefs = AppPreferences.shared
-        let terms = prefs.customDictionaryEnabled
-            ? CustomDictionary.boostTerms(entries: prefs.customDictionaryEntries)
-            : []
-        let vocabularyText = terms.joined(separator: "\n")
-
-        guard !vocabularyText.isEmpty else {
-            manager.disableVocabularyBoosting()
-            return
-        }
-
-        let vocabularyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenSuperWhisper-ParakeetVocabulary-\(UUID().uuidString)")
-            .appendingPathExtension("txt")
-
-        do {
-            try vocabularyText.write(to: vocabularyURL, atomically: true, encoding: .utf8)
-            defer { try? FileManager.default.removeItem(at: vocabularyURL) }
-
-            let vocabularyData = try await CustomVocabularyContext.loadWithCtcTokens(
-                from: vocabularyURL.path
-            )
-
-            guard !vocabularyData.vocab.terms.isEmpty else {
-                manager.disableVocabularyBoosting()
-                return
-            }
-
-            try await manager.configureVocabularyBoosting(
-                vocabulary: vocabularyData.vocab,
-                ctcModels: vocabularyData.models
-            )
-        } catch {
-            manager.disableVocabularyBoosting()
-            print("Parakeet custom vocabulary unavailable: \(error)")
-        }
     }
 }
 
