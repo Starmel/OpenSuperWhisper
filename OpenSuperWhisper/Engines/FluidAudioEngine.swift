@@ -128,7 +128,9 @@ class FluidAudioEngine: TranscriptionEngine {
     /// streaming preview (`CustomDictionary.boostTerms`).
     private func activeBoostTerms() -> [String] {
         let prefs = AppPreferences.shared
-        guard prefs.customDictionaryEnabled else { return [] }
+        // Boosting is opt-in (separate from the always-on text replacement): only bias the
+        // decoder when the user explicitly enabled it for rare/distinctive terms (#over-boost).
+        guard prefs.customDictionaryEnabled, prefs.customDictionaryBoostEnabled else { return [] }
         return CustomDictionary.boostTerms(entries: prefs.customDictionaryEntries)
     }
 

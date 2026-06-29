@@ -124,7 +124,7 @@ class WhisperEngine: TranscriptionEngine {
         params.detectLanguage = false // means that it only detects the language and does not process the transcription
         params.temperature = Float(settings.temperature)
         params.noSpeechThold = Float(settings.noSpeechThreshold)
-        let promptBoost = settings.shouldApplyCustomDictionary
+        let promptBoost = settings.shouldBoostCustomDictionary
             ? CustomDictionary.promptBoost(entries: settings.customDictionaryEntries)
             : ""
         let combinedPrompt = [settings.initialPrompt, promptBoost]

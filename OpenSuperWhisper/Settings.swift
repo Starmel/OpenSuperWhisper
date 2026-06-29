@@ -141,6 +141,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var customDictionaryBoostEnabled: Bool {
+        didSet {
+            AppPreferences.shared.customDictionaryBoostEnabled = customDictionaryBoostEnabled
+        }
+    }
+
     @Published var customDictionaryEntries: [CustomDictionaryEntry] {
         didSet {
             AppPreferences.shared.customDictionaryEntries = customDictionaryEntries
@@ -413,6 +419,7 @@ class SettingsViewModel: ObservableObject {
         self.noSpeechThreshold = prefs.noSpeechThreshold
         self.initialPrompt = prefs.initialPrompt
         self.customDictionaryEnabled = prefs.customDictionaryEnabled
+        self.customDictionaryBoostEnabled = prefs.customDictionaryBoostEnabled
         self.customDictionaryEntries = prefs.customDictionaryEntries
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
@@ -802,6 +809,7 @@ struct Settings {
     var beamSize: Int
     var useAsianAutocorrect: Bool
     var customDictionaryEnabled: Bool
+    var customDictionaryBoostEnabled: Bool
     var customDictionaryEntries: [CustomDictionaryEntry]
 
     var isAsianLanguage: Bool {
@@ -814,6 +822,12 @@ struct Settings {
 
     var shouldApplyCustomDictionary: Bool {
         customDictionaryEnabled && !customDictionaryEntries.isEmpty
+    }
+
+    /// Whether to also bias recognition toward the dictionary terms (opt-in, on top of the
+    /// always-on text replacement). Gated by the separate `customDictionaryBoostEnabled` flag.
+    var shouldBoostCustomDictionary: Bool {
+        customDictionaryBoostEnabled && shouldApplyCustomDictionary
     }
 
     init() {
@@ -829,6 +843,7 @@ struct Settings {
         self.beamSize = prefs.beamSize
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.customDictionaryEnabled = prefs.customDictionaryEnabled
+        self.customDictionaryBoostEnabled = prefs.customDictionaryBoostEnabled
         self.customDictionaryEntries = prefs.customDictionaryEntries
     }
 }
@@ -1760,11 +1775,26 @@ struct SettingsView: View {
                     .labelsHidden()
             }
 
-            Text("Replace recognized words with a preferred spelling. Matching is case-insensitive and limited to whole words. With Whisper, the replacements are also used to bias recognition.")
+            Text("Replace recognized words with a preferred spelling. Matching is case-insensitive and limited to whole words.")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             if viewModel.customDictionaryEnabled {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Boost recognition (advanced)")
+                            .font(.subheadline)
+                        Text("Also bias the model toward these terms while listening, not just fix them afterward. Helps rare, distinctive words (e.g. “Kubernetes”) — but can over-correct short, common ones. Leave off if it replaces too much.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $viewModel.customDictionaryBoostEnabled)
+                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                        .labelsHidden()
+                }
+                .padding(.bottom, 4)
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Heard")

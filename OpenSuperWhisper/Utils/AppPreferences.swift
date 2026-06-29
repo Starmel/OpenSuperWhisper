@@ -100,6 +100,15 @@ final class AppPreferences {
     @UserDefault(key: "customDictionaryEnabled", defaultValue: false)
     var customDictionaryEnabled: Bool
 
+    /// Whether the dictionary's terms also bias *recognition* (Whisper prompt boost / Parakeet
+    /// vocabulary boosting), on top of the always-on text replacement. Opt-in and default OFF:
+    /// boosting is fuzzy and helps rare, distinctive jargon ("Kubernetes") but over-corrects
+    /// short, common terms (it rewrites vaguely-similar spans). Replacement alone is exact and
+    /// safe, so the common case (fixing the spelling/casing of correctly-heard words) needs no
+    /// boosting. See `CustomDictionary.boostTerms`.
+    @UserDefault(key: "customDictionaryBoostEnabled", defaultValue: false)
+    var customDictionaryBoostEnabled: Bool
+
     @OptionalUserDefault(key: "customDictionaryData")
     private var customDictionaryData: Data?
 

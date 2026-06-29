@@ -132,7 +132,7 @@ class IndicatorViewModel: ObservableObject {
         // indicator can show the text as the user speaks. Falls back to the file pass on stop.
         if Self.shouldUseLiveStreaming {
             liveStreamingActive = true
-            let terms = AppPreferences.shared.customDictionaryEnabled
+            let terms = (AppPreferences.shared.customDictionaryEnabled && AppPreferences.shared.customDictionaryBoostEnabled)
                 ? CustomDictionary.boostTerms(entries: AppPreferences.shared.customDictionaryEntries)
                 : []
             Task { @MainActor in
