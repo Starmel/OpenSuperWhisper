@@ -169,6 +169,7 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func insertText(_ text: String) {
+        guard !text.isEmpty else { return }
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
 
