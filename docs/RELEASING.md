@@ -1,5 +1,9 @@
 # Releasing OpenSuperWhisper
 
+> **The complete, canonical guide is [`PUBLISHING.md`](./PUBLISHING.md)** (stable + beta channels,
+> toolchain gotchas, verification, troubleshooting, key inventory). This file is a short summary kept
+> for reference.
+
 The app is distributed as a **notarized Developer ID** build, published as a GitHub release DMG
 and installable via Homebrew.
 
