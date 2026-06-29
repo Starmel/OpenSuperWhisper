@@ -11,7 +11,7 @@ fi
 apply_fluidaudio_patches() {
     local checkout="SourcePackages/checkouts/FluidAudio"
     local patch_file="patches/fluidaudio-vocabulary-rescorer.patch"
-    local target="$checkout/Sources/FluidAudio/ASR/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift"
+    local target="$checkout/Sources/FluidAudio/ASR/Parakeet/SlidingWindow/CustomVocabulary/Rescorer/VocabularyRescorer+TokenRescoring.swift"
 
     if [[ ! -f "$patch_file" ]]; then
         echo "Missing FluidAudio patch: $patch_file"
@@ -23,14 +23,14 @@ apply_fluidaudio_patches() {
         exit 1
     fi
 
-    if grep -q "Prefer longer spans" "$target" && grep -q "wordTimings.count >= spanLength" "$target"; then
+    if grep -q "Prefer longer spans" "$target"; then
         echo "FluidAudio vocabulary rescorer patch already applied."
         return
     fi
 
     echo "Applying FluidAudio vocabulary rescorer patch..."
     patch --silent --forward -d "$checkout" -p1 < "$patch_file"
-    if [[ $? -ne 0 ]] && { ! grep -q "Prefer longer spans" "$target" || ! grep -q "wordTimings.count >= spanLength" "$target"; }; then
+    if [[ $? -ne 0 ]] && ! grep -q "Prefer longer spans" "$target"; then
         echo "Failed to apply FluidAudio vocabulary rescorer patch."
         exit 1
     fi
