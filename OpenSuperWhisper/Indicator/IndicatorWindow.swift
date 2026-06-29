@@ -189,12 +189,27 @@ class IndicatorViewModel: ObservableObject {
     }
     
     static func applyPostProcessing(_ text: String) -> String {
-        guard AppPreferences.shared.addSpaceAfterSentence,
-              let lastChar = text.last,
-              lastChar.isPunctuation else {
-            return text
+        var result = text
+
+        if AppPreferences.shared.removeFillerWords {
+            let fillers = ["um", "uh", "er", "erm", "ah", "hm", "hmm"]
+            for filler in fillers {
+                result = result.replacingOccurrences(
+                    of: "\\b\(filler)\\b",
+                    with: "",
+                    options: [.regularExpression, .caseInsensitive]
+                )
+            }
+            result = result.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
         }
-        return text + " "
+
+        if AppPreferences.shared.addSpaceAfterSentence,
+           let lastChar = result.last,
+           lastChar.isPunctuation {
+            result += " "
+        }
+
+        return result
     }
     
     private func startBlinking() {
