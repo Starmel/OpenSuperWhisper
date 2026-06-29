@@ -192,15 +192,15 @@ class IndicatorViewModel: ObservableObject {
         var result = text
 
         if AppPreferences.shared.removeFillerWords {
-            let fillers = ["um", "uh", "er", "erm", "ah", "hm", "hmm"]
+            let fillers = ["um", "uh"]
             for filler in fillers {
                 result = result.replacingOccurrences(
-                    of: "\\b\(filler)\\b",
-                    with: "",
+                    of: "[,\\s]*\\b\(filler)\\b[,\\s]*",
+                    with: " ",
                     options: [.regularExpression, .caseInsensitive]
                 )
             }
-            result = result.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
+            result = result.trimmingCharacters(in: .whitespaces)
         }
 
         if AppPreferences.shared.addSpaceAfterSentence,

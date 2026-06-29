@@ -900,7 +900,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remove Filler Words")
                                 .font(.subheadline)
-                            Text("Strips um, uh, er, erm, ah, hm, hmm from transcription output")
+                            Text("Strips um and uh from transcription output")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
