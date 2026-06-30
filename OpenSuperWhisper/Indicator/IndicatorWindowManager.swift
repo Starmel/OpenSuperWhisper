@@ -42,11 +42,10 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = false
-            // Receive clicks so the indicator can be clicked to stop recording (F5).
-            // The pill is small and only visible during a recording session, so it
-            // doesn't get in the way the rest of the time. It's a non-activating
-            // panel, so a click stops recording without stealing focus.
-            panel.ignoresMouseEvents = false
+            // Fully click-through, matching the my-monkeys baseline: the indicator never
+            // intercepts clicks meant for the app underneath. (Opt-in on-bubble Stop/Cancel
+            // buttons will flip this per-recording when those are added.)
+            panel.ignoresMouseEvents = true
             panel.hidesOnDeactivate = false
             // Never let AppKit animate this window's frame. The content is hosted with
             // `sizingOptions = .preferredContentSize`, so an animated resize re-enters layout and
