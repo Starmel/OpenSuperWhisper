@@ -46,6 +46,54 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Remote (OpenAI-compatible) engine settings
+
+    @Published var remoteServerURL: String {
+        didSet {
+            AppPreferences.shared.remoteServerURL = remoteServerURL
+            reloadRemoteEngineIfSelected()
+        }
+    }
+
+    @Published var remoteServerModel: String {
+        didSet {
+            AppPreferences.shared.remoteServerModel = remoteServerModel
+            reloadRemoteEngineIfSelected()
+        }
+    }
+
+    /// Non-optional in the UI (empty == "no key"); persisted to the Keychain-backed
+    /// optional `AppPreferences.remoteServerAPIKey` (empty clears it).
+    @Published var remoteServerAPIKey: String {
+        didSet {
+            AppPreferences.shared.remoteServerAPIKey = remoteServerAPIKey
+            reloadRemoteEngineIfSelected()
+        }
+    }
+
+    @Published var remoteServerTimeoutEnabled: Bool {
+        didSet {
+            AppPreferences.shared.remoteServerTimeoutEnabled = remoteServerTimeoutEnabled
+            reloadRemoteEngineIfSelected()
+        }
+    }
+
+    @Published var remoteServerTimeoutSeconds: Double {
+        didSet {
+            AppPreferences.shared.remoteServerTimeoutSeconds = remoteServerTimeoutSeconds
+            reloadRemoteEngineIfSelected()
+        }
+    }
+
+    /// Re-initialize the engine on a remote-config change, but only when the remote
+    /// engine is the active one (editing the config while on Whisper shouldn't reload).
+    private func reloadRemoteEngineIfSelected() {
+        guard selectedEngine == "remote" else { return }
+        Task { @MainActor in
+            TranscriptionService.shared.reloadEngine()
+        }
+    }
+
     /// User-initiated model selection. Persists the model and, when the model declares a
     /// preferred language (e.g. the ivrit.ai Hebrew model), switches to it. Use this for
     /// explicit user actions only — not from init/restore — so we never override the language
@@ -82,11 +130,11 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    /// Whether the selected engine + model can translate to English (#124). When false the
-    /// "Translate to English" toggle is disabled — Parakeet/SenseVoice (and Groq's turbo model)
-    /// ignore the flag, so showing an active toggle is misleading.
+    /// Whether the selected engine can translate to English (#124). When false the
+    /// "Translate to English" toggle is disabled — Parakeet/SenseVoice ignore the flag, so
+    /// showing an active toggle is misleading.
     var canTranslate: Bool {
-        EngineCapabilities.supportsTranslation(engine: selectedEngine, groqModel: AppPreferences.shared.groqModel)
+        EngineCapabilities.supportsTranslation(engine: selectedEngine)
     }
 
     /// Languages the selected engine+model can transcribe — filters the language picker (#155).
@@ -411,6 +459,11 @@ class SettingsViewModel: ObservableObject {
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
+        self.remoteServerURL = prefs.remoteServerURL
+        self.remoteServerModel = prefs.remoteServerModel
+        self.remoteServerAPIKey = prefs.remoteServerAPIKey ?? ""
+        self.remoteServerTimeoutEnabled = prefs.remoteServerTimeoutEnabled
+        self.remoteServerTimeoutSeconds = prefs.remoteServerTimeoutSeconds
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -977,7 +1030,7 @@ struct SettingsView: View {
         case "fluidaudio": return "Parakeet"
         case "whisper": return "Whisper"
         case "sensevoice": return "SenseVoice"
-        case "groq": return "Groq"
+        case "remote": return "Remote"
         default: return engine
         }
     }
@@ -988,7 +1041,7 @@ struct SettingsView: View {
         case "fluidaudio": return "Parakeet"
         case "whisper": return "Whisper"
         case "sensevoice": return "SenseVoice"
-        case "groq": return "Groq"
+        case "remote": return "Remote"
         default: return engine
         }
     }
@@ -999,8 +1052,8 @@ struct SettingsView: View {
             return "Most accurate, ~99 languages, and can translate to English. Runs fully on-device."
         case "sensevoice":
             return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
-        case "groq":
-            return "Cloud — extremely fast whisper-large-v3. ⚠️ Audio is sent to Groq's servers (NOT on-device). Needs a free API key."
+        case "remote":
+            return "Cloud / self-hosted — any OpenAI-compatible server (Groq, speaches, LiteLLM, …). ⚠️ Audio is sent to that server (NOT on-device)."
         default:
             return "Fast, multilingual (25 languages), with a live preview as you speak. Runs fully on-device."
         }
@@ -1208,11 +1261,11 @@ struct SettingsView: View {
                             get: { ["fluidaudio", "whisper"].contains(browseEngine) ? browseEngine : "other" },
                             set: { newValue in
                                 if newValue == "other" {
-                                    if !["sensevoice", "groq"].contains(browseEngine) {
+                                    if !["sensevoice", "remote"].contains(browseEngine) {
 #if arch(arm64)
                                         browseEngine = "sensevoice"
 #else
-                                        browseEngine = "groq"
+                                        browseEngine = "remote"
 #endif
                                     }
                                 } else {
@@ -1237,7 +1290,7 @@ struct SettingsView: View {
 #if arch(arm64)
                                 Text("SenseVoice").tag("sensevoice")
 #endif
-                                Text("Groq").tag("groq")
+                                Text("Remote").tag("remote")
                             }
                             .pickerStyle(.menu)
                             .fixedSize()
@@ -1258,8 +1311,8 @@ struct SettingsView: View {
                         SenseVoiceModelSection(viewModel: viewModel)
                     }
 #endif
-                    if browseEngine == "groq" {
-                        GroqSettingsSection(viewModel: viewModel)
+                    if browseEngine == "remote" {
+                        RemoteSettingsSection(viewModel: viewModel)
                     }
 
                     if browseEngine == "whisper" {
@@ -1450,7 +1503,7 @@ struct SettingsView: View {
                                     .disabled(!viewModel.canTranslate)
                             }
                             if !viewModel.canTranslate {
-                                Text("Only Whisper and Groq (large-v3) translate; the current engine ignores this.")
+                                Text("Only Whisper and remote servers translate; the current engine ignores this.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

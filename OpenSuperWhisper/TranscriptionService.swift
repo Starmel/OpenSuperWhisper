@@ -58,8 +58,8 @@ class TranscriptionService: ObservableObject {
                 // SenseVoice (sherpa-onnx/onnxruntime) ships arm64-only; fall back on Intel.
                 engine = await WhisperEngine()
 #endif
-            } else if selectedEngine == "groq" {
-                engine = GroqEngine()
+            } else if selectedEngine == "remote" {
+                engine = RemoteEngine()
             } else {
                 engine = await WhisperEngine()
             }
@@ -140,6 +140,13 @@ class TranscriptionService: ObservableObject {
             }
         } else if let fluidEngine = engine as? FluidAudioEngine {
             fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self = self, !self.isCancelled else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let remoteEngine = engine as? RemoteEngine {
+            remoteEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self = self, !self.isCancelled else { return }
                     self.progress = newProgress

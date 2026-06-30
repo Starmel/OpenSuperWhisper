@@ -229,12 +229,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         transcriptionLanguageItem.submenu = languageSubmenu
         menu.addItem(transcriptionLanguageItem)
 
-        // Translation needs a Whisper-class model; Parakeet/SenseVoice only transcribe in the source
-        // language (#124), and Groq translates only on whisper-large-v3 (not turbo). Off those, gray
-        // the item out and say why instead of silently ignoring it.
+        // Translation needs a Whisper-class model or a remote server; Parakeet/SenseVoice only
+        // transcribe in the source language (#124). Off those, gray the item out and say why
+        // instead of silently ignoring it.
         let engine = AppPreferences.shared.selectedEngine
-        let translateSupported = EngineCapabilities.supportsTranslation(
-            engine: engine, groqModel: AppPreferences.shared.groqModel)
+        let translateSupported = EngineCapabilities.supportsTranslation(engine: engine)
         let translateItem = NSMenuItem(
             title: translateSupported
                 ? NSLocalizedString("Translate to English", comment: "")

@@ -31,27 +31,83 @@ final class AppPreferences {
     static let shared = AppPreferences()
     private init() {
         migrateOldPreferences()
+        migrateGroqToRemote()
     }
-    
+
     private func migrateOldPreferences() {
         if let oldPath = UserDefaults.standard.string(forKey: "selectedModelPath"),
            UserDefaults.standard.string(forKey: "selectedWhisperModelPath") == nil {
             UserDefaults.standard.set(oldPath, forKey: "selectedWhisperModelPath")
         }
     }
+
+    /// The standalone Groq engine was folded into the generic remote (OpenAI-compatible)
+    /// engine: Groq is now just a preset that points the remote engine at Groq's API. Migrate
+    /// existing Groq users once so their engine keeps working with no re-entry — seed the remote
+    /// config from their stored Groq URL/model/key and flip `selectedEngine` from "groq" to
+    /// "remote". Idempotent: only runs while `selectedEngine` is still "groq".
+    private func migrateGroqToRemote() {
+        guard selectedEngine == "groq" else { return }
+        if remoteServerURL.isEmpty {
+            remoteServerURL = "https://api.groq.com/openai/v1"
+        }
+        if remoteServerModel.isEmpty {
+            remoteServerModel = groqModel
+        }
+        if (remoteServerAPIKey ?? "").isEmpty, let key = groqAPIKey, !key.isEmpty {
+            remoteServerAPIKey = key
+        }
+        selectedEngine = "remote"
+    }
     
     // Engine settings
     @UserDefault(key: "selectedEngine", defaultValue: "whisper")
     var selectedEngine: String
 
+    /// Legacy Groq model selection. Groq is now a preset of the remote engine; this key is read
+    /// only by `migrateGroqToRemote()` to seed the remote model for existing users.
     @UserDefault(key: "groqModel", defaultValue: "whisper-large-v3-turbo")
     var groqModel: String
 
-    /// Groq API key — kept in the Keychain (a secret), not in UserDefaults.
+    /// Legacy Groq API key (Keychain). Read only by `migrateGroqToRemote()` to seed
+    /// `remoteServerAPIKey` for existing Groq users.
     var groqAPIKey: String? {
         get { Keychain.read("groqAPIKey") }
         set { Keychain.set(newValue, for: "groqAPIKey") }
     }
+
+    // MARK: - Remote (OpenAI-compatible) server engine
+    // Used when selectedEngine == "remote". The remote engine talks to any
+    // OpenAI-compatible /v1/audio endpoint (Groq, speaches, LiteLLM, a local
+    // Ollama-style server, …). The API key is optional — leave it empty for
+    // no-auth servers.
+
+    @UserDefault(key: "remoteServerURL", defaultValue: "")
+    var remoteServerURL: String
+
+    @UserDefault(key: "remoteServerModel", defaultValue: "")
+    var remoteServerModel: String
+
+    /// Remote server API key — Keychain-backed (a secret), not UserDefaults.
+    /// Optional: nil/empty means send no Authorization header (no-auth servers).
+    var remoteServerAPIKey: String? {
+        get { Keychain.read("remoteServerAPIKey") }
+        set { Keychain.set(newValue, for: "remoteServerAPIKey") }
+    }
+
+    // Request timeout for the remote engine. Enabled by default at URLSession's
+    // 60s default; disable (or raise) for slow server-side pipelines that run
+    // well past a minute.
+    @UserDefault(key: "remoteServerTimeoutEnabled", defaultValue: true)
+    var remoteServerTimeoutEnabled: Bool
+
+    @UserDefault(key: "remoteServerTimeoutSeconds", defaultValue: 60.0)
+    var remoteServerTimeoutSeconds: Double
+
+    // Last model ids fetched from the remote server's /v1/models, so the menu-bar
+    // model picker can list them without a live network call when it opens.
+    @UserDefault(key: "cachedRemoteModels", defaultValue: [String]())
+    var cachedRemoteModels: [String]
 
     // Model settings
     var selectedModelPath: String? {

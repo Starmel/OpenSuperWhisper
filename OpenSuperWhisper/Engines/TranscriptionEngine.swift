@@ -14,13 +14,14 @@ protocol TranscriptionEngine: AnyObject {
 /// Static engine capabilities keyed by the stored engine id (`AppPreferences.selectedEngine`),
 /// so the UI can gate features without instantiating an engine.
 enum EngineCapabilities {
-    /// Translation to English only works on Whisper (any model) and on Groq with the
-    /// `whisper-large-v3` model. Parakeet/SenseVoice — and Groq's turbo model — silently ignore
-    /// the `translateToEnglish` flag, so the toggle is disabled for them (#124).
-    static func supportsTranslation(engine: String, groqModel: String) -> Bool {
+    /// Translation to English works on Whisper (any model) and on the remote engine, which
+    /// forwards translation to the server's OpenAI-standard `/audio/translations` endpoint (the
+    /// server decides whether its model supports it). Parakeet/SenseVoice silently ignore the
+    /// `translateToEnglish` flag, so the toggle is disabled for them (#124).
+    static func supportsTranslation(engine: String) -> Bool {
         switch engine {
         case "whisper": return true
-        case "groq": return groqModel == GroqEngine.translatingModel
+        case "remote": return true
         default: return false
         }
     }
@@ -31,8 +32,10 @@ enum EngineCapabilities {
     /// Whisper set; "auto" (where present) means let the model detect the language.
     static func supportedLanguages(engine: String, fluidAudioModelVersion: String) -> [String] {
         switch engine {
-        case "groq":
-            return ["auto", "en", "fr", "es", "de", "it", "pt", "nl", "ru", "zh", "ja", "ko", "ar", "hi", "tr", "pl", "uk"]
+        case "remote":
+            // The remote server decides language support; advertise the full Whisper set
+            // (incl. "auto") so the user's choice is forwarded verbatim.
+            return LanguageUtil.availableLanguages
         case "sensevoice":
             return ["auto", "zh", "en", "ja", "ko", "yue"]
         case "fluidaudio":
