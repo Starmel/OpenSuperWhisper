@@ -492,9 +492,9 @@ struct ContentView: View {
                                         onDelete: {
                                             viewModel.deleteRecording(recording)
                                         },
-                                        onRegenerate: {
+                                        onRegenerate: { model in
                                             Task {
-                                                await TranscriptionQueue.shared.requeueRecording(recording)
+                                                await TranscriptionQueue.shared.requeueRecording(recording, model: model)
                                             }
                                         }
                                     )
@@ -808,8 +808,26 @@ struct RecordingRow: View {
     let recording: Recording
     let searchQuery: String
     let onDelete: () -> Void
-    let onRegenerate: () -> Void
+    /// nil → rerun with the current model; otherwise rerun once with that model. (F3)
+    let onRegenerate: (DictationModelOption?) -> Void
     @StateObject private var audioRecorder = AudioRecorder.shared
+
+    /// Models offered in the rerun dropdown — everything usable right now across engines.
+    private var rerunModels: [DictationModelOption] {
+        ModelCatalog.whisperModels() + ModelCatalog.parakeetModels()
+            + ModelCatalog.senseVoiceModels() + ModelCatalog.remoteModels()
+    }
+
+    /// Second metadata line: where the dictation happened + the model used.
+    private var metaLine: String? {
+        let site = SourceCapture.host(of: recording.sourceURL) ?? recording.sourceWindowTitle
+        let context = [recording.sourceAppName, site].compactMap { $0 }.joined(separator: " · ")
+        var line = context
+        if let model = recording.modelUsed, !model.isEmpty {
+            line = line.isEmpty ? model : "\(context) — \(model)"
+        }
+        return line.isEmpty ? nil : line
+    }
     @State private var showTranscription = false
     @State private var isHovered = false
     @Environment(\.colorScheme) private var colorScheme
@@ -961,6 +979,16 @@ struct RecordingRow: View {
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                    // Second line: source app / site + the model used (F3). Omitted when
+                    // there's no metadata (older recordings, file imports).
+                    if let metaLine {
+                        Text(metaLine)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
                 
                 if isRegenerating {
@@ -1034,15 +1062,27 @@ struct RecordingRow: View {
                     }
 
                     if (recording.status == .completed || recording.status == .failed) && isHovered {
-                        Button(action: {
-                            onRegenerate()
-                        }) {
+                        // Primary click regenerates with the current model; the dropdown
+                        // reruns once with a specific model without changing the default. (F3)
+                        Menu {
+                            Button("Current model") { onRegenerate(nil) }
+                            if !rerunModels.isEmpty {
+                                Divider()
+                                ForEach(rerunModels.indices, id: \.self) { i in
+                                    Button(rerunModels[i].displayName) { onRegenerate(rerunModels[i]) }
+                                }
+                            }
+                        } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 18))
                                 .foregroundColor(.secondary)
+                        } primaryAction: {
+                            onRegenerate(nil)
                         }
-                        .buttonStyle(.plain)
-                        .help("Regenerate transcription")
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Regenerate transcription (▾ to pick a model)")
                         .transition(.opacity)
                     }
 
