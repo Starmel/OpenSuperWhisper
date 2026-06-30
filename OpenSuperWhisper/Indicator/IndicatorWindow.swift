@@ -282,6 +282,34 @@ class IndicatorViewModel: ObservableObject {
                     return
                 } catch {
                     print("Error transcribing audio: \(error)")
+                    // Don't lose the audio on failure (e.g. an intermittent remote 405 /
+                    // network blip after a long dictation). When history is on, keep the
+                    // recording with a .failed status + retry message so it shows in the log
+                    // and can be re-run with the regenerate (↻) button. Otherwise discard.
+                    if AppPreferences.shared.saveTranscriptionHistory,
+                       let saved = self.persistFailedRecording(tempURL: tempURL) {
+                        let realDuration = await Self.audioDuration(of: saved.url)
+                        let ctx = RecordingContext.shared
+                        let modelUsed = ModelCatalog.activeOption()?.displayName
+                        await MainActor.run {
+                            self.recordingStore.addRecording(Recording(
+                                id: saved.id,
+                                timestamp: saved.timestamp,
+                                fileName: saved.fileName,
+                                transcription: "Transcription failed — click ↻ to try again.",
+                                duration: realDuration,
+                                status: .failed,
+                                progress: 0,
+                                sourceFileURL: nil,
+                                sourceAppName: ctx.appName,
+                                sourceWindowTitle: ctx.windowTitle,
+                                sourceURL: ctx.fullURL,
+                                modelUsed: modelUsed
+                            ))
+                        }
+                    } else {
+                        try? FileManager.default.removeItem(at: tempURL)
+                    }
                     await MainActor.run {
                         self.showError("Transcription failed: \(error.localizedDescription)")
                     }
@@ -289,9 +317,9 @@ class IndicatorViewModel: ObservableObject {
                 }
             }
         } else {
-            
+
             print("!!! Not found record url !!!")
-            
+
             Task {
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
@@ -299,7 +327,33 @@ class IndicatorViewModel: ObservableObject {
             }
         }
     }
-    
+
+    /// Move a temp recording to its permanent location after a FAILED transcription
+    /// so the audio survives and can be re-run from the history list. Returns the
+    /// saved identity, or nil if the file move failed (then the temp is discarded).
+    private func persistFailedRecording(tempURL: URL) -> (id: UUID, timestamp: Date, fileName: String, url: URL)? {
+        let timestamp = Date()
+        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+        let id = UUID()
+        let finalURL = Recording(
+            id: id,
+            timestamp: timestamp,
+            fileName: fileName,
+            transcription: "",
+            duration: 0,
+            status: .failed,
+            progress: 0,
+            sourceFileURL: nil
+        ).url
+        do {
+            try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+            return (id, timestamp, fileName, finalURL)
+        } catch {
+            print("Failed to persist failed recording: \(error)")
+            return nil
+        }
+    }
+
     /// Returns `true` when auto-paste ran but no editable field was focused,
     /// so the caller can surface a "copied — press ⌘V" notice. When no target
     /// is found, typing is skipped and the text is left on the clipboard.
