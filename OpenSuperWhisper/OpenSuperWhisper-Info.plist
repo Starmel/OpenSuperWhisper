@@ -24,7 +24,7 @@
 	<key>NSAccessibilityUsageDescription</key>
 	<string>OpenSuperWhisper needs accessibility access to provide system-wide functionality.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>OpenSuperWhisper needs accessibility access to provide system-wide functionality.</string>
+	<string>OpenSuperWhisper reads the active browser tab's URL to record where a dictation happened and to apply per-site model rules.</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/my-monkeys/OpenSuperWhisper/master/appcast.xml</string>
 	<key>SUPublicEDKey</key>
