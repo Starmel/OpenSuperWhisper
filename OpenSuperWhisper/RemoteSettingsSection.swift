@@ -61,7 +61,7 @@ struct RemoteSettingsSection: View {
                 .foregroundColor(.primary)
 
             // The one engine family that leaves the device — say so once, here.
-            Label("Audio is uploaded to the remote server — these engines are not on-device.",
+            Label("Audio is uploaded to the remote server — not necessarily on-device.",
                   systemImage: "cloud")
                 .font(.caption)
                 .foregroundColor(.orange)

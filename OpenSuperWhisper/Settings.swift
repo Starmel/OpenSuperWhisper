@@ -1061,7 +1061,7 @@ struct SettingsView: View {
         case "sensevoice":
             return "Fast — Chinese, Cantonese, English, Japanese, Korean. Runs fully on-device."
         case "remote":
-            return "Cloud / self-hosted — any OpenAI-compatible server (Groq, speaches, LiteLLM, …). ⚠️ Audio is sent to that server (NOT on-device)."
+            return "Cloud / self-hosted — any OpenAI-compatible server (Groq, speaches, LiteLLM, …)."
         default:
             return "Fast, multilingual (25 languages), with a live preview as you speak. Runs fully on-device."
         }
