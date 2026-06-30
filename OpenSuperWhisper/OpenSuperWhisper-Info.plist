@@ -35,15 +35,13 @@
 	<dict>
 		<!-- The Remote engine points at ANY user-specified OpenAI-compatible server,
 		     commonly a self-hosted endpoint reached over plain HTTP at an arbitrary
-		     hostname (e.g. http://litellm.docker.lan, http://ollama.box:11434).
-		     NSAllowsLocalNetworking is not enough: ATS exempts only .local hosts,
-		     loopback, and literal private IPs — a custom .lan/.box hostname (which has
-		     dots and isn't .local) is still blocked. Since the host is whatever the
-		     user types, we can't enumerate NSExceptionDomains either, so arbitrary
-		     loads are required for the feature. Cloud presets (Groq) are HTTPS regardless. -->
+		     hostname (e.g. http://litellm.docker.lan, http://ollama.box:11434). Since
+		     the host is whatever the user types, ATS must be disabled wholesale.
+		     IMPORTANT: NSAllowsArbitraryLoads must stand ALONE here. On macOS 10.12+
+		     the presence of NSAllowsLocalNetworking (or the other granular keys) makes
+		     the system IGNORE NSAllowsArbitraryLoads, which re-blocks cleartext HTTP to
+		     non-.local hostnames like *.docker.lan. Cloud presets (Groq) are HTTPS. -->
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
