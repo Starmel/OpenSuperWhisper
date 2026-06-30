@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Built-in presets for the generic remote (OpenAI-compatible) engine. Groq is a
 /// preset that points the remote engine at Groq's API with a curated model list;
@@ -66,13 +67,27 @@ struct RemoteSettingsSection: View {
                 .foregroundColor(.orange)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Picker("Provider", selection: $preset) {
-                ForEach(RemotePreset.allCases) { p in
-                    Text(p.label).tag(p)
+            // Compact preset dropdown. Default is Custom; Groq prefills the Groq URL
+            // and model list (leaving the key for the user). "Request a preset…" opens
+            // the issue tracker so people can ask for a new built-in provider.
+            HStack(spacing: 8) {
+                Text("Preset").foregroundColor(.secondary)
+                Menu {
+                    Button("Custom") { preset = .custom }
+                    Button("Groq") { preset = .groq }
+                    Divider()
+                    Button("Request a preset…") {
+                        if let url = URL(string: "https://github.com/my-monkeys/OpenSuperWhisper/issues") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                } label: {
+                    Text(preset.label)
                 }
+                .fixedSize()
+                .onChange(of: preset) { _, newValue in applyPreset(newValue) }
+                Spacer()
             }
-            .pickerStyle(.segmented)
-            .onChange(of: preset) { _, newValue in applyPreset(newValue) }
 
             if preset == .groq {
                 GroqPresetView(viewModel: viewModel)
