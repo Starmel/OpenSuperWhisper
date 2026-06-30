@@ -103,6 +103,10 @@ final class RecordingContext {
 /// AppPreferences. Rules are created only when the user confirms the menu-bar
 /// prompt, so this holds deliberate choices — never every app touched.
 enum AppContextModelRules {
+    /// Posted after any rule is added, changed, or removed (from this tab or the
+    /// menu-bar "Model" submenu), so open UI can refresh live.
+    static let didChangeNotification = Notification.Name("AppContextModelRulesDidChange")
+
     static func all() -> [String: DictationModelOption] {
         let data = AppPreferences.shared.appModelRulesData
         guard !data.isEmpty,
@@ -149,6 +153,7 @@ enum AppContextModelRules {
     private static func save(_ rules: [String: DictationModelOption]) {
         if let data = try? JSONEncoder().encode(rules) {
             AppPreferences.shared.appModelRulesData = data
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }
 }

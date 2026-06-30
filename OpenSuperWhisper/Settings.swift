@@ -965,10 +965,11 @@ struct SettingRow<Trailing: View>: View {
 
 /// The settings tabs, shown as a vertical sidebar in the dedicated settings window.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, model, transcription, history, advanced, updates, feedback
+    case general, model, transcription, history, appContext, advanced, updates, feedback
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .appContext: return "App Context"
         case .general: return "General"
         case .model: return "Engine & Model"
         case .transcription: return "Transcription"
@@ -980,6 +981,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
     var icon: String {
         switch self {
+        case .appContext: return "macwindow"
         case .general: return "slider.horizontal.3"
         case .model: return "cpu"
         case .transcription: return "text.bubble"
@@ -1070,6 +1072,7 @@ struct SettingsView: View {
     /// Content for the currently-selected sidebar tab.
     @ViewBuilder private var detailContent: some View {
         switch selectedTab {
+        case .appContext:    AppContextSettingsView(viewModel: viewModel)
         case .general:       shortcutSettings
         case .model:         modelSettings
         case .transcription: transcriptionSettings
@@ -2051,39 +2054,6 @@ struct SettingsView: View {
     private var advancedSettings: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Context-Aware Model Selection (F2)
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 5) {
-                        Text("Context-Aware Model")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        InfoButton(text: "Bind a transcription model to an app (or a website, in supported browsers) so it switches automatically when you dictate there. Set a binding from the menu-bar “Model” submenu while that app is focused.\n\n• Ask on change — auto-switch by app, and ask the scope (System Default / this app / just once / forget) whenever you pick a model in the menu.\n• Auto · no prompt — auto-switch by app, but picking a model just sets the system default (no prompt). Set rules up in “Ask”, then switch here.\n• Off — no auto-switch and no prompts.")
-                    }
-
-                    HStack {
-                        Text("Mode")
-                            .font(.subheadline)
-                        Spacer()
-                        Picker("", selection: $viewModel.contextAwareModelMode) {
-                            ForEach(ContextAwareModelMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
-                    }
-
-                    Text("Bind a model from the menu-bar “Model” submenu while the target app is focused.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
-
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Decoding Strategy")

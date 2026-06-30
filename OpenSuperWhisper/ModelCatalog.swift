@@ -3,7 +3,7 @@ import Foundation
 
 /// One selectable dictation model across all engines. Used by the menu-bar model
 /// picker and the per-app context rules.
-struct DictationModelOption: Codable, Equatable {
+struct DictationModelOption: Codable, Equatable, Hashable {
     /// "whisper" | "fluidaudio" | "sensevoice" | "remote" — matches AppPreferences.selectedEngine.
     let engine: String
     /// whisper: model file path; fluidaudio: version ("v2"/"v3"); sensevoice: "default";
