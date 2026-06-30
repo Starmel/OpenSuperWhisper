@@ -36,5 +36,7 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenSuperWhisper connects to remote transcription servers on your local network (e.g. a self-hosted Whisper/LiteLLM endpoint).</string>
 </dict>
 </plist>

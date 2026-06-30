@@ -15,6 +15,7 @@ struct RemoteServerSettingsView: View {
     @State private var serverExpanded: Bool = AppPreferences.shared.remoteServerURL.isEmpty
     @State private var timeoutExpanded: Bool = false
     @State private var showKeyEditor = false
+    @State private var autoTestTask: Task<Void, Never>?
 
     private var hasKey: Bool { !viewModel.remoteServerAPIKey.isEmpty }
 
@@ -67,13 +68,7 @@ struct RemoteServerSettingsView: View {
                 .padding(.top, 6)
             }
 
-            modelSection
-
-            DisclosureGroup("Request timeout", isExpanded: $timeoutExpanded) {
-                timeoutBody
-                    .padding(.top, 6)
-            }
-
+            // Test also refreshes the model list, so it sits right above it.
             HStack(spacing: 12) {
                 Button("Test Connection") { runTest() }
                     .buttonStyle(.bordered)
@@ -81,10 +76,34 @@ struct RemoteServerSettingsView: View {
 
                 statusLabel
             }
+
+            modelSection
+
+            DisclosureGroup("Request timeout", isExpanded: $timeoutExpanded) {
+                timeoutBody
+                    .padding(.top, 6)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
-        .onAppear { fetchModels() }
+        // Auto-test on open (and after edits settle) — surfaces reachability and
+        // refreshes the model list without a manual click.
+        .onAppear { if !viewModel.remoteServerURL.isEmpty { runTest() } else { fetchModels() } }
+        .onChange(of: viewModel.remoteServerURL) { _, _ in scheduleAutoTest() }
+        .onChange(of: viewModel.remoteServerAPIKey) { _, _ in scheduleAutoTest() }
+    }
+
+    // Debounced auto-test: re-run a moment after the URL/key stops changing, so we
+    // don't hammer the server on every keystroke.
+    private func scheduleAutoTest() {
+        autoTestTask?.cancel()
+        autoTestTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if Task.isCancelled { return }
+            await MainActor.run {
+                if !viewModel.remoteServerURL.isEmpty { runTest() }
+            }
+        }
     }
 
     // Inner content of the "Request timeout" disclosure. URLSession's 60s default
