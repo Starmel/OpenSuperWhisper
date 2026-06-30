@@ -1249,7 +1249,7 @@ struct SettingsView: View {
     }
     
     private var modelSettings: some View {
-        Form {
+        ScrollView {
             Section {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Speech Recognition Engine")
@@ -1262,51 +1262,23 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.green)
 
-                    // Centered Parakeet / Whisper / Autre. "Autre" reveals an engine dropdown below.
+                    // All engines are peers: three on-device (Parakeet / Whisper /
+                    // SenseVoice) plus Remote. Picking one shows its settings below.
                     HStack {
                         Spacer()
-                        Picker("", selection: Binding(
-                            get: { ["fluidaudio", "whisper"].contains(browseEngine) ? browseEngine : "other" },
-                            set: { newValue in
-                                if newValue == "other" {
-                                    if !["sensevoice", "remote"].contains(browseEngine) {
-#if arch(arm64)
-                                        browseEngine = "sensevoice"
-#else
-                                        browseEngine = "remote"
-#endif
-                                    }
-                                } else {
-                                    browseEngine = newValue
-                                }
-                            }
-                        )) {
+                        Picker("", selection: $browseEngine) {
                             Text("Parakeet").tag("fluidaudio")
                             Text("Whisper").tag("whisper")
-                            Text("Autre").tag("other")
+#if arch(arm64)
+                            Text("SenseVoice").tag("sensevoice")
+#endif
+                            Text("Remote").tag("remote")
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
                         Spacer()
                     }
                     .padding(.top, 4)
-
-                    if !["fluidaudio", "whisper"].contains(browseEngine) {
-                        HStack {
-                            Text("Engine:").foregroundColor(.secondary)
-                            Picker("", selection: $browseEngine) {
-#if arch(arm64)
-                                Text("SenseVoice").tag("sensevoice")
-#endif
-                                Text("Remote").tag("remote")
-                            }
-                            .pickerStyle(.menu)
-                            .fixedSize()
-                            Spacer()
-                        }
-                        .padding(.top, 4)
-                    }
-
 
                     Text(engineBlurb(for: browseEngine))
                         .font(.caption)
@@ -1918,7 +1890,7 @@ struct SettingsView: View {
     }
 
     private var storageSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Maximum number of recordings
                 VStack(alignment: .leading, spacing: 16) {
@@ -2077,7 +2049,7 @@ struct SettingsView: View {
     }
 
     private var advancedSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Context-Aware Model Selection (F2)
                 VStack(alignment: .leading, spacing: 16) {
