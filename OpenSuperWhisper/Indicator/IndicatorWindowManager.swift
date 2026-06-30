@@ -60,6 +60,12 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         hostingController.sizingOptions = [.preferredContentSize]
         window?.contentViewController = hostingController
 
+        // Accept clicks only when an on-bubble button is enabled (so it's tappable);
+        // otherwise stay fully click-through (baseline). Re-evaluated each show() so
+        // toggling the setting takes effect on the next recording.
+        window?.ignoresMouseEvents = !(AppPreferences.shared.showStopButtonOnIndicator
+            || AppPreferences.shared.showCancelButtonOnIndicator)
+
         // Position window - use the screen containing the point, or main screen as fallback
         let targetScreen = point.flatMap { FocusUtils.screenContaining(point: $0) } ?? NSScreen.main
         if let window = window, let screen = targetScreen {

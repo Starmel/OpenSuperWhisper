@@ -200,6 +200,13 @@ final class AppPreferences {
     
     @UserDefault(key: "useBeamSearch", defaultValue: false)
     var useBeamSearch: Bool
+
+    // Opt-in on-bubble recording controls (default off; additive to the baseline).
+    @UserDefault(key: "showStopButtonOnIndicator", defaultValue: false)
+    var showStopButtonOnIndicator: Bool
+
+    @UserDefault(key: "showCancelButtonOnIndicator", defaultValue: false)
+    var showCancelButtonOnIndicator: Bool
     
     @UserDefault(key: "beamSize", defaultValue: 5)
     var beamSize: Int

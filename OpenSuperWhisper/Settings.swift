@@ -244,6 +244,14 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var showStopButtonOnIndicator: Bool {
+        didSet { AppPreferences.shared.showStopButtonOnIndicator = showStopButtonOnIndicator }
+    }
+
+    @Published var showCancelButtonOnIndicator: Bool {
+        didSet { AppPreferences.shared.showCancelButtonOnIndicator = showCancelButtonOnIndicator }
+    }
+
     @Published var liveTranscriptionEnabled: Bool {
         didSet {
             AppPreferences.shared.liveTranscriptionEnabled = liveTranscriptionEnabled
@@ -488,6 +496,8 @@ class SettingsViewModel: ObservableObject {
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.startHidden = prefs.startHidden
         self.indicatorPosition = prefs.indicatorPosition
+        self.showStopButtonOnIndicator = prefs.showStopButtonOnIndicator
+        self.showCancelButtonOnIndicator = prefs.showCancelButtonOnIndicator
         self.liveTranscriptionEnabled = prefs.liveTranscriptionEnabled
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
@@ -2349,6 +2359,34 @@ struct SettingsView: View {
                                 }
                             }
                             .onAppear { cancelKey = SettingsView.currentCancelKeyID() }
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show Stop Button on Recording Bar")
+                                    .font(.subheadline)
+                                Text("A stop-and-transcribe button on the recording indicator")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.showStopButtonOnIndicator)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show Cancel Button on Recording Bar")
+                                    .font(.subheadline)
+                                Text("A discard (trash) button on the recording indicator")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.showCancelButtonOnIndicator)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
 
                         HStack {

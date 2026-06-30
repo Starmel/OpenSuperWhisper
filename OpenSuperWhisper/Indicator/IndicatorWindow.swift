@@ -448,6 +448,42 @@ struct IndicatorWindow: View {
     
     private var isNotchMode: Bool { AppPreferences.shared.indicatorPosition == "notch" }
 
+    /// Opt-in on-bubble controls (default off). Shown on the trailing side while
+    /// recording. Stop = stop & transcribe (same as the hotkey toggle); Cancel =
+    /// discard (same as the Esc cancel shortcut). Fixed-size, so they don't couple
+    /// the bubble's size to the window (see the recursion-crash note above).
+    private var anyIndicatorButton: Bool {
+        AppPreferences.shared.showStopButtonOnIndicator
+            || AppPreferences.shared.showCancelButtonOnIndicator
+    }
+
+    @ViewBuilder private var indicatorControls: some View {
+        if AppPreferences.shared.showStopButtonOnIndicator {
+            Button { IndicatorWindowManager.shared.stopRecording() } label: {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.accentColor))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Stop & transcribe")
+        }
+        if AppPreferences.shared.showCancelButtonOnIndicator {
+            Button { IndicatorWindowManager.shared.stopForce() } label: {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.red))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Cancel & discard")
+        }
+    }
+
     var body: some View {
 
         // Notch mode uses the real notch silhouette (concave top wings + rounded bottom).
@@ -475,6 +511,10 @@ struct IndicatorWindow: View {
                         Text("Recording…")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
+                        if anyIndicatorButton {
+                            Spacer(minLength: 8)
+                            indicatorControls
+                        }
                     }
                 } else {
                     // Once text starts, drop the label: just the dot + the text, which grows
@@ -489,6 +529,10 @@ struct IndicatorWindow: View {
                             .font(.system(size: 14))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(width: 300, alignment: .leading)
+                        if anyIndicatorButton {
+                            Spacer(minLength: 8)
+                            indicatorControls
+                        }
                     }
                 }
 
