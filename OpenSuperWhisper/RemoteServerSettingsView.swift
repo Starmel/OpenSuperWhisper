@@ -15,6 +15,8 @@ struct RemoteServerSettingsView: View {
     @State private var serverExpanded: Bool = AppPreferences.shared.remoteServerURL.isEmpty
     @State private var timeoutExpanded: Bool = false
 
+    private var hasKey: Bool { !viewModel.remoteServerAPIKey.isEmpty }
+
     enum TestStatus: Equatable {
         case idle
         case testing
@@ -46,8 +48,18 @@ struct RemoteServerSettingsView: View {
                     field(title: "Server URL", placeholder: "http://localhost:11434", text: $viewModel.remoteServerURL)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("API Key (optional)")
-                            .font(.subheadline)
+                        HStack {
+                            Text("API Key (optional)")
+                                .font(.subheadline)
+                            Spacer()
+                            // 🔒 when no key (open / no-auth servers only) / ✓ once a key
+                            // is set — mirrors the Groq key affordance.
+                            Image(systemName: hasKey ? "checkmark.circle.fill" : "lock.fill")
+                                .foregroundColor(hasKey ? .green : .secondary)
+                                .imageScale(.large)
+                                .help(hasKey ? "API key set — stored in your Keychain"
+                                             : "No key — open / no-auth servers only")
+                        }
                         // prompt: (not the label arg) so the hint renders inside the field.
                         SecureField("", text: $viewModel.remoteServerAPIKey,
                                     prompt: Text("leave blank for no-auth servers"))
