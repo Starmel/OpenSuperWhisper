@@ -17,18 +17,17 @@ struct AppContextSettingsView: View {
     private var hasChoice: Bool { availableModels.count > 1 }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if hasChoice {
-                    modeCard
-                    rulesCard
-                } else {
-                    singleModelNotice
-                }
+        VStack(alignment: .leading, spacing: 20) {
+            if hasChoice {
+                modeCard
+                rulesCard
+            } else {
+                singleModelNotice
+                Spacer(minLength: 0)
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear(perform: reload)
         .onReceive(NotificationCenter.default.publisher(for: AppContextModelRules.didChangeNotification)) { _ in
             reload()
@@ -110,8 +109,7 @@ struct AppContextSettingsView: View {
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.horizontal, 12)
                 } else {
                     ScrollView {
@@ -122,7 +120,7 @@ struct AppContextSettingsView: View {
                             }
                         }
                     }
-                    .frame(height: min(max(CGFloat(rules.count) * 48, 96), 320))
+                    .frame(maxHeight: .infinity)
                 }
 
                 Divider()
@@ -146,6 +144,7 @@ struct AppContextSettingsView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
             }
+            .frame(maxHeight: .infinity)
             .background(Color(.controlBackgroundColor).opacity(0.5))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -154,7 +153,7 @@ struct AppContextSettingsView: View {
             .cornerRadius(8)
         }
         .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.controlBackgroundColor).opacity(0.3))
         .cornerRadius(12)
     }
