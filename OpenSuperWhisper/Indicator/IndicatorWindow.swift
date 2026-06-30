@@ -551,6 +551,16 @@ struct IndicatorWindow: View {
         // surrounding frame). Notch content is centred; the others stay leading.
         .frame(minHeight: isNotchMode ? notch.height : 36)
         .frame(width: bubbleWidth, alignment: isNotchMode ? .center : .leading)
+        // Hard guard against the macOS 26 recursion crash: force the bubble's *size* to settle in
+        // a single, non-animated layout pass even when an ancestor animation is in flight (the
+        // entrance spring below, or any future implicit animation). 362612a removed the explicit
+        // size animations, but the implicit `.animation(value: isVisible)` at the root still
+        // governs this subtree, so a size change coinciding with that transaction drives an
+        // animated window resize (NSHostingView.updateAnimatedWindowSize) that re-enters layout
+        // synchronously and recurses until the main-thread stack overflows. Disabling animations
+        // for this (size-determining) layer breaks that coupling; the render transforms applied
+        // afterwards still animate, so the entrance is unaffected.
+        .transaction { $0.disablesAnimations = true }
         .background {
             if isNotchMode {
                 rect

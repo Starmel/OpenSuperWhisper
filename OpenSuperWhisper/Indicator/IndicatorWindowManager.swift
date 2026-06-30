@@ -48,7 +48,11 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             // panel, so a click stops recording without stealing focus.
             panel.ignoresMouseEvents = false
             panel.hidesOnDeactivate = false
-            
+            // Never let AppKit animate this window's frame. The content is hosted with
+            // `sizingOptions = .preferredContentSize`, so an animated resize re-enters layout and
+            // can recurse to a stack overflow on macOS 26+. Size changes should snap, not animate.
+            panel.animationBehavior = .none
+
             self.window = panel
         }
         
