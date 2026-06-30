@@ -443,7 +443,15 @@ struct IndicatorWindow: View {
             return hasCaption ? max(notch.width, 440) : notch.width
         }
         let live = viewModel.state == .recording && IndicatorViewModel.shouldUseLiveStreaming
-        return live ? 380 : 200
+        if live { return 380 }
+        // Widen the recording pill to fit any enabled on-bubble buttons so the
+        // "Recording…" label never wraps; compact (200) otherwise.
+        var width: CGFloat = 200
+        if viewModel.state == .recording {
+            if AppPreferences.shared.showStopButtonOnIndicator { width += 20 }
+            if AppPreferences.shared.showCancelButtonOnIndicator { width += 20 }
+        }
+        return width
     }
     
     private var isNotchMode: Bool { AppPreferences.shared.indicatorPosition == "notch" }
@@ -458,29 +466,31 @@ struct IndicatorWindow: View {
     }
 
     @ViewBuilder private var indicatorControls: some View {
-        if AppPreferences.shared.showStopButtonOnIndicator {
-            Button { IndicatorWindowManager.shared.stopRecording() } label: {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.accentColor))
-                    .contentShape(Circle())
+        HStack(spacing: 8) {
+            if AppPreferences.shared.showStopButtonOnIndicator {
+                Button { IndicatorWindowManager.shared.stopRecording() } label: {
+                    // A red ring with a red stop square inside (transparent interior).
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundColor(.red)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Stop & transcribe")
             }
-            .buttonStyle(.plain)
-            .help("Stop & transcribe")
-        }
-        if AppPreferences.shared.showCancelButtonOnIndicator {
-            Button { IndicatorWindowManager.shared.stopForce() } label: {
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.red))
-                    .contentShape(Circle())
+            if AppPreferences.shared.showCancelButtonOnIndicator {
+                Button { IndicatorWindowManager.shared.stopForce() } label: {
+                    // A plain red trash can — discard without transcribing.
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.red)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Cancel & discard")
             }
-            .buttonStyle(.plain)
-            .help("Cancel & discard")
         }
     }
 
