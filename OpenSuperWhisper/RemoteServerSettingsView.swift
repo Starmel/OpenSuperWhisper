@@ -14,6 +14,7 @@ struct RemoteServerSettingsView: View {
     // focus once configured. Server opens by default only when nothing is set yet.
     @State private var serverExpanded: Bool = AppPreferences.shared.remoteServerURL.isEmpty
     @State private var timeoutExpanded: Bool = false
+    @State private var showKeyEditor = false
 
     private var hasKey: Bool { !viewModel.remoteServerAPIKey.isEmpty }
 
@@ -47,24 +48,20 @@ struct RemoteServerSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     field(title: "Server URL", placeholder: "http://localhost:11434", text: $viewModel.remoteServerURL)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("API Key (optional)")
-                                .font(.subheadline)
-                            Spacer()
-                            // 🔒 when no key (open / no-auth servers only) / ✓ once a key
-                            // is set — mirrors the Groq key affordance.
-                            Image(systemName: hasKey ? "checkmark.circle.fill" : "lock.fill")
-                                .foregroundColor(hasKey ? .green : .secondary)
+                    // Key entry lives behind the lock icon (popover), matching the
+                    // Groq affordance — click the lock to add/edit the key.
+                    HStack {
+                        Text("API Key (optional)")
+                            .font(.subheadline)
+                        Spacer()
+                        Button { showKeyEditor = true } label: {
+                            Image(systemName: hasKey ? "key.fill" : "lock.fill")
                                 .imageScale(.large)
-                                .help(hasKey ? "API key set — stored in your Keychain"
-                                             : "No key — open / no-auth servers only")
+                                .foregroundColor(hasKey ? .secondary : .orange)
                         }
-                        // prompt: (not the label arg) so the hint renders inside the field.
-                        SecureField("", text: $viewModel.remoteServerAPIKey,
-                                    prompt: Text("leave blank for no-auth servers"))
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
+                        .buttonStyle(.plain)
+                        .help(hasKey ? "Edit API key" : "Add API key (open / no-auth servers need none)")
+                        .popover(isPresented: $showKeyEditor, arrowEdge: .top) { keyEditor }
                     }
                 }
                 .padding(.top, 6)
@@ -93,6 +90,21 @@ struct RemoteServerSettingsView: View {
     // Inner content of the "Request timeout" disclosure. URLSession's 60s default
     // cuts off slow server-side pipelines; toggle off for no limit, or override
     // the seconds.
+    // API key popover — opened from the lock icon, mirroring the Groq key editor.
+    private var keyEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("API Key").font(.headline)
+            SecureField("", text: $viewModel.remoteServerAPIKey,
+                        prompt: Text("leave blank for no-auth servers"))
+                .textFieldStyle(.roundedBorder)
+            Text("Optional — only servers that require auth need a key. Stored in your Keychain.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .frame(width: 320)
+    }
+
     private var timeoutBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             Toggle("Enforce a timeout", isOn: $viewModel.remoteServerTimeoutEnabled)

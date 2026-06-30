@@ -89,11 +89,8 @@ struct RemoteSettingsSection: View {
                 Spacer()
             }
 
-            if preset == .groq {
-                GroqPresetView(viewModel: viewModel)
-            } else {
-                RemoteServerSettingsView(viewModel: viewModel)
-            }
+            // One uniform config UI; the preset menu just prefills its fields.
+            RemoteServerSettingsView(viewModel: viewModel)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,99 +119,3 @@ struct RemoteSettingsSection: View {
     }
 }
 
-/// Groq preset UI: the two curated Groq models as rows (like every other engine),
-/// locked (🔒) until an API key is entered. Tapping a row with a key set selects
-/// that model and activates the remote engine pointed at Groq. Mirrors the former
-/// GroqSettingsSection but writes the shared `remoteServer*` preferences.
-struct GroqPresetView: View {
-    @ObservedObject var viewModel: SettingsViewModel
-    @State private var showKeyEditor = false
-
-    private var hasKey: Bool { !viewModel.remoteServerAPIKey.isEmpty }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Groq")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Spacer()
-                Button { showKeyEditor = true } label: {
-                    Image(systemName: hasKey ? "key.fill" : "lock.fill")
-                        .imageScale(.large)
-                        .foregroundColor(hasKey ? .secondary : .orange)
-                }
-                .buttonStyle(.plain)
-                .help(hasKey ? "Edit API key" : "Add API key")
-                .popover(isPresented: $showKeyEditor, arrowEdge: .top) { keyEditor }
-            }
-
-            ForEach(GroqPreset.models) { model in
-                row(for: model)
-            }
-        }
-    }
-
-    private func row(for model: GroqPreset.Model) -> some View {
-        let active = viewModel.selectedEngine == "remote"
-            && GroqPreset.isGroqURL(viewModel.remoteServerURL)
-            && viewModel.remoteServerModel == model.id
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.id)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text(model.desc)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            if !hasKey {
-                Image(systemName: "lock.fill")
-                    .foregroundColor(.secondary)
-                    .imageScale(.large)
-            } else if active {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .imageScale(.large)
-            } else {
-                Image(systemName: "checkmark.circle")
-                    .foregroundColor(.secondary)
-                    .imageScale(.large)
-            }
-        }
-        .padding(12)
-        .background(Color(.controlBackgroundColor).opacity(active ? 0.8 : 0.4))
-        .cornerRadius(8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !hasKey {
-                showKeyEditor = true
-            } else {
-                viewModel.remoteServerURL = GroqPreset.baseURL
-                viewModel.remoteServerModel = model.id
-                viewModel.selectedEngine = "remote"
-            }
-        }
-    }
-
-    private var keyEditor: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Groq API Key").font(.headline)
-                Spacer()
-                Link("Get a free key", destination: URL(string: "https://console.groq.com/keys")!)
-                    .font(.caption)
-            }
-            SecureField("gsk_…", text: $viewModel.remoteServerAPIKey)
-                .textFieldStyle(.roundedBorder)
-            Text("Stored in your Keychain. Then pick a model in the list.")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .frame(width: 320)
-    }
-}
