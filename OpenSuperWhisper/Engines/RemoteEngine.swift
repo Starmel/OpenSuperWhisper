@@ -84,27 +84,53 @@ final class RemoteEngine: TranscriptionEngine {
             )
 
             self.onProgressUpdate?(0.2)
-            let session = self.makeSession()
-            defer { session.finishTasksAndInvalidate() }
-            let (data, response) = try await session.data(for: request)
-            try Task.checkCancellation()
-            self.onProgressUpdate?(0.9)
 
-            guard let http = response as? HTTPURLResponse else {
-                throw RemoteError.network(nil)
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                print("RemoteEngine HTTP \(http.statusCode): \(body)")
-                if http.statusCode == 401 || http.statusCode == 403 {
-                    throw self.apiKey.isEmpty ? RemoteError.missingAPIKey : RemoteError.invalidAPIKey
+            // Send with bounded retries for TRANSIENT failures only: network blips,
+            // 5xx, 408/429, and the "405 + nginx HTML" signature a reverse proxy
+            // returns mid-redeploy/restart. Re-sending the same audio has no side
+            // effects, so this just rides out a momentary server hiccup. Auth errors
+            // (401/403) and real JSON-API 4xx are never retried.
+            var attempt = 0
+            while true {
+                attempt += 1
+                try Task.checkCancellation()
+                let session = self.makeSession()
+                var retry = false
+                do {
+                    defer { session.finishTasksAndInvalidate() }
+                    let (data, response) = try await session.data(for: request)
+                    try Task.checkCancellation()
+
+                    guard let http = response as? HTTPURLResponse else {
+                        throw RemoteError.network(nil)
+                    }
+                    if (200..<300).contains(http.statusCode) {
+                        self.onProgressUpdate?(1.0)
+                        return Self.extractText(from: data)
+                    }
+                    if http.statusCode == 401 || http.statusCode == 403 {
+                        throw self.apiKey.isEmpty ? RemoteError.missingAPIKey : RemoteError.invalidAPIKey
+                    }
+                    let body = String(data: data, encoding: .utf8) ?? ""
+                    print("RemoteEngine HTTP \(http.statusCode) (attempt \(attempt)/\(Self.maxAttempts)): \(body)")
+                    if attempt < Self.maxAttempts, Self.isRetryable(status: http.statusCode, body: body) {
+                        retry = true
+                    } else {
+                        throw RemoteError.api(http.statusCode, Self.serverMessage(from: data))
+                    }
+                } catch let urlError as URLError {
+                    print("RemoteEngine network error (attempt \(attempt)/\(Self.maxAttempts)): \(urlError.code.rawValue)")
+                    guard attempt < Self.maxAttempts, Self.isRetryable(urlError) else {
+                        throw RemoteError.network(urlError)
+                    }
+                    retry = true
                 }
-                throw RemoteError.api(http.statusCode, Self.serverMessage(from: data))
+                // Reached only when an attempt was deemed retryable.
+                if retry {
+                    try await Task.sleep(nanoseconds: Self.backoffNanos(afterAttempt: attempt))
+                    self.onProgressUpdate?(0.2)
+                }
             }
-
-            let text = Self.extractText(from: data)
-            self.onProgressUpdate?(1.0)
-            return text
         }
 
         currentTask = task
@@ -191,6 +217,47 @@ final class RemoteEngine: TranscriptionEngine {
 
         request.httpBody = body
         return request
+    }
+
+    // MARK: - Retry policy
+
+    /// Total attempts (1 initial + 2 retries) for a transcription request.
+    private static let maxAttempts = 3
+
+    /// Backoff before the next attempt: ~0.5s after the first failure, ~1.5s after
+    /// the second — long enough to clear a brief reverse-proxy reload, short enough
+    /// not to feel stuck.
+    private static func backoffNanos(afterAttempt attempt: Int) -> UInt64 {
+        attempt <= 1 ? 500_000_000 : 1_500_000_000
+    }
+
+    /// Retry a non-2xx only when it looks like a transient server/infra hiccup, not
+    /// a real client error: 5xx, request-timeout/too-many-requests, or the static
+    /// "405 Not Allowed" page a reverse proxy (nginx) emits while mid-redeploy.
+    private static func isRetryable(status: Int, body: String) -> Bool {
+        switch status {
+        case 408, 429, 500, 502, 503, 504:
+            return true
+        case 405:
+            // Only the proxy's HTML 405 (server bounce); a real JSON API 405 is not retried.
+            return body.localizedCaseInsensitiveContains("nginx")
+                || body.localizedCaseInsensitiveContains("<html")
+        default:
+            return false
+        }
+    }
+
+    /// Retry transient transport errors (timeouts, dropped/again-unavailable
+    /// connections), but not e.g. a bad URL or cancellation.
+    private static func isRetryable(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+             .networkConnectionLost, .notConnectedToInternet, .resourceUnavailable,
+             .badServerResponse:
+            return true
+        default:
+            return false
+        }
     }
 
     /// OpenAI returns `{"text": "..."}`; tolerate a bare string or `result` key.
