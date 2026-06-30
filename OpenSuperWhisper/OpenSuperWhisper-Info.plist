@@ -31,5 +31,10 @@
 	<string>ECQpCBVVumUKoBjgcDPSlmllYiWlSAUFGh5WycBhCA0=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
