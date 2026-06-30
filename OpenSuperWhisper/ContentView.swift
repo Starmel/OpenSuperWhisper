@@ -176,6 +176,11 @@ class ContentViewModel: ObservableObject {
     }
 
     func startRecording() {
+        // Capture where the dictation is happening (frontmost app + browser site) and
+        // apply any context-aware model rule before the engine spins up. See F2.
+        RecordingContext.shared.captureFrontmost()
+        ContextModelSwitcher.applyForCurrentContext()
+
         if microphoneService.isActiveMicrophoneRequiresConnection() {
             state = .connecting
             stopBlinking()
@@ -234,6 +239,10 @@ class ContentViewModel: ObservableObject {
                         // Move the temporary recording to final location
                         try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
 
+                        // Source context captured at record-start, and the model used.
+                        let ctx = RecordingContext.shared
+                        let modelUsed = ModelCatalog.activeOption()?.displayName
+
                         // Save the recording to store
                         await MainActor.run {
                             let newRecording = Recording(
@@ -244,7 +253,11 @@ class ContentViewModel: ObservableObject {
                                 duration: self.recordingDuration,
                                 status: .completed,
                                 progress: 1.0,
-                                sourceFileURL: nil
+                                sourceFileURL: nil,
+                                sourceAppName: ctx.appName,
+                                sourceWindowTitle: ctx.windowTitle,
+                                sourceURL: ctx.fullURL,
+                                modelUsed: modelUsed
                             )
                             self.recordingStore.addRecording(newRecording)
 

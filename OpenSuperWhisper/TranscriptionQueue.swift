@@ -245,6 +245,9 @@ class TranscriptionQueue: ObservableObject {
             )
         }
 
+        // Capture the model in effect for this transcription, recorded alongside the result.
+        let modelUsed = ModelCatalog.activeOption()?.displayName
+
         currentTranscriptionTask = Task {
             do {
                 if isRecordingCancelled(recording.id) {
@@ -282,7 +285,8 @@ class TranscriptionQueue: ObservableObject {
                     transcription: text,
                     progress: 1.0,
                     status: .completed,
-                    isRegeneration: false
+                    isRegeneration: false,
+                    modelUsed: modelUsed
                 )
 
             } catch {

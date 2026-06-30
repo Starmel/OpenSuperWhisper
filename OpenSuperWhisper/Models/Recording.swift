@@ -18,11 +18,20 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
     var status: RecordingStatus
     var progress: Float
     var sourceFileURL: String?
-    
+    // Where the dictation happened (captured at record-start). All optional with
+    // nil defaults so existing Recording(...) call sites (file imports, etc.) and
+    // older recordings keep working.
+    var sourceAppName: String? = nil
+    var sourceWindowTitle: String? = nil
+    var sourceURL: String? = nil
+    /// Display name of the model used for this transcription (e.g. "whisper-large-v3").
+    var modelUsed: String? = nil
+
     var isRegeneration: Bool = false
-    
+
     enum CodingKeys: String, CodingKey {
         case id, timestamp, fileName, transcription, duration, status, progress, sourceFileURL
+        case sourceAppName, sourceWindowTitle, sourceURL, modelUsed
     }
 
     static func == (lhs: Recording, rhs: Recording) -> Bool {
@@ -65,6 +74,10 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         static let status = Column(CodingKeys.status)
         static let progress = Column(CodingKeys.progress)
         static let sourceFileURL = Column(CodingKeys.sourceFileURL)
+        static let sourceAppName = Column(CodingKeys.sourceAppName)
+        static let sourceWindowTitle = Column(CodingKeys.sourceWindowTitle)
+        static let sourceURL = Column(CodingKeys.sourceURL)
+        static let modelUsed = Column(CodingKeys.modelUsed)
     }
 }
 
@@ -128,7 +141,29 @@ class RecordingStore: ObservableObject {
                 }
             }
         }
-        
+
+        // Appended AFTER my-monkeys' latest migration (v2_add_status). Both columns are
+        // nullable text, so old rows simply get NULL. Guarded by a column-existence check
+        // so re-running is a no-op.
+        migrator.registerMigration("v3_add_source_context") { db in
+            let columnNames = try db.columns(in: Recording.databaseTableName).map { $0.name }
+            for column in ["sourceAppName", "sourceWindowTitle", "sourceURL"]
+            where !columnNames.contains(column) {
+                try db.alter(table: Recording.databaseTableName) { t in
+                    t.add(column: column, .text)
+                }
+            }
+        }
+
+        migrator.registerMigration("v4_add_model_used") { db in
+            let columnNames = try db.columns(in: Recording.databaseTableName).map { $0.name }
+            if !columnNames.contains("modelUsed") {
+                try db.alter(table: Recording.databaseTableName) { t in
+                    t.add(column: "modelUsed", .text)
+                }
+            }
+        }
+
         try migrator.migrate(dbQueue)
     }
     
@@ -238,16 +273,20 @@ class RecordingStore: ObservableObject {
     
     static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
     
-    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
+    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil, modelUsed: String? = nil) async {
         do {
             _ = try await dbQueue.write { db -> Int in
-                try Recording
+                var assignments = [
+                    Recording.Columns.transcription.set(to: transcription),
+                    Recording.Columns.progress.set(to: progress),
+                    Recording.Columns.status.set(to: status.rawValue)
+                ]
+                if let modelUsed {
+                    assignments.append(Recording.Columns.modelUsed.set(to: modelUsed))
+                }
+                return try Recording
                     .filter(Recording.Columns.id == id)
-                    .updateAll(db, [
-                        Recording.Columns.transcription.set(to: transcription),
-                        Recording.Columns.progress.set(to: progress),
-                        Recording.Columns.status.set(to: status.rawValue)
-                    ])
+                    .updateAll(db, assignments)
             }
             if let index = recordings.firstIndex(where: { $0.id == id }) {
                 var updated = recordings[index]
@@ -257,9 +296,12 @@ class RecordingStore: ObservableObject {
                 if let isRegeneration = isRegeneration {
                     updated.isRegeneration = isRegeneration
                 }
+                if let modelUsed {
+                    updated.modelUsed = modelUsed
+                }
                 recordings[index] = updated
             }
-            
+
             var userInfo: [String: Any] = [
                 "id": id,
                 "transcription": transcription,
@@ -269,7 +311,10 @@ class RecordingStore: ObservableObject {
             if let isRegeneration = isRegeneration {
                 userInfo["isRegeneration"] = isRegeneration
             }
-            
+            if let modelUsed {
+                userInfo["modelUsed"] = modelUsed
+            }
+
             await MainActor.run {
                 NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
             }
