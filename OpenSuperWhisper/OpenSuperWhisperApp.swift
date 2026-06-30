@@ -105,10 +105,11 @@ class AppState: ObservableObject {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject {
     private var statusItem: NSStatusItem?
     private var mainWindow: NSWindow?
     private var languageSubmenu: NSMenu?
+    private var modelSubmenu: NSMenu?
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
     
@@ -244,6 +245,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         translateItem.state = (translateSupported && AppPreferences.shared.translateToEnglish) ? .on : .off
         menu.addItem(translateItem)
 
+        // Model picker — quick cross-engine switch. Its items are (re)built each time
+        // the submenu opens (menuNeedsUpdate) so newly-downloaded or newly-fetched
+        // remote models show up without relaunching. (F2)
+        let modelMenuItem = NSMenuItem(title: NSLocalizedString("Model", comment: ""), action: nil, keyEquivalent: "")
+        let modelMenu = NSMenu()
+        modelMenu.delegate = self
+        modelSubmenu = modelMenu
+        populateModelSubmenu()
+        modelMenuItem.submenu = modelMenu
+        menu.addItem(modelMenuItem)
+
         // Listen for language preference changes
         NotificationCenter.default.addObserver(
             self,
@@ -343,6 +355,125 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         guard let device = sender.representedObject as? MicrophoneService.AudioDevice else { return }
         microphoneService.selectMicrophone(device)
         updateStatusBarMenu()
+    }
+
+    // MARK: - Model picker (F2)
+
+    // The Model submenu opening is the moment to snapshot the app the user is in,
+    // so binding a model targets the right app without requiring a recording first.
+    // Opening a status-bar menu doesn't steal focus, so the frontmost app is still
+    // the one the cursor is in.
+    func menuWillOpen(_ menu: NSMenu) {
+        RecordingContext.shared.captureFrontmost()
+    }
+
+    // Rebuild the Model submenu just before it opens, so it reflects the latest
+    // downloaded/fetched models and the current selection.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === modelSubmenu {
+            populateModelSubmenu()
+        }
+    }
+
+    private func populateModelSubmenu() {
+        guard let submenu = modelSubmenu else { return }
+        submenu.removeAllItems()
+
+        let active = ModelCatalog.activeOption()
+        let groups: [(label: String, options: [DictationModelOption])] = [
+            ("Whisper", ModelCatalog.whisperModels()),
+            ("Parakeet", ModelCatalog.parakeetModels()),
+            ("SenseVoice", ModelCatalog.senseVoiceModels()),
+            ("Remote", ModelCatalog.remoteModels()),
+        ]
+
+        var addedAnything = false
+        for group in groups where !group.options.isEmpty {
+            if addedAnything { submenu.addItem(NSMenuItem.separator()) }
+            let header = NSMenuItem(title: group.label, action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            submenu.addItem(header)
+
+            for option in group.options {
+                let item = NSMenuItem(
+                    title: option.displayName,
+                    action: #selector(selectModel(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = option
+                item.indentationLevel = 1
+                if let active, active.engine == option.engine, active.identifier == option.identifier {
+                    item.state = .on
+                }
+                submenu.addItem(item)
+            }
+            addedAnything = true
+        }
+
+        if !addedAnything {
+            let none = NSMenuItem(title: NSLocalizedString("No models available", comment: ""), action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            submenu.addItem(none)
+        }
+    }
+
+    @objc private func selectModel(_ sender: NSMenuItem) {
+        guard let option = sender.representedObject as? DictationModelOption else { return }
+        let context = RecordingContext.shared
+        // Ask the scope only when it's meaningful: context-awareness is on, there's
+        // more than one model to choose between, and we're in a recognized app
+        // whose current rule differs. Otherwise just set the system default.
+        if AppPreferences.shared.contextAwareModelMode.prompts,
+           ModelCatalog.allAvailable().count > 1,
+           let bundleID = context.bundleID, let scopeLabel = context.scopeLabel,
+           AppContextModelRules.rule(for: bundleID, host: context.host) != option {
+            promptForModelScope(option, bundleID: bundleID, host: context.host, scopeLabel: scopeLabel)
+        } else {
+            ModelCatalog.activate(option)
+        }
+        populateModelSubmenu()
+    }
+
+    /// Picking a model can mean: the system default (everywhere, except apps with
+    /// their own rule), the default for the current app, just the next recording in
+    /// that app, or — when the app already has a rule — forgetting it. Never
+    /// overwrites a rule silently.
+    private func promptForModelScope(_ option: DictationModelOption, bundleID: String, host: String?, scopeLabel: String) {
+        // "scope" is the most specific bindable context: the site (host) inside a
+        // browser, otherwise the app.
+        let hasRule = AppContextModelRules.exactRule(for: bundleID, host: host) != nil
+        let alert = NSAlert()
+        alert.messageText = "Apply “\(option.displayName)”?"
+        alert.informativeText = "Set it as your system default, the default for \(scopeLabel), or just for your next recording."
+        alert.addButton(withTitle: "System Default")
+        alert.addButton(withTitle: "Default for \(scopeLabel)")
+        alert.addButton(withTitle: "Just This Time")
+        if hasRule {
+            alert.addButton(withTitle: "Forget \(scopeLabel)’s Default")
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            // System default — change the active model everywhere (scopes with
+            // their own rule still win); drop any pending one-time override.
+            ModelCatalog.activate(option)
+            RecordingContext.shared.clearOneTimeModel(for: bundleID)
+        case .alertSecondButtonReturn:
+            // Default for this scope (site or app) — apply now and persist.
+            ModelCatalog.activate(option)
+            AppContextModelRules.set(option, for: bundleID, host: host)
+            RecordingContext.shared.clearOneTimeModel(for: bundleID)
+        case .alertThirdButtonReturn:
+            // Just this time — next recording uses it; the system default is left
+            // untouched (the override fires at record-start).
+            RecordingContext.shared.setOneTimeModel(option, for: bundleID)
+        default:
+            // Fourth button (only present when this scope has a rule): forget it so
+            // it falls back to the app rule, then the system default.
+            AppContextModelRules.remove(bundleID: bundleID, host: host)
+            RecordingContext.shared.clearOneTimeModel(for: bundleID)
+        }
     }
     
     @objc private func statusBarButtonClicked(_ sender: Any) {

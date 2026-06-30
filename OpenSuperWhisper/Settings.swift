@@ -85,6 +85,13 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    /// Context-aware model selection mode (per-app / per-site rules). See F2.
+    @Published var contextAwareModelMode: ContextAwareModelMode {
+        didSet {
+            AppPreferences.shared.contextAwareModelMode = contextAwareModelMode
+        }
+    }
+
     /// Re-initialize the engine on a remote-config change, but only when the remote
     /// engine is the active one (editing the config while on Whisper shouldn't reload).
     private func reloadRemoteEngineIfSelected() {
@@ -464,6 +471,7 @@ class SettingsViewModel: ObservableObject {
         self.remoteServerAPIKey = prefs.remoteServerAPIKey ?? ""
         self.remoteServerTimeoutEnabled = prefs.remoteServerTimeoutEnabled
         self.remoteServerTimeoutSeconds = prefs.remoteServerTimeoutSeconds
+        self.contextAwareModelMode = prefs.contextAwareModelMode
         self.selectedLanguage = prefs.whisperLanguage
         self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
@@ -2071,6 +2079,39 @@ struct SettingsView: View {
     private var advancedSettings: some View {
         Form {
             VStack(spacing: 20) {
+                // Context-Aware Model Selection (F2)
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 5) {
+                        Text("Context-Aware Model")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        InfoButton(text: "Bind a transcription model to an app (or a website, in supported browsers) so it switches automatically when you dictate there. Set a binding from the menu-bar “Model” submenu while that app is focused.\n\n• Ask on change — auto-switch by app, and ask the scope (System Default / this app / just once / forget) whenever you pick a model in the menu.\n• Auto · no prompt — auto-switch by app, but picking a model just sets the system default (no prompt). Set rules up in “Ask”, then switch here.\n• Off — no auto-switch and no prompts.")
+                    }
+
+                    HStack {
+                        Text("Mode")
+                            .font(.subheadline)
+                        Spacer()
+                        Picker("", selection: $viewModel.contextAwareModelMode) {
+                            ForEach(ContextAwareModelMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+
+                    Text("Bind a model from the menu-bar “Model” submenu while the target app is focused.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Decoding Strategy")
