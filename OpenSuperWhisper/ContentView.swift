@@ -136,7 +136,7 @@ class ContentViewModel: ObservableObject {
         startFreshLoad(query: query)
     }
     
-    func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?) {
+    func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?, modelUsed: String? = nil) {
         if let index = recordings.firstIndex(where: { $0.id == id }) {
             if let transcription = transcription {
                 recordings[index].transcription = transcription
@@ -145,6 +145,9 @@ class ContentViewModel: ObservableObject {
             recordings[index].status = status
             if let isRegeneration = isRegeneration {
                 recordings[index].isRegeneration = isRegeneration
+            }
+            if let modelUsed {
+                recordings[index].modelUsed = modelUsed
             }
         }
     }
@@ -690,13 +693,15 @@ struct ContentView: View {
             
             let transcription = userInfo["transcription"] as? String
             let isRegeneration = userInfo["isRegeneration"] as? Bool
-            
+            let modelUsed = userInfo["modelUsed"] as? String
+
             viewModel.handleProgressUpdate(
                 id: id,
                 transcription: transcription,
                 progress: progress,
                 status: status,
-                isRegeneration: isRegeneration
+                isRegeneration: isRegeneration,
+                modelUsed: modelUsed
             )
         }
         .onReceive(NotificationCenter.default.publisher(for: RecordingStore.recordingsDidUpdateNotification)) { _ in
@@ -818,15 +823,12 @@ struct RecordingRow: View {
             + ModelCatalog.senseVoiceModels() + ModelCatalog.remoteModels()
     }
 
-    /// Second metadata line: where the dictation happened + the model used.
-    private var metaLine: String? {
+    /// Where the dictation happened (target app · site), for the row's second line.
+    /// The model used is rendered separately, right-aligned — see the row body.
+    private var sourceLabel: String? {
         let site = SourceCapture.host(of: recording.sourceURL) ?? recording.sourceWindowTitle
         let context = [recording.sourceAppName, site].compactMap { $0 }.joined(separator: " · ")
-        var line = context
-        if let model = recording.modelUsed, !model.isEmpty {
-            line = line.isEmpty ? model : "\(context) — \(model)"
-        }
-        return line.isEmpty ? nil : line
+        return context.isEmpty ? nil : context
     }
     @State private var showTranscription = false
     @State private var isHovered = false
@@ -965,31 +967,48 @@ struct RecordingRow: View {
                 .padding(.vertical, 8)
 
             HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(recording.timestamp, style: .date)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 4) {
-                        Text(recording.timestamp, style: .time)
-                        Text("·")
-                        Text(TextUtil.formatDuration(recording.duration))
-                        Text("·")
-                        Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
+                VStack(alignment: .leading, spacing: 3) {
+                    // Row 1: date (left) · time / duration / words (right).
+                    HStack(spacing: 8) {
+                        Text(recording.timestamp, style: .date)
+                            .font(.subheadline)
+                        Spacer(minLength: 8)
+                        HStack(spacing: 4) {
+                            Text(recording.timestamp, style: .time)
+                            Text("·")
+                            Text(TextUtil.formatDuration(recording.duration))
+                            Text("·")
+                            Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
+                        }
+                        .font(.caption)
                     }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
 
-                    // Second line: source app / site + the model used (F3). Omitted when
-                    // there's no metadata (older recordings, file imports).
-                    if let metaLine {
-                        Text(metaLine)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                    // Row 2: source app / site (left) · model used (right, cpu glyph).
+                    // Omitted when there's no metadata (older recordings, file imports).
+                    if sourceLabel != nil || recording.modelUsed != nil {
+                        HStack(spacing: 8) {
+                            if let sourceLabel {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "macwindow")
+                                    Text(sourceLabel)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if let model = recording.modelUsed {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "cpu")
+                                    Text(model)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                            }
+                        }
+                        .font(.caption2)
                     }
                 }
+                .foregroundColor(.secondary)
                 
                 if isRegenerating {
                     Spacer()
@@ -1062,27 +1081,37 @@ struct RecordingRow: View {
                     }
 
                     if (recording.status == .completed || recording.status == .failed) && isHovered {
-                        // Primary click regenerates with the current model; the dropdown
-                        // reruns once with a specific model without changing the default. (F3)
-                        Menu {
-                            Button("Current model") { onRegenerate(nil) }
-                            if !rerunModels.isEmpty {
-                                Divider()
-                                ForEach(rerunModels.indices, id: \.self) { i in
-                                    Button(rerunModels[i].displayName) { onRegenerate(rerunModels[i]) }
-                                }
+                        // Two controls: the icon reruns with the current model; the visible
+                        // chevron opens a picker that reruns once with a specific model without
+                        // changing the default. The chevron is the discoverable affordance. (F3)
+                        HStack(spacing: 1) {
+                            Button(action: { onRegenerate(nil) }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.secondary)
                             }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 18))
-                                .foregroundColor(.secondary)
-                        } primaryAction: {
-                            onRegenerate(nil)
+                            .buttonStyle(.plain)
+                            .help("Regenerate (current model)")
+
+                            Menu {
+                                Button("Current model") { onRegenerate(nil) }
+                                if !rerunModels.isEmpty {
+                                    Divider()
+                                    ForEach(rerunModels.indices, id: \.self) { i in
+                                        Button(rerunModels[i].displayName) { onRegenerate(rerunModels[i]) }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                            .menuStyle(.button)
+                            .menuIndicator(.hidden)
+                            .buttonStyle(.plain)
+                            .fixedSize()
+                            .help("Regenerate with a specific model")
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .help("Regenerate transcription (▾ to pick a model)")
                         .transition(.opacity)
                     }
 
