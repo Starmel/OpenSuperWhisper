@@ -465,9 +465,7 @@ struct IndicatorWindow: View {
                     
                     Text("Connecting...")
                         .font(.system(size: 13, weight: .semibold))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
+                }                
             case .recording:
                 if streaming.confirmedText.isEmpty && streaming.volatileText.isEmpty {
                     // Before any text arrives, just the dot + label, vertically centered.
@@ -495,16 +493,16 @@ struct IndicatorWindow: View {
                 }
 
             case .decoding:
+                // Keep the same height as the recording state (the spinner's intrinsic
+                // height is capped) so the bubble doesn't jump taller when transcribing.
                 HStack(spacing: 8) {
                     ProgressView()
-                        .scaleEffect(0.7)
-                        .frame(width: 24)
-                    
+                        .controlSize(.small)
+                        .frame(width: 24, height: 16)
+
                     Text("Transcribing...")
                         .font(.system(size: 13, weight: .semibold))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
+                }                
             case .busy:
                 HStack(spacing: 8) {
                     Image(systemName: "hourglass")
@@ -514,9 +512,7 @@ struct IndicatorWindow: View {
                     Text("Processing...")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.orange)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
+                }                
             case .error(let message):
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -527,8 +523,6 @@ struct IndicatorWindow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.red)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
             case .info(let message):
                 HStack(spacing: 8) {
                     Image(systemName: "doc.on.clipboard")
@@ -539,8 +533,6 @@ struct IndicatorWindow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.primary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
             case .idle:
                 EmptyView()
             }
@@ -577,18 +569,6 @@ struct IndicatorWindow: View {
             }
         }
         .clipShape(rect)
-        // Click-to-stop: in toggle / live-transcription mode the user starts with the
-        // hotkey and can click the indicator to stop, instead of pressing it again. Only
-        // while actively recording/connecting; other states ignore the tap. (F5)
-        .contentShape(rect)
-        .onTapGesture {
-            switch viewModel.state {
-            case .recording, .connecting:
-                IndicatorWindowManager.shared.stopRecording()
-            default:
-                break
-            }
-        }
         .environment(\.colorScheme, isNotchMode ? .dark : colorScheme)
         // Notch drops in from the top edge; the others rise from below.
         .scaleEffect(viewModel.isVisible ? 1 : (isNotchMode ? 0.85 : 0.5), anchor: isNotchMode ? .top : .center)
