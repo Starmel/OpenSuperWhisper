@@ -33,9 +33,16 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Permit cleartext HTTP only to LAN / loopback / .local hosts (self-hosted
-		     Whisper / LiteLLM / Ollama endpoints) while keeping ATS enforced for the
-		     public internet. Groq and other cloud servers are HTTPS, so unaffected. -->
+		<!-- The Remote engine points at ANY user-specified OpenAI-compatible server,
+		     commonly a self-hosted endpoint reached over plain HTTP at an arbitrary
+		     hostname (e.g. http://litellm.docker.lan, http://ollama.box:11434).
+		     NSAllowsLocalNetworking is not enough: ATS exempts only .local hosts,
+		     loopback, and literal private IPs — a custom .lan/.box hostname (which has
+		     dots and isn't .local) is still blocked. Since the host is whatever the
+		     user types, we can't enumerate NSExceptionDomains either, so arbitrary
+		     loads are required for the feature. Cloud presets (Groq) are HTTPS regardless. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
