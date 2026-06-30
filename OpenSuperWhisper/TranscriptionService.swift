@@ -19,14 +19,18 @@ class TranscriptionService: ObservableObject {
     }
 
     private var currentEngine: TranscriptionEngine?
+    private var loadedEngineKind: String?
     private var totalDuration: Float = 0.0
     private var transcriptionTask: Task<String, Error>? = nil
     private var isCancelled = false
     
     init() {
-        loadEngine()
+        // Engines load lazily on first transcription (see ensureEngineLoaded), so
+        // merely selecting an engine in Settings — or launching the app — never
+        // triggers a model download. The download happens only when you actually
+        // transcribe with that engine.
     }
-    
+
     func cancelTranscription() {
         isCancelled = true
         currentEngine?.cancelTranscription()
@@ -39,16 +43,21 @@ class TranscriptionService: ObservableObject {
         isCancelled = false
     }
     
-    private func loadEngine() {
+    /// Initialize the engine matching the current preference if it isn't already
+    /// active. Called lazily from transcribeAudio, so selecting an engine in
+    /// Settings only records the choice — the model isn't downloaded/loaded until
+    /// you actually transcribe with it. Heavy work runs off the main actor.
+    private func ensureEngineLoaded() async {
         let selectedEngine = AppPreferences.shared.selectedEngine
-        print("Loading engine: \(selectedEngine)")
-        
+        if currentEngine != nil, loadedEngineKind == selectedEngine { return }
+
         isLoading = true
         engineError = nil
+        print("Loading engine: \(selectedEngine)")
 
-        Task.detached(priority: .userInitiated) {
+        let result = await Task.detached(priority: .userInitiated) { () -> Result<TranscriptionEngine?, Error> in
             let engine: TranscriptionEngine?
-            
+
             if selectedEngine == "fluidaudio" {
                 engine = await FluidAudioEngine()
             } else if selectedEngine == "sensevoice" {
@@ -63,27 +72,35 @@ class TranscriptionService: ObservableObject {
             } else {
                 engine = await WhisperEngine()
             }
-            
+
             do {
                 try await engine?.initialize()
-                
-                await MainActor.run {
-                    self.currentEngine = engine
-                    self.isLoading = false
-                    print("Engine loaded: \(selectedEngine)")
-                }
+                return .success(engine)
             } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                    self.engineError = "Failed to load engine: \(error.localizedDescription)"
-                    print("Failed to load engine: \(error)")
-                }
+                return .failure(error)
             }
+        }.value
+
+        switch result {
+        case .success(let engine):
+            currentEngine = engine
+            loadedEngineKind = (engine != nil) ? selectedEngine : nil
+            print("Engine loaded: \(selectedEngine)")
+        case .failure(let error):
+            currentEngine = nil
+            loadedEngineKind = nil
+            engineError = "Failed to load engine: \(error.localizedDescription)"
+            print("Failed to load engine: \(error)")
         }
+        isLoading = false
     }
-    
+
+    /// Invalidate the active engine so the next transcription re-initializes it
+    /// (used when the engine selection or model changes). Intentionally does NOT
+    /// load or download anything — that's deferred to next use.
     func reloadEngine() {
-        loadEngine()
+        currentEngine = nil
+        loadedEngineKind = nil
     }
     
     func reloadModel(with path: String) {
@@ -125,7 +142,11 @@ class TranscriptionService: ObservableObject {
         await MainActor.run {
             self.totalDuration = durationInSeconds
         }
-        
+
+        // Lazily initialize the selected engine on first use (downloads a local
+        // model only now, never on mere engine selection in Settings).
+        await ensureEngineLoaded()
+
         guard let engine = currentEngine else {
             throw TranscriptionError.contextInitializationFailed
         }
