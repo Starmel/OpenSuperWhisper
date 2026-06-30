@@ -41,6 +41,7 @@ class OnboardingViewModel: ObservableObject {
 
     @Published var unifiedModels: [OnboardingUnifiedModel] = []
     @Published var selectedModelId: UUID?
+    @Published var remoteSelected: Bool = false
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
@@ -93,13 +94,23 @@ class OnboardingViewModel: ObservableObject {
     }
     
     var canContinue: Bool {
+        if remoteSelected { return true }
         guard let selectedId = selectedModelId else { return false }
         return unifiedModels.contains { $0.id == selectedId && $0.isDownloaded }
     }
-    
+
+    // Selecting a remote (OpenAI-compatible) server skips the local-model
+    // requirement entirely; the endpoint/key are configured later in Settings.
+    func selectRemote() {
+        remoteSelected = true
+        selectedModelId = nil
+        AppPreferences.shared.selectedEngine = "remote"
+    }
+
     func selectModel(_ model: OnboardingUnifiedModel) {
+        remoteSelected = false
         selectedModelId = model.id
-        
+
         switch model.type {
         case .whisper(let url, _):
             AppPreferences.shared.selectedEngine = "whisper"
@@ -435,6 +446,36 @@ struct OnboardingView: View {
                                 OnboardingUnifiedModelItemView(model: $model, viewModel: viewModel)
                             }
                         }
+
+                        // Remote server option — no local model download required.
+                        Button(action: { viewModel.selectRemote() }) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "cloud")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Use a remote server")
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text("OpenAI-compatible API (Groq, or your own server). Set the endpoint and key in Settings after setup.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                if viewModel.remoteSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(viewModel.remoteSelected ? Color.accentColor : Color.gray.opacity(0.3),
+                                            lineWidth: viewModel.remoteSelected ? 2 : 1)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(12)
