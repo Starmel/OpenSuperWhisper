@@ -423,6 +423,25 @@ struct RecordingIndicator: View {
     }
 }
 
+/// Pointing-hand cursor while hovering (macOS 14 predates SwiftUI's .pointerStyle).
+/// Pops on disappear too, so the cursor never sticks when the bubble goes away
+/// mid-hover (e.g. after clicking Stop).
+private struct PointerCursorModifier: ViewModifier {
+    @State private var hovering = false
+    func body(content: Content) -> some View {
+        content
+            .onHover { inside in
+                hovering = inside
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .onDisappear { if hovering { NSCursor.pop(); hovering = false } }
+    }
+}
+
+extension View {
+    func pointerCursorOnHover() -> some View { modifier(PointerCursorModifier()) }
+}
+
 struct IndicatorWindow: View {
     @ObservedObject var viewModel: IndicatorViewModel
     @ObservedObject private var streaming = StreamingTranscriptionController.shared
@@ -477,7 +496,8 @@ struct IndicatorWindow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Stop & transcribe")
+                .pointerCursorOnHover()
+                .help("Finish recording")
             }
             if AppPreferences.shared.showCancelButtonOnIndicator {
                 Button { IndicatorWindowManager.shared.stopForce() } label: {
@@ -489,7 +509,8 @@ struct IndicatorWindow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Cancel & discard")
+                .pointerCursorOnHover()
+                .help("Cancel recording")
             }
         }
     }
