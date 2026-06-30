@@ -819,8 +819,7 @@ struct RecordingRow: View {
 
     /// Models offered in the rerun dropdown — everything usable right now across engines.
     private var rerunModels: [DictationModelOption] {
-        ModelCatalog.whisperModels() + ModelCatalog.parakeetModels()
-            + ModelCatalog.senseVoiceModels() + ModelCatalog.remoteModels()
+        ModelCatalog.allAvailable()
     }
 
     /// Where the dictation happened (target app · site), for the row's second line.

@@ -33,7 +33,10 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<!-- Permit cleartext HTTP only to LAN / loopback / .local hosts (self-hosted
+		     Whisper / LiteLLM / Ollama endpoints) while keeping ATS enforced for the
+		     public internet. Groq and other cloud servers are HTTPS, so unaffected. -->
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>

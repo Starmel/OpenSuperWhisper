@@ -8,13 +8,19 @@ import Foundation
 enum SourceCapture {
     /// Title of the system-wide focused window (e.g. a browser tab or document).
     static func focusedWindowTitle() -> String? {
+        // These AX calls are synchronous IPC to the frontmost app and run on the
+        // main thread at record-start / menu-open; a wedged target would freeze the
+        // recording hotkey without a timeout (#freeze). Bound every request, exactly
+        // as FocusUtils does.
         let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, FocusUtils.axMessagingTimeout)
         var windowRef: AnyObject?
         guard AXUIElementCopyAttributeValue(
             system, kAXFocusedWindowAttribute as CFString, &windowRef
         ) == .success, let windowRef else { return nil }
 
         let window = windowRef as! AXUIElement
+        AXUIElementSetMessagingTimeout(window, FocusUtils.axMessagingTimeout)
         var titleRef: AnyObject?
         guard AXUIElementCopyAttributeValue(
             window, kAXTitleAttribute as CFString, &titleRef

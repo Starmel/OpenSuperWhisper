@@ -11,7 +11,7 @@ import Foundation
 /// Translation uses OpenAI's separate `/v1/audio/translations` endpoint (which
 /// always outputs English and ignores `language`), matching the OpenAI spec;
 /// plain transcription uses `/v1/audio/transcriptions`.
-class RemoteEngine: TranscriptionEngine {
+final class RemoteEngine: TranscriptionEngine {
     var engineName: String { "Remote" }
 
     private var serverURL: String = ""
@@ -90,10 +90,16 @@ class RemoteEngine: TranscriptionEngine {
             try Task.checkCancellation()
             self.onProgressUpdate?(0.9)
 
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            guard let http = response as? HTTPURLResponse else {
+                throw RemoteError.network(nil)
+            }
+            guard (200..<300).contains(http.statusCode) else {
                 let body = String(data: data, encoding: .utf8) ?? ""
-                print("RemoteEngine HTTP error: \(body)")
-                throw TranscriptionError.processingFailed
+                print("RemoteEngine HTTP \(http.statusCode): \(body)")
+                if http.statusCode == 401 || http.statusCode == 403 {
+                    throw self.apiKey.isEmpty ? RemoteError.missingAPIKey : RemoteError.invalidAPIKey
+                }
+                throw RemoteError.api(http.statusCode, Self.serverMessage(from: data))
             }
 
             let text = Self.extractText(from: data)
@@ -106,8 +112,13 @@ class RemoteEngine: TranscriptionEngine {
 
         do {
             return try await task.value
+        } catch let error as RemoteError {
+            throw error
         } catch is CancellationError {
-            throw TranscriptionError.processingFailed
+            // Preserve cancellation as cancellation (house style), don't mask it.
+            throw CancellationError()
+        } catch {
+            throw RemoteError.network(error)
         }
     }
 
@@ -172,17 +183,11 @@ class RemoteEngine: TranscriptionEngine {
         if !trimmedPrompt.isEmpty { fields.append(("prompt", trimmedPrompt)) }
 
         var body = Data()
-        let prefix = "--\(boundary)\r\n"
         for (name, value) in fields {
-            body.append(prefix.data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-            body.append("\(value)\r\n".data(using: .utf8)!)
+            body.appendField(name, value, boundary: boundary)
         }
-        body.append(prefix.data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
-        body.append(audioData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.appendField("file", filename: filename, data: audioData, boundary: boundary)
+        body.append("--\(boundary)--\r\n")
 
         request.httpBody = body
         return request
@@ -195,5 +200,58 @@ class RemoteEngine: TranscriptionEngine {
             if let text = json["result"] as? String { return text }
         }
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// Pull a human-readable message from an error body — OpenAI-style
+    /// `{"error": {"message": "…"}}` or `{"error": "…"}`, else the raw text.
+    private static func serverMessage(from data: Data) -> String? {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let err = json["error"] as? [String: Any], let msg = err["message"] as? String { return msg }
+            if let err = json["error"] as? String { return err }
+            if let msg = json["message"] as? String { return msg }
+        }
+        let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (text?.isEmpty == false) ? text : nil
+    }
+}
+
+/// User-facing remote-server failures. Mirrors the (now-folded-in) Groq engine's
+/// error style: cloud/remote failures are common and actionable, so they get
+/// descriptive messages instead of the bare on-device `TranscriptionError`.
+enum RemoteError: LocalizedError {
+    case missingAPIKey
+    case invalidAPIKey
+    case network(Error?)
+    case api(Int, String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingAPIKey:
+            return "The server requires an API key. Add one in Settings → Engine & Model → Remote (lock icon)."
+        case .invalidAPIKey:
+            return "The server rejected the API key. Check it in Settings → Engine & Model → Remote."
+        case .network(let e):
+            return "Couldn't reach the remote server. \(e?.localizedDescription ?? "Check the URL and your connection.")"
+        case .api(let code, let msg):
+            return "Remote server error \(code): \(msg ?? "request failed")."
+        }
+    }
+}
+
+private extension Data {
+    mutating func append(_ string: String) {
+        if let d = string.data(using: .utf8) { append(d) }
+    }
+    mutating func appendField(_ name: String, _ value: String, boundary: String) {
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        append("\(value)\r\n")
+    }
+    mutating func appendField(_ name: String, filename: String, data: Data, boundary: String) {
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
+        append("Content-Type: audio/wav\r\n\r\n")
+        append(data)
+        append("\r\n")
     }
 }

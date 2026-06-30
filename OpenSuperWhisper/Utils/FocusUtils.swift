@@ -20,8 +20,8 @@ class FocusUtils {
     /// browser/Electron app) blocks the calling thread — and since the global
     /// hotkey tap runs on the main run loop, that freezes the whole app and the
     /// recording shortcut (#freeze). Half a second is far longer than a healthy
-    /// AX reply and short enough to fall back gracefully.
-    private static let axMessagingTimeout: Float = 0.5
+    /// AX reply and short enough to fall back gracefully. Shared with SourceCapture.
+    static let axMessagingTimeout: Float = 0.5
 
     static func getCurrentCursorPosition() -> NSPoint {
         return NSEvent.mouseLocation

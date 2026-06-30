@@ -2361,29 +2361,19 @@ struct SettingsView: View {
                             .onAppear { cancelKey = SettingsView.currentCancelKeyID() }
                         }
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Show Stop Button on Recording Bar")
-                                    .font(.subheadline)
-                                Text("A stop-and-transcribe button on the recording indicator")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
+                        SettingRow(
+                            title: "Show Stop Button on Recording Bar",
+                            caption: "A stop-and-transcribe button on the recording indicator."
+                        ) {
                             Toggle("", isOn: $viewModel.showStopButtonOnIndicator)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }
 
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Show Cancel Button on Recording Bar")
-                                    .font(.subheadline)
-                                Text("A discard (trash) button on the recording indicator")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
+                        SettingRow(
+                            title: "Show Cancel Button on Recording Bar",
+                            caption: "A discard (trash) button on the recording indicator."
+                        ) {
                             Toggle("", isOn: $viewModel.showCancelButtonOnIndicator)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
