@@ -2,10 +2,14 @@ import Foundation
 
 /// Pauses/resumes system media playback via the private MediaRemote framework.
 ///
-/// macOS lets a normal app *send* play/pause commands but not reliably *read* the Now
-/// Playing state from inside the process, so we can't tell whether something was actually
-/// playing. We therefore always pause on record and always resume on stop. The trade-off:
-/// if media was already paused when you start recording, it will resume on stop — accepted.
+/// On record-start we first ask MediaRemote whether something is actually playing;
+/// we only send a pause (and arm the resume) when it is. On stop we resume only if
+/// we paused this cycle. That way media that was already paused/idle — e.g. a
+/// YouTube tab you stopped earlier, or a background app macOS keeps alive — is
+/// never spuriously started when you finish recording.
+///
+/// MediaRemote's "now playing" is a single system-wide owner, so this acts on the
+/// active player; it can't independently restore several simultaneous sources.
 final class MediaPlaybackController {
     static let shared = MediaPlaybackController()
 
@@ -16,6 +20,8 @@ final class MediaPlaybackController {
     private static let kMRPause: UInt32 = 1
 
     private let sendCommand: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool)?
+    /// MRMediaRemoteGetNowPlayingApplicationIsPlaying(queue, completion(isPlaying)).
+    private let getIsPlaying: (@convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void)?
 
     private init() {
         guard
@@ -23,21 +29,50 @@ final class MediaPlaybackController {
                 kCFAllocatorDefault,
                 NSURL(fileURLWithPath: "/System/Library/PrivateFrameworks/MediaRemote.framework")
             ),
-            let ptr = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteSendCommand" as CFString)
+            let sendPtr = CFBundleGetFunctionPointerForName(bundle, "MRMediaRemoteSendCommand" as CFString)
         else {
             sendCommand = nil
+            getIsPlaying = nil
             return
         }
-        sendCommand = unsafeBitCast(ptr, to: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool).self)
+        sendCommand = unsafeBitCast(sendPtr, to: (@convention(c) (UInt32, UnsafeRawPointer?) -> Bool).self)
+
+        if let isPlayingPtr = CFBundleGetFunctionPointerForName(
+            bundle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying" as CFString
+        ) {
+            getIsPlaying = unsafeBitCast(
+                isPlayingPtr,
+                to: (@convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void).self
+            )
+        } else {
+            getIsPlaying = nil
+        }
     }
 
-    /// Sends an explicit pause (a harmless no-op when nothing is playing).
+    /// Pause playback, but only if something is actually playing right now — so we
+    /// don't "wake" idle/paused media on resume. The MediaRemote query is async, so
+    /// the pause lands a few milliseconds after the call (imperceptible in practice).
     func pauseMedia() {
         guard let sendCommand = sendCommand else { return }
-        didPauseMedia = sendCommand(Self.kMRPause, nil)
+
+        guard let getIsPlaying = getIsPlaying else {
+            // Read API unavailable (framework changed): fall back to the old
+            // always-pause/always-resume behavior so the feature still works.
+            didPauseMedia = sendCommand(Self.kMRPause, nil)
+            return
+        }
+
+        getIsPlaying(DispatchQueue.main) { [weak self] isPlaying in
+            guard let self = self else { return }
+            if isPlaying {
+                self.didPauseMedia = sendCommand(Self.kMRPause, nil)
+            } else {
+                self.didPauseMedia = false
+            }
+        }
     }
 
-    /// Sends play, but only if we previously paused this cycle.
+    /// Sends play, but only if we actually paused something this cycle.
     func resumeMedia() {
         guard didPauseMedia, let sendCommand = sendCommand else { return }
         _ = sendCommand(Self.kMRPlay, nil)
