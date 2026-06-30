@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Configuration UI for a custom remote (OpenAI-compatible) transcription server.
 /// Shown under the "Custom" preset of the Remote engine section: free-text URL,
@@ -91,6 +92,14 @@ struct RemoteServerSettingsView: View {
         .onAppear { if !viewModel.remoteServerURL.isEmpty { runTest() } else { fetchModels() } }
         .onChange(of: viewModel.remoteServerURL) { _, _ in scheduleAutoTest() }
         .onChange(of: viewModel.remoteServerAPIKey) { _, _ in scheduleAutoTest() }
+        // Granting the Local Network prompt re-activates the app — retry a
+        // previously-failed test so the model list fills in without a manual click
+        // (the first auto-test runs while the permission prompt is still up).
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if case .failure = testStatus, !viewModel.remoteServerURL.isEmpty {
+                runTest()
+            }
+        }
     }
 
     // Debounced auto-test: re-run a moment after the URL/key stops changing, so we
