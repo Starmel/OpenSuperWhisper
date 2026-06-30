@@ -42,7 +42,11 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = false
-            panel.ignoresMouseEvents = true
+            // Receive clicks so the indicator can be clicked to stop recording (F5).
+            // The pill is small and only visible during a recording session, so it
+            // doesn't get in the way the rest of the time. It's a non-activating
+            // panel, so a click stops recording without stealing focus.
+            panel.ignoresMouseEvents = false
             panel.hidesOnDeactivate = false
             
             self.window = panel

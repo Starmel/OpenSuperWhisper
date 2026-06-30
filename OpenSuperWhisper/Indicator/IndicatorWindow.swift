@@ -567,6 +567,18 @@ struct IndicatorWindow: View {
             }
         }
         .clipShape(rect)
+        // Click-to-stop: in toggle / live-transcription mode the user starts with the
+        // hotkey and can click the indicator to stop, instead of pressing it again. Only
+        // while actively recording/connecting; other states ignore the tap. (F5)
+        .contentShape(rect)
+        .onTapGesture {
+            switch viewModel.state {
+            case .recording, .connecting:
+                IndicatorWindowManager.shared.stopRecording()
+            default:
+                break
+            }
+        }
         .environment(\.colorScheme, isNotchMode ? .dark : colorScheme)
         // Notch drops in from the top edge; the others rise from below.
         .scaleEffect(viewModel.isVisible ? 1 : (isNotchMode ? 0.85 : 0.5), anchor: isNotchMode ? .top : .center)
