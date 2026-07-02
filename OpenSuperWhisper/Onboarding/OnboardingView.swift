@@ -506,6 +506,18 @@ struct OnboardingUnifiedModelItemView: View {
         return false
     }
     
+    var sizeString: String {
+        if case let .whisper(url, size) = model.type {
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB]
+            formatter.countStyle = .file
+            formatter.includesUnit = true
+            formatter.isAdaptive = true
+            return formatter.string(fromByteCount: Int64(size) * 1000000)
+        }
+        return ""
+    }
+    
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -523,6 +535,10 @@ struct OnboardingUnifiedModelItemView: View {
                 
                 Text(model.description)
                     .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(model.sizeString)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                 
                 if viewModel.isDownloading && viewModel.downloadingModelName == model.name && isParakeet {

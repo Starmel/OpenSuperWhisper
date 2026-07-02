@@ -1269,8 +1269,18 @@ struct OnboardingUnifiedModel: Identifiable {
     let name: String
     var isDownloaded: Bool
     let description: String
+    let size: Int
     let type: OnboardingModelType
     var downloadProgress: Double = 0.0
+    
+    var sizeString: String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        formatter.includesUnit = true
+        formatter.isAdaptive = true
+        return formatter.string(fromByteCount: Int64(size) * 1000000)
+    }
 }
 
 struct OnboardingUnifiedModels {
@@ -1279,6 +1289,7 @@ struct OnboardingUnifiedModels {
             name: "Whisper V3 Large",
             isDownloaded: false,
             description: "High accuracy, best quality",
+            size: 1624,
             type: .whisper(
                 url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
                 size: 1624
@@ -1288,18 +1299,21 @@ struct OnboardingUnifiedModels {
             name: "Parakeet v3",
             isDownloaded: false,
             description: "Fastest processing and accurate",
+            size: 0,
             type: .parakeet(version: "v3")
         ),
         OnboardingUnifiedModel(
             name: "Parakeet v2",
             isDownloaded: false,
             description: "Fastest processing and English-only, higher recall",
+            size: 0,
             type: .parakeet(version: "v2")
         ),
         OnboardingUnifiedModel(
             name: "Whisper Medium",
             isDownloaded: false,
             description: "Balanced speed and accuracy",
+            size: 874,
             type: .whisper(
                 url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!,
                 size: 874
@@ -1309,6 +1323,7 @@ struct OnboardingUnifiedModels {
             name: "Whisper Small",
             isDownloaded: false,
             description: "Very fast processing",
+            size: 574,
             type: .whisper(
                 url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
                 size: 574
@@ -1449,6 +1464,10 @@ struct ModelDownloadItemView: View {
                 
                 Text(model.description)
                     .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(model.sizeString)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                 
                 if model.downloadProgress > 0 && model.downloadProgress < 1 {
