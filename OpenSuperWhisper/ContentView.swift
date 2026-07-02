@@ -157,6 +157,8 @@ class ContentViewModel: ObservableObject {
     }
     
     func startRecording() {
+        guard microphoneService.getActiveMicrophone() != nil else { return }
+
         if microphoneService.isActiveMicrophoneRequiresConnection() {
             state = .connecting
             stopBlinking()
@@ -508,7 +510,7 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding)
+                        .disabled(viewModel.transcriptionService.isLoading || viewModel.transcriptionService.isTranscribing || viewModel.transcriptionQueue.isProcessing || viewModel.state == .decoding || viewModel.microphoneService.availableMicrophones.isEmpty)
                         .padding(.top, 24)
                         .padding(.bottom, 16)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isRecording)

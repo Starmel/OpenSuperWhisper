@@ -1046,6 +1046,54 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
     }
 }
 
+@MainActor
+final class NoMicrophoneGuardTests: XCTestCase {
+
+    /// Forces `MicrophoneService.shared` to report no active microphone for the
+    /// duration of `body`, restoring the previous state afterwards.
+    private func withNoMicrophone(_ body: () -> Void) {
+        let service = MicrophoneService.shared
+        let savedSelected = service.selectedMicrophone
+        let savedCurrent = service.currentMicrophone
+
+        service.selectedMicrophone = nil
+        service.currentMicrophone = nil
+        defer {
+            service.selectedMicrophone = savedSelected
+            service.currentMicrophone = savedCurrent
+        }
+
+        XCTAssertNil(service.getActiveMicrophone(), "Precondition: no active microphone")
+        body()
+    }
+
+    func testIndicatorViewModel_startRecording_withNoMicrophone_showsNoMicrophoneState() {
+        withNoMicrophone {
+            let viewModel = IndicatorViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .noMicrophone,
+                          "Indicator should show the no-microphone state instead of a fake 'recording' state")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+
+            viewModel.cleanup()
+        }
+    }
+
+    func testContentViewModel_startRecording_withNoMicrophone_doesNotStartRecording() {
+        withNoMicrophone {
+            let viewModel = ContentViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .idle,
+                          "In-app recording must not begin when there is no microphone")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+        }
+    }
+}
+
 final class TextUtilTests: XCTestCase {
 
     // MARK: - wordCount
