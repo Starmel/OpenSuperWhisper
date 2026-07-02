@@ -93,7 +93,7 @@ class FluidAudioEngine: TranscriptionEngine {
         
         onProgressUpdate?(1.0)
         
-        return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        return processedText
     }
     
     func cancelTranscription() {
