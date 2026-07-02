@@ -302,6 +302,10 @@ struct ContentView: View {
     @State private var searchTask: Task<Void, Never>? = nil
 
     private var currentShortcutDescription: String {
+        let mouseButton = MouseButton(rawValue: AppPreferences.shared.mouseButtonHotkey) ?? .none
+        if mouseButton != .none {
+            return mouseButton.shortSymbol
+        }
         let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         if modifierKey != .none {
             return modifierKey.shortSymbol
