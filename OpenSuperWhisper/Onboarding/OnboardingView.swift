@@ -72,7 +72,7 @@ class OnboardingViewModel: ObservableObject {
         unifiedModels = OnboardingUnifiedModels.availableModels.map { model in
             var updatedModel = model
             switch model.type {
-            case .whisper(let url, _):
+            case .whisper(let url):
                 let filename = url.lastPathComponent
                 updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             case .parakeet(let version):
@@ -101,7 +101,7 @@ class OnboardingViewModel: ObservableObject {
         selectedModelId = model.id
         
         switch model.type {
-        case .whisper(let url, _):
+        case .whisper(let url):
             AppPreferences.shared.selectedEngine = "whisper"
             let modelPath = modelManager.modelsDirectory.appendingPathComponent(url.lastPathComponent).path
             AppPreferences.shared.selectedWhisperModelPath = modelPath
@@ -124,7 +124,7 @@ class OnboardingViewModel: ObservableObject {
         }
         
         switch model.type {
-        case .whisper(let url, _):
+        case .whisper(let url):
             try await downloadWhisperModel(model: model, url: url)
         case .parakeet(let version):
             try await downloadParakeetModel(model: model, version: version)
@@ -296,7 +296,7 @@ class OnboardingViewModel: ObservableObject {
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if let model = unifiedModels.first(where: { $0.name == modelName }) {
-                if case .whisper(let url, _) = model.type {
+                if case .whisper(let url) = model.type {
                     let filename = url.lastPathComponent
                     modelManager.cancelDownload(name: filename)
                 }
