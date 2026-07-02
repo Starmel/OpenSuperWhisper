@@ -1260,7 +1260,7 @@ struct SettingsFluidAudioModels {
 }
 
 enum OnboardingModelType {
-    case whisper(url: URL, size: Int)
+    case whisper(url: URL)
     case parakeet(version: String)
 }
 
@@ -1291,22 +1291,21 @@ struct OnboardingUnifiedModels {
             description: "High accuracy, best quality",
             size: 1624,
             type: .whisper(
-                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
-                size: 1624
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!
             )
         ),
         OnboardingUnifiedModel(
             name: "Parakeet v3",
             isDownloaded: false,
             description: "Fastest processing and accurate",
-            size: 0,
+            size: 483,
             type: .parakeet(version: "v3")
         ),
         OnboardingUnifiedModel(
             name: "Parakeet v2",
             isDownloaded: false,
             description: "Fastest processing and English-only, higher recall",
-            size: 0,
+            size: 464,
             type: .parakeet(version: "v2")
         ),
         OnboardingUnifiedModel(
@@ -1315,8 +1314,7 @@ struct OnboardingUnifiedModels {
             description: "Balanced speed and accuracy",
             size: 874,
             type: .whisper(
-                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!,
-                size: 874
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin?download=true")!
             )
         ),
         OnboardingUnifiedModel(
@@ -1325,8 +1323,7 @@ struct OnboardingUnifiedModels {
             description: "Very fast processing",
             size: 574,
             type: .whisper(
-                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!,
-                size: 574
+                url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true")!
             )
         )
     ]

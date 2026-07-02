@@ -507,15 +507,12 @@ struct OnboardingUnifiedModelItemView: View {
     }
     
     var sizeString: String {
-        if case let .whisper(url, size) = model.type {
-            let formatter = ByteCountFormatter()
-            formatter.allowedUnits = [.useMB, .useGB]
-            formatter.countStyle = .file
-            formatter.includesUnit = true
-            formatter.isAdaptive = true
-            return formatter.string(fromByteCount: Int64(size) * 1000000)
-        }
-        return ""
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        formatter.includesUnit = true
+        formatter.isAdaptive = true
+        return formatter.string(fromByteCount: Int64(model.size) * 1000000)
     }
     
     var body: some View {
