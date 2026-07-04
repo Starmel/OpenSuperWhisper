@@ -8,7 +8,15 @@ import SwiftUI
 
 extension KeyboardShortcuts.Name {
     static let toggleRecord = Self("toggleRecord", default: .init(.backtick, modifiers: .option))
+    static let toggleRecord2 = Self("toggleRecord2")
+    static let toggleRecord3 = Self("toggleRecord3")
+    static let toggleRecord4 = Self("toggleRecord4")
     static let escape = Self("escape", default: .init(.escape))
+
+    /// All combo slots, in display order. `.toggleRecord` is slot 1 (back-compat).
+    static let recordComboPool: [KeyboardShortcuts.Name] = [
+        .toggleRecord, .toggleRecord2, .toggleRecord3, .toggleRecord4,
+    ]
 }
 
 class ShortcutManager {
@@ -18,13 +26,12 @@ class ShortcutManager {
     private var holdWorkItem: DispatchWorkItem?
     private let holdThreshold: TimeInterval = 0.3
     private var holdMode = false
-    private var useModifierOnlyHotkey = false
 
     private init() {
         print("ShortcutManager init")
-        
+
         setupKeyboardShortcuts()
-        setupModifierKeyMonitor()
+        setupTriggerKeyMonitor()
         
         NotificationCenter.default.addObserver(
             self,
@@ -39,6 +46,24 @@ class ShortcutManager {
             name: .indicatorWindowDidHide,
             object: nil
         )
+
+        // Re-arm the single-key monitor when the app reactivates — e.g. after the
+        // user grants Input Monitoring in System Settings and returns to the app.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func appDidBecomeActive() {
+        // Only (re)start when single-key triggers exist, permission is now granted,
+        // and the monitor isn't already running — the post-grant recovery case.
+        let hasTriggers = !AppPreferences.shared.singleKeyTriggers.isEmpty
+        if hasTriggers, !TriggerKeyMonitor.shared.isRunning, CGPreflightListenEventAccess() {
+            setupTriggerKeyMonitor()
+        }
     }
     
     @objc private func indicatorWindowDidHide() {
@@ -47,16 +72,13 @@ class ShortcutManager {
     }
     
     @objc private func hotkeySettingsChanged() {
-        setupModifierKeyMonitor()
+        setupTriggerKeyMonitor()
     }
-    
-    private func setupKeyboardShortcuts() {
-        KeyboardShortcuts.onKeyDown(for: .toggleRecord) { [weak self] in
-            self?.handleKeyDown()
-        }
 
-        KeyboardShortcuts.onKeyUp(for: .toggleRecord) { [weak self] in
-            self?.handleKeyUp()
+    private func setupKeyboardShortcuts() {
+        for name in KeyboardShortcuts.Name.recordComboPool {
+            KeyboardShortcuts.onKeyDown(for: name) { [weak self] in self?.handleKeyDown() }
+            KeyboardShortcuts.onKeyUp(for: name) { [weak self] in self?.handleKeyUp() }
         }
 
         KeyboardShortcuts.onKeyUp(for: .escape) { [weak self] in
@@ -69,31 +91,26 @@ class ShortcutManager {
         }
         KeyboardShortcuts.disable(.escape)
     }
-    
-    private func setupModifierKeyMonitor() {
-        let modifierKeyString = AppPreferences.shared.modifierOnlyHotkey
-        let modifierKey = ModifierKey(rawValue: modifierKeyString) ?? .none
-        
-        if modifierKey != .none {
-            useModifierOnlyHotkey = true
-            KeyboardShortcuts.disable(.toggleRecord)
-            
-            ModifierKeyMonitor.shared.onKeyDown = { [weak self] in
-                self?.handleKeyDown()
-            }
-            
-            ModifierKeyMonitor.shared.onKeyUp = { [weak self] in
-                self?.handleKeyUp()
-            }
-            
-            ModifierKeyMonitor.shared.start(modifierKey: modifierKey)
-            print("ShortcutManager: Using modifier-only hotkey: \(modifierKey.displayName)")
-        } else {
-            useModifierOnlyHotkey = false
-            ModifierKeyMonitor.shared.stop()
-            KeyboardShortcuts.enable(.toggleRecord)
-            print("ShortcutManager: Using regular keyboard shortcut")
+
+    /// Combos (Carbon) are always active; the event-tap monitor runs only when
+    /// single-key triggers are configured and Input Monitoring is granted.
+    private func setupTriggerKeyMonitor() {
+        let triggers = Set(AppPreferences.shared.singleKeyTriggers)
+
+        guard !triggers.isEmpty else {
+            TriggerKeyMonitor.shared.stop()
+            return
         }
+
+        guard CGPreflightListenEventAccess() else {
+            TriggerKeyMonitor.shared.stop()
+            print("ShortcutManager: single-key triggers configured but Input Monitoring not granted")
+            return
+        }
+
+        TriggerKeyMonitor.shared.onKeyDown = { [weak self] in self?.handleKeyDown() }
+        TriggerKeyMonitor.shared.onKeyUp = { [weak self] in self?.handleKeyUp() }
+        TriggerKeyMonitor.shared.start(keys: triggers)
     }
     
     private func handleKeyDown() {

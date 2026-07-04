@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import FluidAudio
+import KeyboardShortcuts
 
 enum OnboardingShortcutOption: String, CaseIterable {
     case keyCombination
@@ -31,9 +32,11 @@ class OnboardingViewModel: ObservableObject {
         didSet {
             switch selectedShortcut {
             case .keyCombination:
-                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
+                AppPreferences.shared.singleKeyTriggers = []
+                KeyboardShortcuts.reset(.toggleRecord)
             case .rightOption:
-                AppPreferences.shared.modifierOnlyHotkey = ModifierKey.rightOption.rawValue
+                AppPreferences.shared.singleKeyTriggers = [TriggerKey(modifierKey: .rightOption)]
+                KeyboardShortcuts.setShortcut(nil, for: .toggleRecord)
             }
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
@@ -54,15 +57,15 @@ class OnboardingViewModel: ObservableObject {
         self.selectedLanguage = systemLanguage
         self.useAsianAutocorrect = AppPreferences.shared.useAsianAutocorrect
         
-        let currentHotkey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
-        if currentHotkey == .none && !AppPreferences.shared.hasCompletedOnboarding {
+        let hasSingleKey = !AppPreferences.shared.singleKeyTriggers.isEmpty
+        if !hasSingleKey && !AppPreferences.shared.hasCompletedOnboarding {
             // Default to key combination mode — does NOT require Input Monitoring permission.
-            // Users can switch to single modifier key mode later in Settings if they prefer.
+            // Users can switch to single key mode later in Settings if they prefer.
             self.selectedShortcut = .keyCombination
-            AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
+            AppPreferences.shared.singleKeyTriggers = []
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         } else {
-            self.selectedShortcut = currentHotkey == .rightOption ? .rightOption : .keyCombination
+            self.selectedShortcut = hasSingleKey ? .rightOption : .keyCombination
         }
         
         initializeUnifiedModels()

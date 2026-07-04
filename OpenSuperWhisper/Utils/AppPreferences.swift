@@ -1,4 +1,5 @@
 import Foundation
+import KeyboardShortcuts
 
 @propertyWrapper
 struct UserDefault<T> {
@@ -32,6 +33,51 @@ final class AppPreferences {
            UserDefaults.standard.string(forKey: "selectedWhisperModelPath") == nil {
             UserDefaults.standard.set(oldPath, forKey: "selectedWhisperModelPath")
         }
+
+        // Migrate single-modifier hotkey -> singleKeyTriggers list, exactly once.
+        // Always write the new key (even when empty) so migration never re-runs and
+        // can't re-seed from the legacy value after the user clears their list.
+        if UserDefaults.standard.data(forKey: Self.singleKeyTriggersKey) == nil {
+            let migrated = Self.migratedSingleKeyTriggers(
+                legacyModifierOnly: UserDefaults.standard.string(forKey: "modifierOnlyHotkey"),
+                existingData: nil
+            )
+            singleKeyTriggers = migrated
+            UserDefaults.standard.removeObject(forKey: "modifierOnlyHotkey")
+            if !migrated.isEmpty {
+                KeyboardShortcuts.setShortcut(nil, for: .toggleRecord)
+            }
+        }
+    }
+
+    // Recording trigger: list of bare single keys handled by the event-tap monitor.
+    private static let singleKeyTriggersKey = "singleKeyTriggers"
+
+    var singleKeyTriggers: [TriggerKey] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: Self.singleKeyTriggersKey),
+                  let decoded = try? JSONDecoder().decode([TriggerKey].self, from: data)
+            else { return [] }
+            return decoded
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            UserDefaults.standard.set(data, forKey: Self.singleKeyTriggersKey)
+        }
+    }
+
+    /// Pure migration logic (unit-tested). `existingData` is the current
+    /// `singleKeyTriggers` JSON, if any; when present it always wins.
+    static func migratedSingleKeyTriggers(legacyModifierOnly: String?, existingData: Data?) -> [TriggerKey] {
+        if let existingData,
+           let decoded = try? JSONDecoder().decode([TriggerKey].self, from: existingData) {
+            return decoded
+        }
+        guard let legacy = legacyModifierOnly,
+              let modifier = ModifierKey(rawValue: legacy),
+              modifier != .none
+        else { return [] }
+        return [TriggerKey(modifierKey: modifier)]
     }
     
     // Engine settings
@@ -101,9 +147,6 @@ final class AppPreferences {
     
     @OptionalUserDefault(key: "selectedMicrophoneData")
     var selectedMicrophoneData: Data?
-    
-    @UserDefault(key: "modifierOnlyHotkey", defaultValue: "none")
-    var modifierOnlyHotkey: String
     
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
