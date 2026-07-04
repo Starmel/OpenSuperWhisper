@@ -21,40 +21,32 @@ private class ProgressContext {
     }
 }
 
+/// Thread-safe cancellation flag. Owned by the engine for its whole lifetime,
+/// so the pointer passed into whisper's C callback can never dangle.
+private final class AbortFlag {
+    private let lock = NSLock()
+    private var _isSet = false
+    
+    var isSet: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isSet
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isSet = newValue
+        }
+    }
+}
+
 class WhisperEngine: TranscriptionEngine {
     var engineName: String { "Whisper" }
     
     private var context: MyWhisperContext?
-    private let stateLock = NSLock()
-    private var _isCancelled = false
-    private var _abortFlag: UnsafeMutablePointer<Bool>?
+    private let abortFlag = AbortFlag()
     private var progressContext: ProgressContext?
-    
-    private var isCancelled: Bool {
-        get {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            return _isCancelled
-        }
-        set {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            _isCancelled = newValue
-        }
-    }
-    
-    private var abortFlag: UnsafeMutablePointer<Bool>? {
-        get {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            return _abortFlag
-        }
-        set {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            _abortFlag = newValue
-        }
-    }
     
     var onProgressUpdate: ((Float) -> Void)?
     
@@ -81,21 +73,13 @@ class WhisperEngine: TranscriptionEngine {
             throw TranscriptionError.contextInitializationFailed
         }
         
-        isCancelled = false
-        
-        if abortFlag != nil {
-            abortFlag?.deallocate()
-        }
-        abortFlag = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
-        abortFlag?.initialize(to: false)
+        abortFlag.isSet = false
         
         // Setup progress context for callback
         progressContext = ProgressContext()
         progressContext?.onProgress = onProgressUpdate
         
         defer {
-            abortFlag?.deallocate()
-            abortFlag = nil
             progressContext = nil
         }
         
@@ -129,8 +113,7 @@ class WhisperEngine: TranscriptionEngine {
         typealias GGMLAbortCallback = @convention(c) (UnsafeMutableRawPointer?) -> Bool
         let abortCallback: GGMLAbortCallback = { userData in
             guard let userData = userData else { return false }
-            let flag = userData.assumingMemoryBound(to: Bool.self)
-            return flag.pointee
+            return Unmanaged<AbortFlag>.fromOpaque(userData).takeUnretainedValue().isSet
         }
         
         // Progress callback: whisper reports 0-100%, we map to 10-95%
@@ -163,10 +146,7 @@ class WhisperEngine: TranscriptionEngine {
         
         var cParams = params.toC()
         cParams.abort_callback = abortCallback
-        
-        if let abortFlag = abortFlag {
-            cParams.abort_callback_user_data = UnsafeMutableRawPointer(abortFlag)
-        }
+        cParams.abort_callback_user_data = Unmanaged.passUnretained(abortFlag).toOpaque()
         
         try Task.checkCancellation()
         
@@ -208,10 +188,7 @@ class WhisperEngine: TranscriptionEngine {
     }
     
     func cancelTranscription() {
-        isCancelled = true
-        if let abortFlag = abortFlag {
-            abortFlag.pointee = true
-        }
+        abortFlag.isSet = true
     }
     
     func getSupportedLanguages() -> [String] {
@@ -250,35 +227,32 @@ class WhisperEngine: TranscriptionEngine {
                 return nil
             }
             
-            let sourceRate = sourceFormat.sampleRate
-            let targetRate = targetFormat.sampleRate
-            let ratio = targetRate / sourceRate
+            let ratio = targetFormat.sampleRate / sourceFormat.sampleRate
             
             // Use parallel processing for large files (> 10 seconds of audio)
             // Benchmarked: 4 cores = +339%, 8 cores = +609% improvement
-            let minFramesForParallel = AVAudioFramePosition(sourceRate * 10)
+            let minFramesForParallel = AVAudioFramePosition(sourceFormat.sampleRate * 10)
             let workerCount = totalFrames > minFramesForParallel ? ProcessInfo.processInfo.activeProcessorCount : 1
             
             if workerCount == 1 {
-                // Sequential processing for small files
-                return try self.convertSequential(
+                let result = try self.convertSegment(
                     fileURL: resolvedURL,
                     sourceFormat: sourceFormat,
                     targetFormat: targetFormat,
                     ratio: ratio,
-                    totalFrames: totalFrames
+                    startFrame: 0,
+                    frameCount: totalFrames,
+                    inputChunkSize: 1_048_576
                 )
+                return result.isEmpty ? nil : result
             }
             
-            // Parallel processing: split file into segments
+            // Parallel processing: each worker converts its own frame range with an
+            // independent converter (flushed at the end), results are concatenated in
+            // worker order so no samples are lost or overwritten at boundaries.
             let framesPerWorker = totalFrames / AVAudioFramePosition(workerCount)
-            let outputFrameCount = Int(Double(totalFrames) * ratio) + 1024
-            
-            // Pre-allocate result array
-            var result = [Float](repeating: 0, count: outputFrameCount)
+            var segmentResults = [[Float]?](repeating: nil, count: workerCount)
             let resultLock = NSLock()
-            var totalWritten = 0
-            var hasError = false
             
             let group = DispatchGroup()
             let queue = DispatchQueue(label: "audio.conversion.parallel", attributes: .concurrent)
@@ -288,140 +262,79 @@ class WhisperEngine: TranscriptionEngine {
                 queue.async {
                     defer { group.leave() }
                     
-                    guard !hasError else { return }
-                    
                     let startFrame = AVAudioFramePosition(workerIndex) * framesPerWorker
                     let endFrame = workerIndex == workerCount - 1 ? totalFrames : startFrame + framesPerWorker
-                    let segmentFrames = endFrame - startFrame
                     
-                    guard let workerFile = try? AVAudioFile(forReading: resolvedURL) else {
-                        hasError = true
-                        return
-                    }
-                    
-                    do {
-                        workerFile.framePosition = startFrame
-                    }
-                    
-                    guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
-                        hasError = true
-                        return
-                    }
-                    converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
-                    
-                    let inputChunkSize: AVAudioFrameCount = 262144 // 256K for parallel
-                    let outputChunkSize = AVAudioFrameCount(Double(inputChunkSize) * ratio) + 256
-                    
-                    guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: inputChunkSize),
-                          let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputChunkSize) else {
-                        hasError = true
-                        return
-                    }
-                    
-                    var segmentResult = [Float]()
-                    let expectedOutputFrames = Int(Double(segmentFrames) * ratio) + 256
-                    segmentResult.reserveCapacity(expectedOutputFrames)
-                    
-                    var framesRead: AVAudioFramePosition = 0
-                    
-                    while framesRead < segmentFrames {
-                        let framesToRead = min(AVAudioFrameCount(segmentFrames - framesRead), inputChunkSize)
-                        inputBuffer.frameLength = 0
-                        
-                        do {
-                            try workerFile.read(into: inputBuffer, frameCount: framesToRead)
-                        } catch {
-                            break
-                        }
-                        
-                        if inputBuffer.frameLength == 0 { break }
-                        framesRead += AVAudioFramePosition(inputBuffer.frameLength)
-                        
-                        var inputConsumed = false
-                        var convError: NSError?
-                        
-                        let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
-                            if inputConsumed {
-                                outStatus.pointee = .noDataNow
-                                return nil
-                            }
-                            inputConsumed = true
-                            outStatus.pointee = .haveData
-                            return inputBuffer
-                        }
-                        
-                        outputBuffer.frameLength = 0
-                        converter.convert(to: outputBuffer, error: &convError, withInputFrom: inputBlock)
-                        
-                        self.appendMixedSamples(from: outputBuffer, to: &segmentResult)
-                    }
-                    
-                    // Calculate output position for this segment
-                    let outputStartIndex = Int(Double(startFrame) * ratio)
+                    let segment = try? self.convertSegment(
+                        fileURL: resolvedURL,
+                        sourceFormat: sourceFormat,
+                        targetFormat: targetFormat,
+                        ratio: ratio,
+                        startFrame: startFrame,
+                        frameCount: endFrame - startFrame,
+                        inputChunkSize: 262_144
+                    )
                     
                     resultLock.lock()
-                    let writeEnd = min(outputStartIndex + segmentResult.count, result.count)
-                    let writeCount = writeEnd - outputStartIndex
-                    if writeCount > 0 && !segmentResult.isEmpty {
-                        result.replaceSubrange(outputStartIndex..<writeEnd, with: segmentResult.prefix(writeCount))
-                        totalWritten = max(totalWritten, writeEnd)
-                    }
+                    segmentResults[workerIndex] = segment
                     resultLock.unlock()
                 }
             }
             
             group.wait()
             
-            if hasError { return nil }
-            
-            // Trim to actual size
-            if totalWritten > 0 && totalWritten < result.count {
-                result.removeLast(result.count - totalWritten)
+            var result = [Float]()
+            result.reserveCapacity(Int(Double(totalFrames) * ratio) + 1024)
+            for segment in segmentResults {
+                guard let segment = segment else { return nil }
+                result.append(contentsOf: segment)
             }
             
             return result.isEmpty ? nil : result
         }.value
     }
     
-    private nonisolated func convertSequential(
+    nonisolated func convertSegment(
         fileURL: URL,
         sourceFormat: AVAudioFormat,
         targetFormat: AVAudioFormat,
         ratio: Double,
-        totalFrames: AVAudioFramePosition
-    ) throws -> [Float]? {
+        startFrame: AVAudioFramePosition,
+        frameCount: AVAudioFramePosition,
+        inputChunkSize: AVAudioFrameCount
+    ) throws -> [Float] {
         let audioFile = try AVAudioFile(forReading: fileURL)
+        audioFile.framePosition = startFrame
         
         guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
-            return nil
+            throw TranscriptionError.audioConversionFailed
         }
         converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         
-        let outputFrameCount = AVAudioFrameCount(Double(totalFrames) * ratio) + 1024
-        let inputChunkSize: AVAudioFrameCount = 1048576 // 1M for sequential
-        
-        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: inputChunkSize) else {
-            return nil
+        let outputChunkSize = AVAudioFrameCount(Double(inputChunkSize) * ratio) + 256
+        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: inputChunkSize),
+              let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputChunkSize) else {
+            throw TranscriptionError.audioConversionFailed
         }
         
         var result = [Float]()
-        result.reserveCapacity(Int(outputFrameCount))
+        result.reserveCapacity(Int(Double(frameCount) * ratio) + 256)
         
-        let outputChunkSize = AVAudioFrameCount(Double(inputChunkSize) * ratio) + 256
-        guard let chunkOutputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputChunkSize) else {
-            return nil
-        }
+        var framesRead: AVAudioFramePosition = 0
         
-        while audioFile.framePosition < totalFrames {
+        while framesRead < frameCount {
+            let framesToRead = min(AVAudioFrameCount(frameCount - framesRead), inputChunkSize)
             inputBuffer.frameLength = 0
-            try audioFile.read(into: inputBuffer, frameCount: inputChunkSize)
+            try audioFile.read(into: inputBuffer, frameCount: framesToRead)
             
             if inputBuffer.frameLength == 0 { break }
+            framesRead += AVAudioFramePosition(inputBuffer.frameLength)
             
             var inputConsumed = false
-            var error: NSError?
+            var convError: NSError?
             
-            let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
+            outputBuffer.frameLength = 0
+            converter.convert(to: outputBuffer, error: &convError) { _, outStatus in
                 if inputConsumed {
                     outStatus.pointee = .noDataNow
                     return nil
@@ -431,18 +344,28 @@ class WhisperEngine: TranscriptionEngine {
                 return inputBuffer
             }
             
-            chunkOutputBuffer.frameLength = 0
-            converter.convert(to: chunkOutputBuffer, error: &error, withInputFrom: inputBlock)
-            
-            if let error = error {
-                print("Conversion error: \(error)")
-                break
+            if let convError = convError {
+                throw convError
             }
             
-            appendMixedSamples(from: chunkOutputBuffer, to: &result)
+            appendMixedSamples(from: outputBuffer, to: &result)
         }
         
-        return result.isEmpty ? nil : result
+        // Flush the resampler: without an .endOfStream pass its internal latency
+        // (the last few milliseconds of audio) is silently dropped.
+        var status = AVAudioConverterOutputStatus.haveData
+        while status == .haveData {
+            var convError: NSError?
+            outputBuffer.frameLength = 0
+            status = converter.convert(to: outputBuffer, error: &convError) { _, outStatus in
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+            if convError != nil { break }
+            appendMixedSamples(from: outputBuffer, to: &result)
+        }
+        
+        return result
     }
     
     private nonisolated func appendMixedSamples(from buffer: AVAudioPCMBuffer, to output: inout [Float]) {

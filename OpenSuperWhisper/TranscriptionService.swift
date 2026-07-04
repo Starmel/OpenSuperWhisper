@@ -13,9 +13,14 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var isConverting = false
     @Published private(set) var conversionProgress: Float = 0.0
     
+    private final class TranscriptionTaskBox {
+        let task: Task<String, Error>
+        init(_ task: Task<String, Error>) { self.task = task }
+    }
+    
     private var currentEngine: TranscriptionEngine?
     private var totalDuration: Float = 0.0
-    private var transcriptionTask: Task<String, Error>? = nil
+    private var transcriptionTask: TranscriptionTaskBox? = nil
     private var isCancelled = false
     
     init() {
@@ -25,7 +30,7 @@ class TranscriptionService: ObservableObject {
     func cancelTranscription() {
         isCancelled = true
         currentEngine?.cancelTranscription()
-        transcriptionTask?.cancel()
+        transcriptionTask?.task.cancel()
         transcriptionTask = nil
         
         isTranscribing = false
@@ -78,6 +83,16 @@ class TranscriptionService: ObservableObject {
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        // Serialize access to the engine: a whisper context must not process
+        // two transcriptions concurrently (indicator flow and queue flow can
+        // both reach this point due to async busy checks).
+        while let existing = transcriptionTask {
+            _ = try? await existing.task.value
+            if transcriptionTask === existing {
+                transcriptionTask = nil
+            }
+        }
+        
         await MainActor.run {
             self.progress = 0.0
             self.conversionProgress = 0.0
@@ -166,7 +181,7 @@ class TranscriptionService: ObservableObject {
         }
         
         await MainActor.run {
-            self.transcriptionTask = task
+            self.transcriptionTask = TranscriptionTaskBox(task)
         }
         
         do {

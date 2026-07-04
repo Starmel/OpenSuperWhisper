@@ -11,6 +11,13 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var canRecord = false
     @Published var isConnecting = false
     
+    static let minimumRecordingDuration: TimeInterval = 1.0
+    static let temporaryFileMaxAge: TimeInterval = 24 * 60 * 60
+    
+    // Serializes all recording state mutations (start/stop/cancel/connection monitoring)
+    // so a stop arriving right after a start can never overtake it.
+    private let workQueue = DispatchQueue(label: "com.opensuperwhisper.audiorecorder")
+    
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
     private var notificationSound: NSSound?
@@ -20,6 +27,7 @@ class AudioRecorder: NSObject, ObservableObject {
     private var microphoneChangeObserver: Any?
     private var connectionCheckTimer: DispatchSourceTimer?
     private var recordingDeviceID: AudioDeviceID?
+    private var previousDefaultInputDeviceID: AudioDeviceID?
 
     // MARK: - Singleton Instance
 
@@ -31,6 +39,9 @@ class AudioRecorder: NSObject, ObservableObject {
         
         super.init()
         createTemporaryDirectoryIfNeeded()
+        workQueue.async { [temporaryDirectory] in
+            Self.cleanupOldTemporaryFiles(in: temporaryDirectory, olderThan: Self.temporaryFileMaxAge)
+        }
         setup()
     }
     
@@ -83,6 +94,22 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
+    static func cleanupOldTemporaryFiles(in directory: URL, olderThan maxAge: TimeInterval) {
+        let fileManager = FileManager.default
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return }
+        
+        let cutoff = Date().addingTimeInterval(-maxAge)
+        for file in files {
+            let values = try? file.resourceValues(forKeys: [.contentModificationDateKey])
+            if let modified = values?.contentModificationDate, modified < cutoff {
+                try? fileManager.removeItem(at: file)
+            }
+        }
+    }
+    
     private func playNotificationSound() {
         // Try to play using NSSound first
         guard let soundURL = Bundle.main.url(forResource: "notification", withExtension: "mp3") else {
@@ -110,44 +137,39 @@ class AudioRecorder: NSObject, ObservableObject {
             return
         }
         
-        if isRecording || isConnecting {
-            print("stop recording while recording")
-            _ = stopRecording()
-        }
-        
         if AppPreferences.shared.playSoundOnRecordStart {
             playNotificationSound()
         }
         
+        let activeMic = MicrophoneService.shared.getActiveMicrophone()
+        let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
+        updateRecordingState(isRecording: false, isConnecting: requiresConnection)
+        
+        workQueue.async {
+            self.performStart(activeMic: activeMic, monitorConnection: requiresConnection)
+        }
+    }
+    
+    private func performStart(activeMic: MicrophoneService.AudioDevice?, monitorConnection: Bool) {
+        if audioRecorder != nil {
+            print("stop recording while recording")
+            _ = performStop(discard: true)
+        }
+        
         let timestamp = Int(Date().timeIntervalSince1970)
-        let filename = "\(timestamp).wav"
-        let fileURL = temporaryDirectory.appendingPathComponent(filename)
+        let fileURL = temporaryDirectory.appendingPathComponent("\(timestamp).wav")
         currentRecordingURL = fileURL
         
         print("start record file to \(fileURL)")
         
-        #if os(macOS)
-        if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
-            _ = MicrophoneService.shared.setAsSystemDefaultInput(activeMic)
-            print("Set system default input to: \(activeMic.displayName)")
-            
-            if let deviceID = MicrophoneService.shared.getCoreAudioDeviceID(for: activeMic) {
-                recordingDeviceID = deviceID
-            }
-        }
-        #endif
-        
-        let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
-        updateRecordingState(isRecording: false, isConnecting: requiresConnection)
-        startRecordingWithRecorder(fileURL: fileURL, monitorConnection: requiresConnection)
-    }
-    
-    private func startRecordingWithRecorder(fileURL: URL, monitorConnection: Bool) {
         var channelCount = 1
-        if let activeMic = MicrophoneService.shared.getActiveMicrophone() {
+        #if os(macOS)
+        if let activeMic = activeMic {
+            switchSystemDefaultInput(to: activeMic)
             channelCount = MicrophoneService.shared.getInputChannelCount(for: activeMic)
             print("Recording with \(channelCount) input channel(s) from \(activeMic.displayName)")
         }
+        #endif
         
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
@@ -171,40 +193,69 @@ class AudioRecorder: NSObject, ObservableObject {
         } catch {
             print("Failed to start recording: \(error)")
             currentRecordingURL = nil
+            restoreSystemDefaultInputIfNeeded()
             updateRecordingState(isRecording: false, isConnecting: false)
         }
     }
     
     func stopRecording() -> URL? {
-        audioRecorder?.stop()
-        updateRecordingState(isRecording: false, isConnecting: false)
-        stopConnectionMonitoring()
-        
-        if let url = currentRecordingURL,
-           let duration = try? AVAudioPlayer(contentsOf: url).duration,
-           duration < 1.0
-        {
-            try? FileManager.default.removeItem(at: url)
-            currentRecordingURL = nil
-            return nil
+        workQueue.sync {
+            performStop(discard: false)
         }
-        
-        let url = currentRecordingURL
-        currentRecordingURL = nil
-        return url
     }
     
     func cancelRecording() {
-        audioRecorder?.stop()
-        updateRecordingState(isRecording: false, isConnecting: false)
-        stopConnectionMonitoring()
-        
-        if let url = currentRecordingURL {
-            try? FileManager.default.removeItem(at: url)
+        workQueue.sync {
+            _ = performStop(discard: true)
         }
-        currentRecordingURL = nil
     }
     
+    private func performStop(discard: Bool) -> URL? {
+        let recordedDuration = audioRecorder?.currentTime ?? 0
+        audioRecorder?.stop()
+        audioRecorder = nil
+        stopConnectionMonitoring()
+        restoreSystemDefaultInputIfNeeded()
+        updateRecordingState(isRecording: false, isConnecting: false)
+        
+        guard let url = currentRecordingURL else { return nil }
+        currentRecordingURL = nil
+        
+        if discard || recordedDuration < Self.minimumRecordingDuration {
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        return url
+    }
+    
+    #if os(macOS)
+    private func switchSystemDefaultInput(to device: MicrophoneService.AudioDevice) {
+        guard let targetID = MicrophoneService.shared.getCoreAudioDeviceID(for: device) else { return }
+        recordingDeviceID = targetID
+        
+        let currentDefault = MicrophoneService.shared.getCurrentSystemDefaultInputDevice()
+        guard currentDefault != targetID else { return }
+        
+        if MicrophoneService.shared.setSystemDefaultInputDevice(targetID) {
+            previousDefaultInputDeviceID = currentDefault
+            print("Set system default input to: \(device.displayName)")
+        }
+    }
+    
+    private func restoreSystemDefaultInputIfNeeded() {
+        guard let previous = previousDefaultInputDeviceID else { return }
+        previousDefaultInputDeviceID = nil
+        
+        // Restore only if the default is still the device we set,
+        // so a manual change made by the user during recording is kept.
+        if MicrophoneService.shared.getCurrentSystemDefaultInputDevice() == recordingDeviceID {
+            _ = MicrophoneService.shared.setSystemDefaultInputDevice(previous)
+        }
+    }
+    #else
+    private func switchSystemDefaultInput(to device: MicrophoneService.AudioDevice) {}
+    private func restoreSystemDefaultInputIfNeeded() {}
+    #endif
     
     func moveTemporaryRecording(from tempURL: URL, to finalURL: URL) throws {
 
@@ -253,7 +304,7 @@ class AudioRecorder: NSObject, ObservableObject {
     private func startConnectionMonitoring() {
         stopConnectionMonitoring()
         
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInitiated))
+        let timer = DispatchSource.makeTimerSource(queue: workQueue)
         timer.schedule(deadline: .now() + 0.05, repeating: 0.05)
         let initialFileSize: Int64 = 4096
         var growthCount = 0
@@ -285,8 +336,10 @@ class AudioRecorder: NSObject, ObservableObject {
 
 extension AudioRecorder: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag {
-            currentRecordingURL = nil
+        guard !flag else { return }
+        workQueue.async {
+            guard recorder === self.audioRecorder else { return }
+            self.currentRecordingURL = nil
         }
     }
 }

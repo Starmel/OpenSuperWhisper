@@ -170,9 +170,7 @@ class ContentViewModel: ObservableObject {
             startDurationTimerIfNeeded()
         }
         
-        Task.detached { [recorder] in
-            recorder.startRecording()
-        }
+        recorder.startRecording()
     }
 
     func startDecoding() {
