@@ -1233,6 +1233,180 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
     }
 }
 
+final class FocusUtilsCaretPositionTests: XCTestCase {
+
+    // Primary screen 1440x900 with a larger secondary display to the right,
+    // shifted 100 pt up (typical multi-monitor setup).
+    private let primaryMaxY: CGFloat = 900
+    private let screens = [
+        CGRect(x: 0, y: 0, width: 1440, height: 900),
+        CGRect(x: 1440, y: 100, width: 1920, height: 1080)
+    ]
+
+    // Bug: apps returning an all-zero caret rect pinned the indicator to a screen corner.
+    func testZeroCaretRectIsRejected() {
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: .zero, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+        XCTAssertFalse(FocusUtils.isValidCaretRect(.zero))
+    }
+
+    func testValidCaretRectIsConvertedToCocoa() {
+        let rect = CGRect(x: 100, y: 200, width: 1, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 100, y: 700))
+    }
+
+    // Bug: Terminal.app reports .success with x:0 y:<screen height> w:0 h:0 —
+    // that point maps exactly to the bottom-left corner of the screen.
+    func testZeroSizeCaretRectIsRejected() {
+        let terminalRect = CGRect(x: 0, y: primaryMaxY, width: 0, height: 0)
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: terminalRect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+
+        // Zero size at any position means the app doesn't know the real bounds.
+        XCTAssertFalse(FocusUtils.isValidCaretRect(CGRect(x: 300, y: 300, width: 0, height: 0)))
+    }
+
+    func testZeroWidthCaretWithLineHeightIsAccepted() {
+        // A collapsed caret legitimately has zero width but always a line height.
+        let rect = CGRect(x: 300, y: 300, width: 0, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 300, y: 600))
+    }
+
+    func testCaretPointOutsideAllScreensIsRejected() {
+        // AX y=5000 converts to Cocoa y=-4100, below every screen.
+        let rect = CGRect(x: 100, y: 5000, width: 1, height: 16)
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+
+    func testCaretOnSecondScreenIsAccepted() {
+        // Cocoa target (2000, 500) on the secondary display: AX y = 900 - 500 = 400.
+        let rect = CGRect(x: 2000, y: 400, width: 1, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 2000, y: 500))
+    }
+
+    func testConvertAXPointToCocoaFlipsY() {
+        let point = FocusUtils.convertAXPointToCocoa(CGPoint(x: 10, y: 40), primaryScreenMaxY: 900)
+        XCTAssertEqual(point, NSPoint(x: 10, y: 860))
+    }
+
+    // Bug: NSRect.contains excludes the top edge, so a point exactly on the
+    // screen border fell through to the wrong screen.
+    func testPointOnScreenEdgeIsContained() {
+        XCTAssertEqual(FocusUtils.frameIndex(containing: NSPoint(x: 0, y: 900), frames: screens), 0)
+        XCTAssertEqual(FocusUtils.frameIndex(containing: NSPoint(x: 1440, y: 100), frames: screens), 0)
+    }
+
+    func testPointInDeadZoneBetweenScreensIsNotContained() {
+        // Below the secondary display, right of the primary one.
+        XCTAssertNil(FocusUtils.frameIndex(containing: NSPoint(x: 1500, y: 50), frames: screens))
+    }
+
+    // MARK: Focused element anchor (fallback when caret bounds are unavailable)
+
+    func testElementAnchorPointIsTopCenterOfFrame() {
+        // AX frame: input field at x:200 y:100, 400x30 → top center AX (400, 100)
+        // → Cocoa (400, 800).
+        let frame = CGRect(x: 200, y: 100, width: 400, height: 30)
+        let point = FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: frame, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 400, y: 800))
+    }
+
+    func testDegenerateElementFrameIsRejected() {
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: .zero, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: CGRect(x: 100, y: 100, width: 0, height: 30),
+            primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+
+    func testOffScreenElementFrameIsRejected() {
+        // Top center converts to Cocoa y = 900 - 5000 = -4100, below every screen.
+        let frame = CGRect(x: 100, y: 5000, width: 400, height: 30)
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: frame, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+}
+
+final class IndicatorWindowGeometryTests: XCTestCase {
+
+    // Bug: the panel was 200x60 for a 200x36 card — during the appear
+    // animation the card moves 20 pt down, and everything outside the window
+    // bounds is cut off, so the bottom rounded corners were visibly clipped.
+    func testPanelFitsCardAtWorstAnimationPhase() {
+        let halfWindow = IndicatorWindow.windowSize.height / 2
+        // Animation start: the card is scaled down and pushed fully down.
+        let worstBottomExtent = IndicatorWindow.cardSize.height / 2 * IndicatorWindow.appearInitialScale
+            + IndicatorWindow.appearOffset
+        XCTAssertLessThanOrEqual(worstBottomExtent, halfWindow,
+                                 "Appear animation doesn't fit inside the panel vertically")
+
+        // Spring overshoot scales the card slightly above 1.
+        let springOvershoot: CGFloat = 1.1
+        let worstSideExtent = IndicatorWindow.cardSize.width / 2 * springOvershoot
+        XCTAssertLessThanOrEqual(worstSideExtent, IndicatorWindow.windowSize.width / 2,
+                                 "Card doesn't fit inside the panel horizontally")
+
+        let worstTopExtent = IndicatorWindow.cardSize.height / 2 * springOvershoot
+        XCTAssertLessThanOrEqual(worstTopExtent, halfWindow,
+                                 "Spring overshoot doesn't fit inside the panel at the top")
+    }
+
+    // Bug: the hidden transform translated +y, which in Core Animation
+    // coordinates on macOS is up — the card appeared from above sliding down
+    // instead of rising bottom-up towards its resting position.
+    @MainActor
+    func testHiddenTransformPushesCardDown() {
+        let view = NSView(frame: NSRect(origin: .zero, size: IndicatorWindow.windowSize))
+        let transform = IndicatorWindowManager.hiddenTransform(for: view)
+
+        // The card center must map below its resting position (smaller y in
+        // CA coordinates) and keep the same x.
+        let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        let mappedX = transform.m11 * center.x + transform.m21 * center.y + transform.m41
+        let mappedY = transform.m12 * center.x + transform.m22 * center.y + transform.m42
+        XCTAssertEqual(mappedX, center.x, accuracy: 0.001)
+        XCTAssertEqual(mappedY, center.y - IndicatorWindow.appearOffset, accuracy: 0.001,
+                       "Hidden state must sit below the resting position")
+    }
+
+    // Bug: NSHostingView's default sizingOptions let SwiftUI's ideal size
+    // drive the window frame — the panel shrank to the card size right after
+    // contentView was set and the window bounds clipped the whole animation.
+    @MainActor
+    func testWindowKeepsPanelSizeAfterPresent() async throws {
+        let manager = IndicatorWindowManager.shared
+        let vm = manager.prepare()
+        manager.presentWindow(for: vm, nearPoint: NSPoint(x: 700, y: 500))
+
+        // Give AppKit a runloop turn to apply any pending autosizing.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(manager.window?.frame.size, IndicatorWindow.windowSize,
+                       "The panel must keep its size; SwiftUI content must not resize the window")
+
+        manager.hide()
+        try await Task.sleep(nanoseconds: 700_000_000)
+    }
+}
+
 final class TextUtilTests: XCTestCase {
 
     // MARK: - wordCount
