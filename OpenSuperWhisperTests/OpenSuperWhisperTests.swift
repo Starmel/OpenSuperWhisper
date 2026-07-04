@@ -52,7 +52,7 @@ final class WhisperEngineConversionTests: XCTestCase {
         tempFiles.removeAll()
     }
 
-    private func makeSineWAV(duration: Double, sampleRate: Double, frequency: Double = 440) throws -> URL {
+    private func makeSineWAV(duration: Double, sampleRate: Double, frequency: Double = 440, settings: [String: Any]? = nil) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("osw-conversion-test-\(UUID().uuidString).wav")
         tempFiles.append(url)
@@ -63,7 +63,7 @@ final class WhisperEngineConversionTests: XCTestCase {
             throw NSError(domain: "test", code: 1)
         }
         let file = try AVAudioFile(
-            forWriting: url, settings: format.settings,
+            forWriting: url, settings: settings ?? format.settings,
             commonFormat: .pcmFormatFloat32, interleaved: false
         )
         let frameCount = AVAudioFrameCount(duration * sampleRate)
@@ -160,6 +160,32 @@ final class WhisperEngineConversionTests: XCTestCase {
         let rms = sqrt(parallel.reduce(Float(0)) { $0 + $1 * $1 } / Float(parallel.count))
         print("[DIAG] parallel441 rms=\(rms)")
         XCTAssertEqual(rms, 0.3535, accuracy: 0.01, "RMS of converted audio deviates from source sine")
+    }
+
+    // The recorder now writes 16-bit integer PCM at 16 kHz — the exact format
+    // produced on the hotkey critical path must convert losslessly.
+    func testRecorderFormatInt16Wav16kConverts() async throws {
+        let recorderSettings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 16000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false
+        ]
+        let url = try makeSineWAV(duration: 3.0, sampleRate: 16000, settings: recorderSettings)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        let expected = Int(3.0 * 16000)
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Int16 recorder format conversion length mismatch: got \(result.count), expected \(expected)"
+        )
+
+        let rms = sqrt(result.reduce(Float(0)) { $0 + $1 * $1 } / Float(result.count))
+        XCTAssertEqual(rms, 0.3535, accuracy: 0.01, "RMS deviates — Int16 recording is not decoded correctly")
     }
 }
 

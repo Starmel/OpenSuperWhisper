@@ -33,9 +33,12 @@ class AudioRecorder: NSObject, ObservableObject {
 
     static let shared = AudioRecorder()
     
+    static var temporaryRecordingsDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("temp_recordings")
+    }
+    
     override private init() {
-        let tempDir = FileManager.default.temporaryDirectory
-        temporaryDirectory = tempDir.appendingPathComponent("temp_recordings")
+        temporaryDirectory = Self.temporaryRecordingsDirectory
         
         super.init()
         createTemporaryDirectoryIfNeeded()
@@ -171,12 +174,14 @@ class AudioRecorder: NSObject, ObservableObject {
         }
         #endif
         
+        // 16-bit integer PCM: half the disk/IO of Float32 with no quality loss
+        // for speech recognition (whisper consumes 16 kHz mono anyway).
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
             AVNumberOfChannelsKey: channelCount,
-            AVLinearPCMBitDepthKey: 32,
-            AVLinearPCMIsFloatKey: true
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false
         ]
         
         do {

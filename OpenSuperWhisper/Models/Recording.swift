@@ -233,6 +233,43 @@ class RecordingStore: ObservableObject {
     
     static let recordingProgressDidUpdateNotification = Notification.Name("RecordingStore.recordingProgressDidUpdate")
     
+    /// Updates the in-memory copy and notifies observers without touching the database.
+    private func applyLocalProgressUpdate(_ id: UUID, transcription: String? = nil, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) {
+        if let index = recordings.firstIndex(where: { $0.id == id }) {
+            var updated = recordings[index]
+            if let transcription = transcription {
+                updated.transcription = transcription
+            }
+            updated.progress = progress
+            updated.status = status
+            if let isRegeneration = isRegeneration {
+                updated.isRegeneration = isRegeneration
+            }
+            recordings[index] = updated
+        }
+        
+        var userInfo: [String: Any] = [
+            "id": id,
+            "progress": progress,
+            "status": status
+        ]
+        if let transcription = transcription {
+            userInfo["transcription"] = transcription
+        }
+        if let isRegeneration = isRegeneration {
+            userInfo["isRegeneration"] = isRegeneration
+        }
+        
+        NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
+    }
+    
+    /// Progress ticks are ephemeral UI state: persisting each one caused up to
+    /// ~100 SQLite transactions per transcription. Status transitions are still
+    /// persisted by the explicit update methods.
+    func updateRecordingProgressTransient(_ id: UUID, progress: Float, status: RecordingStatus) {
+        applyLocalProgressUpdate(id, progress: progress, status: status)
+    }
+    
     func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
         do {
             _ = try await dbQueue.write { db -> Int in
@@ -244,30 +281,7 @@ class RecordingStore: ObservableObject {
                         Recording.Columns.status.set(to: status.rawValue)
                     ])
             }
-            if let index = recordings.firstIndex(where: { $0.id == id }) {
-                var updated = recordings[index]
-                updated.transcription = transcription
-                updated.progress = progress
-                updated.status = status
-                if let isRegeneration = isRegeneration {
-                    updated.isRegeneration = isRegeneration
-                }
-                recordings[index] = updated
-            }
-            
-            var userInfo: [String: Any] = [
-                "id": id,
-                "transcription": transcription,
-                "progress": progress,
-                "status": status
-            ]
-            if let isRegeneration = isRegeneration {
-                userInfo["isRegeneration"] = isRegeneration
-            }
-            
-            await MainActor.run {
-                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
-            }
+            applyLocalProgressUpdate(id, transcription: transcription, progress: progress, status: status, isRegeneration: isRegeneration)
         } catch {
             print("Failed to update recording progress: \(error)")
         }
@@ -293,28 +307,7 @@ class RecordingStore: ObservableObject {
                         Recording.Columns.status.set(to: status.rawValue)
                     ])
             }
-            if let index = recordings.firstIndex(where: { $0.id == id }) {
-                var updated = recordings[index]
-                updated.progress = progress
-                updated.status = status
-                if let isRegeneration = isRegeneration {
-                    updated.isRegeneration = isRegeneration
-                }
-                recordings[index] = updated
-            }
-            
-            var userInfo: [String: Any] = [
-                "id": id,
-                "progress": progress,
-                "status": status
-            ]
-            if let isRegeneration = isRegeneration {
-                userInfo["isRegeneration"] = isRegeneration
-            }
-            
-            await MainActor.run {
-                NotificationCenter.default.post(name: Self.recordingProgressDidUpdateNotification, object: nil, userInfo: userInfo)
-            }
+            applyLocalProgressUpdate(id, progress: progress, status: status, isRegeneration: isRegeneration)
         } catch {
             print("Failed to update recording status: \(error)")
         }

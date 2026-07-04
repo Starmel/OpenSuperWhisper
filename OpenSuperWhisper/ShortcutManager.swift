@@ -105,16 +105,18 @@ class ShortcutManager {
         
         Task { @MainActor in
             if self.activeVm == nil {
-                let cursorPosition = FocusUtils.getCurrentCursorPosition()
-                let indicatorPoint: NSPoint?
-                if let caret = FocusUtils.getCaretRect() {
-                    indicatorPoint = FocusUtils.convertAXPointToCocoa(caret.origin)
-                } else {
-                    indicatorPoint = cursorPosition
-                }
-                let vm = IndicatorWindowManager.shared.show(nearPoint: indicatorPoint)
+                // Start recording immediately: resolving the caret position talks to
+                // the focused app via AX IPC and can hang for seconds if that app
+                // is busy — the first words must not be lost because of it.
+                let vm = IndicatorWindowManager.shared.prepare()
                 vm.startRecording()
                 self.activeVm = vm
+                
+                let cursorPosition = FocusUtils.getCurrentCursorPosition()
+                let caretRect = await Task.detached { FocusUtils.getCaretRect() }.value
+                let indicatorPoint = caretRect.map { FocusUtils.convertAXPointToCocoa($0.origin) } ?? cursorPosition
+                
+                IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: indicatorPoint)
             } else if !self.holdMode {
                 IndicatorWindowManager.shared.stopRecording()
                 self.activeVm = nil

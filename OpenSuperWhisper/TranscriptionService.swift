@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 
 @MainActor
@@ -19,7 +18,6 @@ class TranscriptionService: ObservableObject {
     }
     
     private var currentEngine: TranscriptionEngine?
-    private var totalDuration: Float = 0.0
     private var transcriptionTask: TranscriptionTaskBox? = nil
     private var isCancelled = false
     
@@ -93,15 +91,13 @@ class TranscriptionService: ObservableObject {
             }
         }
         
-        await MainActor.run {
-            self.progress = 0.0
-            self.conversionProgress = 0.0
-            self.isConverting = true
-            self.isTranscribing = true
-            self.transcribedText = ""
-            self.currentSegment = ""
-            self.isCancelled = false
-        }
+        progress = 0.0
+        conversionProgress = 0.0
+        isConverting = true
+        isTranscribing = true
+        transcribedText = ""
+        currentSegment = ""
+        isCancelled = false
         
         defer {
             Task { @MainActor in
@@ -113,16 +109,6 @@ class TranscriptionService: ObservableObject {
                 }
                 self.transcriptionTask = nil
             }
-        }
-        
-        let durationInSeconds: Float = await (try? Task.detached(priority: .userInitiated) {
-            let asset = AVAsset(url: url)
-            let duration = try await asset.load(.duration)
-            return Float(CMTimeGetSeconds(duration))
-        }.value) ?? 0.0
-        
-        await MainActor.run {
-            self.totalDuration = durationInSeconds
         }
         
         guard let engine = currentEngine else {
@@ -180,16 +166,12 @@ class TranscriptionService: ObservableObject {
             return result
         }
         
-        await MainActor.run {
-            self.transcriptionTask = TranscriptionTaskBox(task)
-        }
+        transcriptionTask = TranscriptionTaskBox(task)
         
         do {
             return try await task.value
         } catch is CancellationError {
-            await MainActor.run {
-                self.isCancelled = true
-            }
+            isCancelled = true
             throw TranscriptionError.processingFailed
         }
     }
