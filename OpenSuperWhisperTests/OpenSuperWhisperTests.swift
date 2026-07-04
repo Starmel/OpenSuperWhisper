@@ -41,6 +41,167 @@ final class WhisperEngineMultiChannelTests: XCTestCase {
     }
 }
 
+final class WhisperEngineConversionTests: XCTestCase {
+
+    private var tempFiles: [URL] = []
+
+    override func tearDownWithError() throws {
+        for url in tempFiles {
+            try? FileManager.default.removeItem(at: url)
+        }
+        tempFiles.removeAll()
+    }
+
+    private func makeSineWAV(duration: Double, sampleRate: Double, frequency: Double = 440) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osw-conversion-test-\(UUID().uuidString).wav")
+        tempFiles.append(url)
+
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false
+        ) else {
+            throw NSError(domain: "test", code: 1)
+        }
+        let file = try AVAudioFile(
+            forWriting: url, settings: format.settings,
+            commonFormat: .pcmFormatFloat32, interleaved: false
+        )
+        let frameCount = AVAudioFrameCount(duration * sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw NSError(domain: "test", code: 2)
+        }
+        buffer.frameLength = frameCount
+        let samples = buffer.floatChannelData![0]
+        for i in 0..<Int(frameCount) {
+            samples[i] = 0.5 * sinf(Float(2.0 * Double.pi * frequency * Double(i) / sampleRate))
+        }
+        try file.write(from: buffer)
+        return url
+    }
+
+    private func longestNearZeroRun(in samples: [Float], threshold: Float = 1e-4) -> Int {
+        var longest = 0
+        var current = 0
+        for sample in samples {
+            if abs(sample) < threshold {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 0
+            }
+        }
+        return longest
+    }
+
+    // Bug: converter tail is never flushed (.endOfStream), so trailing samples are dropped.
+    func testSequentialConversionPreservesFullDuration() async throws {
+        let url = try makeSineWAV(duration: 3.0, sampleRate: 44100)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        // 3 s * 44100 * (16000/44100) = exactly 48000 output samples.
+        // Without flushing the converter (.endOfStream) the resampler tail is lost.
+        let expected = Int(3.0 * 16000)
+        print("[DIAG] sequential count=\(result.count) expected=\(expected) diff=\(result.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Sequential conversion dropped samples: got \(result.count), expected \(expected)"
+        )
+
+        let tail = result.suffix(320)
+        let tailRMS = sqrt(tail.reduce(Float(0)) { $0 + $1 * $1 } / Float(tail.count))
+        print("[DIAG] sequential tailRMS=\(tailRMS)")
+        XCTAssertGreaterThan(tailRMS, 0.1, "Tail of converted audio is silent — end of recording was lost")
+    }
+
+    // Bug: parallel segment stitching leaves zero-filled gaps / misaligned boundaries.
+    func testParallelConversionProducesContinuousAudio() async throws {
+        // > 10 seconds triggers the parallel conversion path
+        let url = try makeSineWAV(duration: 15.0, sampleRate: 48000)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        let expected = Int(15.0 * 16000)
+        print("[DIAG] parallel count=\(result.count) expected=\(expected) diff=\(result.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Parallel conversion produced wrong duration: got \(result.count), expected \(expected)"
+        )
+
+        // At 16 kHz a 440 Hz sine crosses zero every ~18 samples and stays below the
+        // threshold for at most 1 sample per crossing. Any longer run of near-zero
+        // samples is a gap at a worker segment boundary.
+        let interior = Array(result.dropFirst(1600).dropLast(1600))
+        let gap = longestNearZeroRun(in: interior)
+        print("[DIAG] parallel longest near-zero run=\(gap)")
+        XCTAssertLessThan(gap, 3, "Found a silent gap of \(gap) samples inside continuous audio — segment stitching is broken")
+    }
+
+    func testParallelConversionMatchesSequentialResult() async throws {
+        let url = try makeSineWAV(duration: 15.0, sampleRate: 44100)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let parallel = try XCTUnwrap(samples)
+
+        let expected = Int(15.0 * 16000)
+        print("[DIAG] parallel441 count=\(parallel.count) expected=\(expected) diff=\(parallel.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(parallel.count - expected), 2,
+            "Parallel conversion length mismatch: got \(parallel.count), expected \(expected)"
+        )
+
+        // Overall energy must match a clean 0.5-amplitude sine (RMS ~0.35).
+        // Gaps or overlapping segments change the energy noticeably.
+        let rms = sqrt(parallel.reduce(Float(0)) { $0 + $1 * $1 } / Float(parallel.count))
+        print("[DIAG] parallel441 rms=\(rms)")
+        XCTAssertEqual(rms, 0.3535, accuracy: 0.01, "RMS of converted audio deviates from source sine")
+    }
+}
+
+final class AudioRecorderTempCleanupTests: XCTestCase {
+
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osw-cleanup-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func createFile(named name: String, modifiedDaysAgo days: Double) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        FileManager.default.createFile(atPath: url.path, contents: Data([0x1]))
+        let date = Date().addingTimeInterval(-days * 24 * 60 * 60)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        return url
+    }
+
+    // Bug: orphaned temp recordings were never cleaned up and accumulated forever.
+    func testRemovesOnlyFilesOlderThanMaxAge() throws {
+        let oldFile = try createFile(named: "old.wav", modifiedDaysAgo: 2)
+        let freshFile = try createFile(named: "fresh.wav", modifiedDaysAgo: 0)
+
+        AudioRecorder.cleanupOldTemporaryFiles(in: directory, olderThan: 24 * 60 * 60)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path), "Stale temp recording must be removed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshFile.path), "Recent temp recording must be kept")
+    }
+
+    func testMissingDirectoryDoesNotCrash() {
+        let missing = directory.appendingPathComponent("does-not-exist")
+        AudioRecorder.cleanupOldTemporaryFiles(in: missing, olderThan: 24 * 60 * 60)
+    }
+}
+
 final class MicrophoneInventoryTests: XCTestCase {
     
     func testPrintConnectedMicrophones() throws {

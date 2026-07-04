@@ -89,16 +89,24 @@ class IndicatorViewModel: ObservableObject {
             startBlinking()
         }
         
-        Task.detached { [recorder] in
-            recorder.startRecording()
-        }
+        recorder.startRecording()
     }
     
     func startDecoding() {
+        // A second stop request (double hotkey press, hold-mode key-up) must not
+        // restart decoding or hide the window while transcription is in flight.
+        guard state == .recording || state == .connecting else { return }
+        
         stopBlinking()
         
         if isTranscriptionBusy {
-            recorder.cancelRecording()
+            // The engine is busy with another transcription: keep the user's audio
+            // and put it into the queue instead of deleting it.
+            if let tempURL = recorder.stopRecording() {
+                Task {
+                    await transcriptionQueue.addFileToQueue(url: tempURL)
+                }
+            }
             showBusyMessage()
             return
         }
@@ -357,7 +365,7 @@ struct IndicatorWindowPreview: View {
     
     @StateObject private var decodingVM = {
         let vm = IndicatorViewModel()
-        vm.startDecoding()
+        vm.state = .decoding
         return vm
     }()
     

@@ -101,6 +101,7 @@ class ShortcutManager {
         holdMode = false
         
         let holdToRecordEnabled = AppPreferences.shared.holdToRecord
+        let isStartingRecording = activeVm == nil
         
         Task { @MainActor in
             if self.activeVm == nil {
@@ -120,7 +121,9 @@ class ShortcutManager {
             }
         }
         
-        if holdToRecordEnabled {
+        // Arm hold mode only when this press starts a recording. Arming it on the
+        // stopping press would trigger a second stop on key-up.
+        if holdToRecordEnabled && isStartingRecording {
             let workItem = DispatchWorkItem { [weak self] in
                 self?.holdMode = true
             }
@@ -136,11 +139,11 @@ class ShortcutManager {
         let holdToRecordEnabled = AppPreferences.shared.holdToRecord
         
         Task { @MainActor in
-            if holdToRecordEnabled && self.holdMode {
+            if holdToRecordEnabled && self.holdMode && self.activeVm != nil {
                 IndicatorWindowManager.shared.stopRecording()
                 self.activeVm = nil
-                self.holdMode = false
             }
+            self.holdMode = false
         }
     }
 }
