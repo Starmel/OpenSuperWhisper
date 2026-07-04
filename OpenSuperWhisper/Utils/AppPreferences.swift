@@ -105,6 +105,11 @@ final class AppPreferences {
     @UserDefault(key: "modifierOnlyHotkey", defaultValue: "none")
     var modifierOnlyHotkey: String
     
+    /// Last non-none modifier key, used to restore the user's choice
+    /// when switching back to Single Modifier Key mode.
+    @UserDefault(key: "lastModifierOnlyHotkey", defaultValue: "leftCommand")
+    var lastModifierOnlyHotkey: String
+    
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
     
@@ -112,7 +117,7 @@ final class AppPreferences {
     var addSpaceAfterSentence: Bool
 
     // Clipboard settings
-    @UserDefault(key: "autoCopyToClipboard", defaultValue: true)
+    @UserDefault(key: "autoCopyToClipboard", defaultValue: false)
     var autoCopyToClipboard: Bool
 
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)

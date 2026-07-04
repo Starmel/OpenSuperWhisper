@@ -137,6 +137,9 @@ class SettingsViewModel: ObservableObject {
     @Published var modifierOnlyHotkey: ModifierKey {
         didSet {
             AppPreferences.shared.modifierOnlyHotkey = modifierOnlyHotkey.rawValue
+            if modifierOnlyHotkey != .none {
+                AppPreferences.shared.lastModifierOnlyHotkey = modifierOnlyHotkey.rawValue
+            }
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
     }
@@ -362,7 +365,18 @@ class SettingsViewModel: ObservableObject {
                     throw CancellationError()
                 }
                 
-                let models = try await AsrModels.downloadAndLoad(version: version)
+                let modelId = model.id
+                let models = try await AsrModels.downloadAndLoad(version: version) { [weak self] progress in
+                    print("[ParakeetProgress] fraction=\(progress.fractionCompleted) phase=\(progress.phase)")
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+                        self.downloadProgress = progress.fractionCompleted
+                        if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == modelId }) {
+                            self.downloadableFluidAudioModels[index].downloadProgress = progress.fractionCompleted
+                        }
+                    }
+                }
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
@@ -465,12 +479,7 @@ struct SettingsDownloadableModel: Identifiable {
     let preferredLanguage: String?
 
     var sizeString: String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        formatter.includesUnit = true
-        formatter.isAdaptive = true
-        return formatter.string(fromByteCount: Int64(size) * 1000000)
+        formatModelSize(megabytes: size)
     }
 
     var huggingFacePageURL: URL? {
@@ -536,10 +545,25 @@ struct SettingsDownloadableModels {
     }
 }
 
+func formatModelSize(megabytes: Int) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useMB, .useGB]
+    formatter.countStyle = .file
+    formatter.includesUnit = true
+    formatter.isAdaptive = true
+    return formatter.string(fromByteCount: Int64(megabytes) * 1000000)
+}
+
 func makeHuggingFacePageURL(fromDownloadURL url: URL) -> URL? {
     let absoluteString = url.absoluteString
     guard let range = absoluteString.range(of: "/resolve/") else { return nil }
     return URL(string: String(absoluteString[..<range.lowerBound]))
+}
+
+/// The Hugging Face owner (user / organization) from a model page URL,
+/// e.g. https://huggingface.co/ivrit-ai/whisper-... -> "ivrit-ai".
+func huggingFaceOwner(fromPageURL url: URL) -> String? {
+    url.pathComponents.first { $0 != "/" }
 }
 
 struct Settings {
@@ -581,10 +605,18 @@ struct Settings {
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
+    @StateObject private var permissionsManager = PermissionsManager()
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
+    
+    private var sheetSize: CGSize {
+        let visibleFrame = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1280, height: 800)
+        let width = min(550, visibleFrame.width - 40)
+        let height = min(500, visibleFrame.height - 60)
+        return CGSize(width: width, height: height)
+    }
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -617,7 +649,7 @@ struct SettingsView: View {
                 .tag(3)
             }
         .padding()
-        .frame(width: 550)
+        .frame(width: sheetSize.width, height: sheetSize.height)
         .background(Color(.windowBackgroundColor))
         .safeAreaInset(edge: .bottom) {
             HStack {
@@ -674,181 +706,117 @@ struct SettingsView: View {
     }
     
     private var modelSettings: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Speech Recognition Engine")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    Picker("Engine", selection: $viewModel.selectedEngine) {
-                        Text("Parakeet").tag("fluidaudio")
-                        Text("Whisper").tag("whisper")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Speech Recognition Engine")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Picker("Engine", selection: $viewModel.selectedEngine) {
+                    Text("Parakeet").tag("fluidaudio")
+                    Text("Whisper").tag("whisper")
+                }
+                .pickerStyle(.segmented)
+                .padding(.bottom, 8)
+                
+                if viewModel.selectedEngine == "whisper" {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Whisper Model")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        Text("Download Models")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.top, 8)
+                        
+                        VStack(spacing: 12) {
+                            ForEach($viewModel.downloadableModels) { $model in
+                                if SettingsDownloadableModels.isVisible(model,
+                                        selectedLanguage: viewModel.selectedLanguage,
+                                        systemLanguage: LanguageUtil.getSystemLanguage()) {
+                                    ModelDownloadItemView(model: $model, viewModel: viewModel)
+                                }
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Models Directory:")
+                                    .font(.subheadline)
+                                Button(action: {
+                                    NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
+                                }) {
+                                    Label("Open Folder", systemImage: "folder")
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Open models directory")
+                            }
+                            Text(WhisperModelManager.shared.modelsDirectory.path)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(6)
+                        }
+                        .padding(.top, 8)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.bottom, 8)
-                    
-                    if viewModel.selectedEngine == "whisper" {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Whisper Model")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
-                            
-                            ScrollView {
-                                VStack(spacing: 12) {
-                                    ForEach($viewModel.downloadableModels) { $model in
-                                        if SettingsDownloadableModels.isVisible(model,
-                                                selectedLanguage: viewModel.selectedLanguage,
-                                                systemLanguage: LanguageUtil.getSystemLanguage()) {
-                                            ModelDownloadItemView(model: $model, viewModel: viewModel)
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 200)
-                            
-                            if viewModel.isDownloading {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        if viewModel.downloadProgress > 0 {
-                                            ProgressView(value: viewModel.downloadProgress)
-                                                .progressViewStyle(LinearProgressViewStyle())
-                                        } else {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle())
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Button("Cancel") {
-                                            viewModel.cancelDownload()
-                                        }
-                                        .buttonStyle(.bordered)
-                                    }
-                                    
-                                    if let downloadingName = viewModel.downloadingModelName {
-                                        Text("Downloading: \(downloadingName)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(.top, 8)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Models Directory:")
-                                        .font(.subheadline)
-                                    Button(action: {
-                                        NSWorkspace.shared.open(WhisperModelManager.shared.modelsDirectory)
-                                    }) {
-                                        Label("Open Folder", systemImage: "folder")
-                                            .font(.subheadline)
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .help("Open models directory")
-                                }
-                                Text(WhisperModelManager.shared.modelsDirectory.path)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textSelection(.enabled)
-                                    .padding(8)
-                                    .background(Color(.textBackgroundColor).opacity(0.5))
-                                    .cornerRadius(6)
-                            }
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Parakeet Model")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        Text("Download Models")
+                            .font(.headline)
+                            .foregroundColor(.primary)
                             .padding(.top, 8)
+                        
+                        VStack(spacing: 12) {
+                            ForEach($viewModel.downloadableFluidAudioModels) { $model in
+                                FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
+                            }
                         }
-                    } else {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Parakeet Model")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text("Download Models")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(.top, 8)
-                            
-                            ScrollView {
-                                VStack(spacing: 12) {
-                                    ForEach($viewModel.downloadableFluidAudioModels) { $model in
-                                        FluidAudioModelDownloadItemView(model: $model, viewModel: viewModel)
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 200)
-                            
-                            if viewModel.isDownloading {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        if viewModel.downloadProgress > 0 {
-                                            ProgressView(value: viewModel.downloadProgress)
-                                                .progressViewStyle(LinearProgressViewStyle())
-                                        } else {
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle())
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Button("Cancel") {
-                                            viewModel.cancelDownload()
-                                        }
-                                        .buttonStyle(.bordered)
-                                    }
-                                    
-                                    if let downloadingName = viewModel.downloadingModelName {
-                                        Text("Downloading: \(downloadingName)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(.top, 8)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Models Directory:")
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Models Directory:")
+                                    .font(.subheadline)
+                                Button(action: {
+                                    let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
+                                    let parentDir = cacheDir.deletingLastPathComponent()
+                                    NSWorkspace.shared.open(parentDir)
+                                }) {
+                                    Label("Open Folder", systemImage: "folder")
                                         .font(.subheadline)
-                                    Button(action: {
-                                        let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
-                                        let parentDir = cacheDir.deletingLastPathComponent()
-                                        NSWorkspace.shared.open(parentDir)
-                                    }) {
-                                        Label("Open Folder", systemImage: "folder")
-                                            .font(.subheadline)
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .help("Open models directory")
                                 }
-                                Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textSelection(.enabled)
-                                    .padding(8)
-                                    .background(Color(.textBackgroundColor).opacity(0.5))
-                                    .cornerRadius(6)
+                                .buttonStyle(.borderless)
+                                .help("Open models directory")
                             }
-                            .padding(.top, 8)
+                            Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(6)
                         }
+                        .padding(.top, 8)
                     }
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(12)
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.controlBackgroundColor).opacity(0.3))
+            .cornerRadius(12)
         }
         .padding()
     }
     
     private var transcriptionSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Language Settings
                 VStack(alignment: .leading, spacing: 16) {
@@ -1055,7 +1023,7 @@ struct SettingsView: View {
     }
     
     private var advancedSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Decoding Strategy
                 VStack(alignment: .leading, spacing: 16) {
@@ -1162,7 +1130,7 @@ struct SettingsView: View {
     }
     
     private var shortcutSettings: some View {
-        Form {
+        ScrollView {
             VStack(spacing: 20) {
                 // Recording Trigger
                 VStack(alignment: .leading, spacing: 16) {
@@ -1177,7 +1145,8 @@ struct SettingsView: View {
                                 if !newValue {
                                     viewModel.modifierOnlyHotkey = .none
                                 } else if viewModel.modifierOnlyHotkey == .none {
-                                    viewModel.modifierOnlyHotkey = .leftCommand
+                                    viewModel.modifierOnlyHotkey =
+                                        ModifierKey(rawValue: AppPreferences.shared.lastModifierOnlyHotkey) ?? .leftCommand
                                 }
                             }
                         )) {
@@ -1209,10 +1178,20 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
-                                Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
+                                if !permissionsManager.isInputMonitoringPermissionGranted {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                        
+                                        Button("Grant Permission") {
+                                            permissionsManager.requestInputMonitoringPermissionOrOpenSystemPreferences()
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                    }
                                     .padding(.top, 4)
+                                }
                             }
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
@@ -1290,7 +1269,12 @@ struct SettingsFluidAudioModel: Identifiable {
     let version: String
     var isDownloaded: Bool
     let description: String
+    let size: Int
     var downloadProgress: Double = 0.0
+
+    var sizeString: String {
+        formatModelSize(megabytes: size)
+    }
 }
 
 struct SettingsFluidAudioModels {
@@ -1299,13 +1283,15 @@ struct SettingsFluidAudioModels {
             name: "Parakeet v3",
             version: "v3",
             isDownloaded: false,
-            description: "Multilingual, 25 languages"
+            description: "Multilingual, 25 languages",
+            size: 483
         ),
         SettingsFluidAudioModel(
             name: "Parakeet v2",
             version: "v2",
             isDownloaded: false,
-            description: "English-only, higher recall"
+            description: "English-only, higher recall",
+            size: 464
         )
     ]
 }
@@ -1391,28 +1377,15 @@ struct FluidAudioModelDownloadItemView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(model.name)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    if model.isDownloaded {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.blue)
-                            .imageScale(.small)
-                    }
-                }
+                Text(model.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                 
                 Text(model.description)
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
                 if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(0.7)
-                        .padding(.top, 4)
-                } else if model.downloadProgress > 0 && model.downloadProgress < 1 {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(height: 6)
@@ -1443,23 +1416,29 @@ struct FluidAudioModelDownloadItemView: View {
                     .controlSize(.small)
                 }
             } else {
-                Button(action: {
-                    Task {
-                        do {
-                            try await viewModel.downloadFluidAudioModel(model)
-                        } catch is CancellationError {
-                            // Don't show error for manual cancellation
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
+                HStack(spacing: 8) {
+                    Text(model.sizeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Button(action: {
+                        Task {
+                            do {
+                                try await viewModel.downloadFluidAudioModel(model)
+                            } catch is CancellationError {
+                                // Don't show error for manual cancellation
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                showError = true
+                            }
                         }
+                    }) {
+                        Label("Download", systemImage: "arrow.down.circle")
                     }
-                }) {
-                    Label("Download", systemImage: "arrow.down.circle")
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(viewModel.isDownloading)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(viewModel.isDownloading)
             }
         }
         .padding(12)
@@ -1496,15 +1475,17 @@ struct ModelDownloadItemView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(model.name)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
-                    if model.isDownloaded {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.blue)
-                            .imageScale(.small)
+
+                    if let pageURL = model.huggingFacePageURL,
+                       let owner = huggingFaceOwner(fromPageURL: pageURL) {
+                        Link(owner, destination: pageURL)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("View on Hugging Face")
                     }
                 }
                 
@@ -1512,17 +1493,7 @@ struct ModelDownloadItemView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                if let pageURL = model.huggingFacePageURL {
-                    Link(destination: pageURL) {
-                        HStack(spacing: 3) {
-                            Text("Hugging Face")
-                            Image(systemName: "arrow.up.right")
-                        }
-                        .font(.caption2)
-                    }
-                }
-
-                if model.downloadProgress > 0 && model.downloadProgress < 1 {
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(height: 6)
@@ -1554,23 +1525,29 @@ struct ModelDownloadItemView: View {
                     .controlSize(.small)
                 }
             } else {
-                Button(action: {
-                    Task {
-                        do {
-                            try await viewModel.downloadModel(model)
-                        } catch is CancellationError {
-                            // Don't show error for manual cancellation
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
+                HStack(spacing: 8) {
+                    Text(model.sizeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Button(action: {
+                        Task {
+                            do {
+                                try await viewModel.downloadModel(model)
+                            } catch is CancellationError {
+                                // Don't show error for manual cancellation
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                showError = true
+                            }
                         }
+                    }) {
+                        Label("Download", systemImage: "arrow.down.circle")
                     }
-                }) {
-                    Label("Download", systemImage: "arrow.down.circle")
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(viewModel.isDownloading)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(viewModel.isDownloading)
             }
         }
         .padding(12)
