@@ -180,10 +180,10 @@ class ContentViewModel: ObservableObject {
         
         IndicatorWindowManager.shared.hide()
 
-        if let tempURL = recorder.stopRecording() {
-            Task { [weak self] in
-                guard let self = self else { return }
-
+        Task { [weak self] in
+            guard let self = self else { return }
+            
+            if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
@@ -241,10 +241,12 @@ class ContentViewModel: ObservableObject {
                     self.state = .idle
                     self.recordingDuration = 0
                 }
+            } else {
+                await MainActor.run {
+                    self.state = .idle
+                    self.recordingDuration = 0
+                }
             }
-        } else {
-            state = .idle
-            recordingDuration = 0
         }
     }
 
