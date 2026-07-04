@@ -23,7 +23,6 @@ public struct WhisperFullParams {
     public var tholdPtsum: Float = 0.01
     public var maxLen: Int32 = 0
     public var splitOnWord: Bool = false
-    public var print_realtime: Bool = false
     public var maxTokens: Int32 = 0
     public var debugMode: Bool = false
     public var audioCtx: Int32 = 0
@@ -82,7 +81,6 @@ public struct WhisperFullParams {
         cParams.thold_ptsum = tholdPtsum
         cParams.max_len = maxLen
         cParams.split_on_word = splitOnWord
-        cParams.print_realtime = print_realtime
         cParams.max_tokens = maxTokens
         cParams.debug_mode = debugMode
         cParams.audio_ctx = audioCtx

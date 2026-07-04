@@ -13,6 +13,9 @@ class AudioRecorder: NSObject, ObservableObject {
     
     static let minimumRecordingDuration: TimeInterval = 1.0
     static let temporaryFileMaxAge: TimeInterval = 24 * 60 * 60
+    /// Extra audio captured after a stop request, so the tail of the last word
+    /// (released together with the hotkey) is not clipped.
+    static let stopTailDuration: TimeInterval = 0.25
     
     // Serializes all recording state mutations (start/stop/cancel/connection monitoring)
     // so a stop arriving right after a start can never overtake it.
@@ -113,42 +116,48 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
+    // Loaded once: decoding the mp3 from disk takes ~15 ms on the main thread,
+    // which drops frames of the indicator appear animation on every hotkey press.
+    private static let cachedNotificationSound: NSSound? = {
+        guard let soundURL = Bundle.main.url(forResource: "notification", withExtension: "mp3"),
+              let sound = NSSound(contentsOf: soundURL, byReference: false) else {
+            print("Failed to load notification sound file")
+            return nil
+        }
+        sound.volume = 0.3
+        return sound
+    }()
+    
     private func playNotificationSound() {
-        // Try to play using NSSound first
-        guard let soundURL = Bundle.main.url(forResource: "notification", withExtension: "mp3") else {
-            print("Failed to find notification sound file")
-            // Fall back to system sound if notification.mp3 is not found
+        guard let sound = Self.cachedNotificationSound else {
             NSSound.beep()
             return
         }
-        
-        if let sound = NSSound(contentsOf: soundURL, byReference: false) {
-            // Set maximum volume to ensure it's audible
-            sound.volume = 0.3
-            sound.play()
-            notificationSound = sound
-        } else {
-            print("Failed to create NSSound from URL, falling back to system beep")
-            // Fall back to system beep if NSSound creation fails
-            NSSound.beep()
+        if sound.isPlaying {
+            sound.stop()
         }
+        sound.play()
+        notificationSound = sound
     }
     
     func startRecording() {
-        guard canRecord else {
-            print("Cannot start recording - no audio input available")
-            return
-        }
-        
-        if AppPreferences.shared.playSoundOnRecordStart {
-            playNotificationSound()
-        }
-        
-        let activeMic = MicrophoneService.shared.getActiveMicrophone()
-        let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
-        updateRecordingState(isRecording: false, isConnecting: requiresConnection)
-        
+        // Everything below costs CoreAudio HAL round-trips (device queries,
+        // AudioQueue start for the notification sound) — 20-35 ms that used to
+        // block the main thread right when the indicator appear animation
+        // starts, so the whole start sequence runs on the work queue.
+        let playSound = AppPreferences.shared.playSoundOnRecordStart
         workQueue.async {
+            guard let activeMic = MicrophoneService.shared.getActiveMicrophone() else {
+                print("Cannot start recording - no audio input available")
+                return
+            }
+            
+            if playSound {
+                self.playNotificationSound()
+            }
+            
+            let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
+            self.updateRecordingState(isRecording: false, isConnecting: requiresConnection)
             self.performStart(activeMic: activeMic, monitorConnection: requiresConnection)
         }
     }
@@ -203,9 +212,39 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
-    func stopRecording() -> URL? {
-        workQueue.sync {
-            performStop(discard: false)
+    func stopRecording() async -> URL? {
+        await withCheckedContinuation { continuation in
+            workQueue.async {
+                guard let recorder = self.audioRecorder, let url = self.currentRecordingURL else {
+                    continuation.resume(returning: self.performStop(discard: false))
+                    return
+                }
+                
+                // Detach the session immediately (UI state, connection monitoring),
+                // then keep capturing a short tail before actually stopping, so the
+                // end of the last word released together with the hotkey survives.
+                self.audioRecorder = nil
+                self.currentRecordingURL = nil
+                self.stopConnectionMonitoring()
+                self.updateRecordingState(isRecording: false, isConnecting: false)
+                
+                self.workQueue.asyncAfter(deadline: .now() + Self.stopTailDuration) {
+                    let recordedDuration = recorder.currentTime
+                    recorder.stop()
+                    // A new recording may have started during the tail window;
+                    // it will restore the system input itself when it stops.
+                    if self.audioRecorder == nil {
+                        self.restoreSystemDefaultInputIfNeeded()
+                    }
+                    
+                    if recordedDuration < Self.minimumRecordingDuration {
+                        try? FileManager.default.removeItem(at: url)
+                        continuation.resume(returning: nil)
+                    } else {
+                        continuation.resume(returning: url)
+                    }
+                }
+            }
         }
     }
     

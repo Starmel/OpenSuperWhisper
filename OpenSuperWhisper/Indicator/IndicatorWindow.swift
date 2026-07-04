@@ -21,7 +21,6 @@ class IndicatorViewModel: ObservableObject {
     @Published var state: RecordingState = .idle
     @Published var isBlinking = false
     @Published var recorder: AudioRecorder = .shared
-    @Published var isVisible = false
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
@@ -81,13 +80,13 @@ class IndicatorViewModel: ObservableObject {
             return
         }
         
-        if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
-            state = .connecting
-            stopBlinking()
-        } else {
-            state = .recording
-            startBlinking()
-        }
+        // Optimistically assume recording: querying the microphone here costs
+        // CoreAudio HAL round-trips on the main thread right before the appear
+        // animation. The recorder resolves the real state on its own queue and
+        // publishes isConnecting/isRecording, which the sinks above translate
+        // into .connecting/.recording.
+        state = .recording
+        startBlinking()
         
         recorder.startRecording()
     }
@@ -102,9 +101,10 @@ class IndicatorViewModel: ObservableObject {
         if isTranscriptionBusy {
             // The engine is busy with another transcription: keep the user's audio
             // and put it into the queue instead of deleting it.
-            if let tempURL = recorder.stopRecording() {
-                Task {
-                    await transcriptionQueue.addFileToQueue(url: tempURL)
+            Task { [weak self] in
+                guard let self = self else { return }
+                if let tempURL = await self.recorder.stopRecording() {
+                    await self.transcriptionQueue.addFileToQueue(url: tempURL)
                 }
             }
             showBusyMessage()
@@ -113,10 +113,10 @@ class IndicatorViewModel: ObservableObject {
         
         state = .decoding
         
-        if let tempURL = recorder.stopRecording() {
-            Task { [weak self] in
-                guard let self = self else { return }
-                
+        Task { [weak self] in
+            guard let self = self else { return }
+            
+            if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
@@ -163,12 +163,9 @@ class IndicatorViewModel: ObservableObject {
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
                 }
-            }
-        } else {
-            
-            print("!!! Not found record url !!!")
-            
-            Task {
+            } else {
+                print("!!! Not found record url !!!")
+                
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
                 }
@@ -234,17 +231,6 @@ class IndicatorViewModel: ObservableObject {
         hideTimer = nil
         recorder.cancelRecording()
     }
-
-    @MainActor
-    func hideWithAnimation() async {
-        await withCheckedContinuation { continuation in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                self.isVisible = false
-            } completion: {
-                continuation.resume()
-            }
-        }
-    }
 }
 
 struct RecordingIndicator: View {
@@ -270,6 +256,15 @@ struct RecordingIndicator: View {
 }
 
 struct IndicatorWindow: View {
+    /// Geometry shared with IndicatorWindowManager. The panel must be larger
+    /// than the card: everything drawn outside the window bounds is cut off,
+    /// so the appear offset (moves the card down) and the spring overshoot
+    /// need margins, otherwise the card edges are visibly clipped mid-animation.
+    static let cardSize = CGSize(width: 200, height: 36)
+    static let windowSize = CGSize(width: 256, height: 96)
+    static let appearOffset: CGFloat = 20
+    static let appearInitialScale: CGFloat = 0.5
+    
     @ObservedObject var viewModel: IndicatorViewModel
     @Environment(\.colorScheme) private var colorScheme
     
@@ -334,7 +329,7 @@ struct IndicatorWindow: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(height: 36)
+        .frame(height: Self.cardSize.height)
         .background {
             rect
                 .fill(backgroundColor)
@@ -342,17 +337,20 @@ struct IndicatorWindow: View {
                     rect
                         .fill(Material.thinMaterial)
                 }
-                .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
         }
         .clipShape(rect)
-        .frame(width: 200)
-        .scaleEffect(viewModel.isVisible ? 1 : 0.5)
-        .offset(y: viewModel.isVisible ? 0 : 20)
-        .opacity(viewModel.isVisible ? 1 : 0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isVisible)
-        .onAppear {
-            viewModel.isVisible = true
-        }
+        .frame(width: Self.cardSize.width)
+        // The ideal size of the root view must match the panel: NSHostingView
+        // resizes the window down to SwiftUI's ideal size, and a window sized
+        // to the bare card clips the appear offset, bounce overshoot and shadow.
+        .frame(width: Self.windowSize.width, height: Self.windowSize.height)
+        // The appear/hide animation is NOT done in SwiftUI on purpose:
+        // animating scaleEffect/offset/opacity re-rasterizes the card (material
+        // + gradients + shadow) on the CPU every frame and stalls the main
+        // thread in CABackingStoreUpdate/wait_for_synchronize (20-60 ms per
+        // frame in traces). IndicatorWindowManager animates the hosting view's
+        // layer with CASpringAnimation instead: content is drawn once and the
+        // spring runs entirely in the render server on the GPU.
     }
 }
 

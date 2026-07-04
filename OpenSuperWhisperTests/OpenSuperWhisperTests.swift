@@ -189,6 +189,66 @@ final class WhisperEngineConversionTests: XCTestCase {
     }
 }
 
+final class WhisperStateIsolationTests: XCTestCase {
+
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    // Each transcription runs whisper_full_with_state on a fresh whisper_state,
+    // so noContext = false keeps context between 30s windows of one recording
+    // but a silent/hallucinated recording can never poison the next one.
+    func testFreshStatePerCallKeepsRecordingsIsolated() async throws {
+        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
+        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: modelURL.path)
+                && FileManager.default.fileExists(atPath: audioURL.path),
+            "tiny model / jfk sample not present in repo root"
+        )
+
+        let context = try XCTUnwrap(
+            MyWhisperContext.initFromFileNoState(path: modelURL.path, params: WhisperContextParams())
+        )
+        let engine = WhisperEngine()
+        let converted = try await engine.convertAudioToPCM(fileURL: audioURL)
+        let speech = try XCTUnwrap(converted)
+        let silence = [Float](repeating: 0, count: 16000 * 2)
+
+        func transcribe(_ pcm: [Float]) throws -> String {
+            var params = WhisperFullParams()
+            params.noContext = false
+            params.greedyBestOf = 5
+            params.language = "en"
+            var cParams = params.toC()
+
+            XCTAssertTrue(context.initState(), "Fresh whisper_state must be created per call")
+            defer { context.freeState() }
+
+            guard context.full(samples: pcm, params: &cParams) else {
+                XCTFail("whisper_full_with_state failed")
+                return ""
+            }
+
+            var text = ""
+            for i in 0..<context.fullNSegments {
+                text += context.fullGetSegmentText(iSegment: i) ?? ""
+            }
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let first = try transcribe(speech)
+        _ = try transcribe(silence)
+        let second = try transcribe(speech)
+
+        XCTAssertTrue(first.lowercased().contains("your country"), "Unexpected transcription: \(first)")
+        XCTAssertEqual(
+            first, second,
+            "Transcription changed after a silent recording — decoding state leaks between calls"
+        )
+    }
+}
+
 final class AudioRecorderTempCleanupTests: XCTestCase {
 
     private var directory: URL!

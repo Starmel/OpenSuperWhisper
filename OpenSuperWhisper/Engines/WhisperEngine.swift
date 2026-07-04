@@ -61,7 +61,10 @@ class WhisperEngine: TranscriptionEngine {
         }
         
         let params = WhisperContextParams()
-        context = MyWhisperContext.initFromFile(path: modelPath, params: params)
+        // Load the model without a decoding state: a fresh whisper_state is
+        // created per transcription, so recordings can share the model weights
+        // while keeping their decoding context (prompt_past) fully isolated.
+        context = MyWhisperContext.initFromFileNoState(path: modelPath, params: params)
         
         guard context != nil else {
             throw TranscriptionError.contextInitializationFailed
@@ -100,6 +103,14 @@ class WhisperEngine: TranscriptionEngine {
         var params = WhisperFullParams()
         params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
         params.nThreads = Int32(nThreads)
+        // Match whisper.cpp defaults: on temperature fallback the decoder samples
+        // best_of candidates and keeps the most probable one; with 1 the fallback
+        // degenerates to a single random sample on hard audio.
+        params.greedyBestOf = 5
+        // Each transcription runs on a fresh whisper_state (see below), so text
+        // context flows between 30s windows within one recording (better
+        // coherence, upstream default) but can never leak into the next one.
+        params.noContext = false
         params.noTimestamps = !settings.showTimestamps
         params.suppressBlank = settings.suppressBlankAudio
         params.translate = settings.translateToEnglish
@@ -146,6 +157,15 @@ class WhisperEngine: TranscriptionEngine {
         cParams.abort_callback_user_data = Unmanaged.passUnretained(abortFlag).toOpaque()
         
         try Task.checkCancellation()
+        
+        // Fresh decoding state per recording: isolates prompt_past between
+        // recordings (a hallucination on silence cannot poison the next one).
+        guard context.initState() else {
+            throw TranscriptionError.contextInitializationFailed
+        }
+        defer {
+            context.freeState()
+        }
         
         guard context.full(samples: samples, params: &cParams) else {
             throw TranscriptionError.processingFailed
@@ -310,7 +330,7 @@ class WhisperEngine: TranscriptionEngine {
         guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
             throw TranscriptionError.audioConversionFailed
         }
-        converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
+        converter.sampleRateConverterQuality = AVAudioQuality.max.rawValue
         
         // Buffers hold Float32 per channel, so cap the chunk by bytes: a chunk sized
         // in frames alone balloons for multi-channel sources (8ch = 32 MB per buffer).

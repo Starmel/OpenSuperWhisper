@@ -27,10 +27,7 @@ public class MyWhisperContext {
     
     deinit {
         freeContext()
-        if let state = state {
-            whisper_free_state(state)
-            self.state = nil
-        }
+        freeState()
     }
     
     // MARK: - Initialization
@@ -74,12 +71,17 @@ public class MyWhisperContext {
     
     public func initState() -> Bool {
         guard let ctx = ctx else { return false }
-        let state = whisper_init_state(ctx)
+        freeState()
+        guard let state = whisper_init_state(ctx) else { return false }
+        self.state = state
+        return true
+    }
+    
+    public func freeState() {
         if let state = state {
-            self.state = state
-            return true
+            whisper_free_state(state)
+            self.state = nil
         }
-        return false
     }
     
     // MARK: - OpenVINO
