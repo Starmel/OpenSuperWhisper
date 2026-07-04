@@ -11,14 +11,27 @@ class IndicatorWindowManager: IndicatorViewDelegate {
     
     private init() {}
     
-    func show(nearPoint point: NSPoint? = nil) -> IndicatorViewModel {
-        
+    /// Creates the view model without presenting the window, so recording can
+    /// start immediately while the caret position is being resolved.
+    func prepare() -> IndicatorViewModel {
         KeyboardShortcuts.enable(.escape)
         
-        // Create new view model
         let newViewModel = IndicatorViewModel()
         newViewModel.delegate = self
         viewModel = newViewModel
+        return newViewModel
+    }
+    
+    func show(nearPoint point: NSPoint? = nil) -> IndicatorViewModel {
+        let newViewModel = prepare()
+        presentWindow(for: newViewModel, nearPoint: point)
+        return newViewModel
+    }
+    
+    func presentWindow(for presentedViewModel: IndicatorViewModel, nearPoint point: NSPoint?) {
+        // The recording may already be cancelled/hidden by the time the caret
+        // position is resolved.
+        guard viewModel === presentedViewModel else { return }
         
         if window == nil {
             // Create window if it doesn't exist - using NSPanel for full-screen compatibility
@@ -65,12 +78,11 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             window.setFrameOrigin(NSPoint(x: x, y: y))
             
             // Set content view
-            let hostingView = NSHostingView(rootView: IndicatorWindow(viewModel: newViewModel))
+            let hostingView = NSHostingView(rootView: IndicatorWindow(viewModel: presentedViewModel))
             window.contentView = hostingView
         }
         
         window?.orderFront(nil)
-        return newViewModel
     }
     
     func stopRecording() {

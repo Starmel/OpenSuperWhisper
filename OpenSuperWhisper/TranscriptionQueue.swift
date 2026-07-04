@@ -31,13 +31,11 @@ class TranscriptionQueue: ObservableObject {
                       newProgress > 0,
                       newProgress < 1.0 else { return }
                 
-                Task {
-                    await self.recordingStore.updateRecordingStatusOnly(
-                        recordingId,
-                        progress: newProgress,
-                        status: .transcribing
-                    )
-                }
+                self.recordingStore.updateRecordingProgressTransient(
+                    recordingId,
+                    progress: newProgress,
+                    status: .transcribing
+                )
             }
     }
 
@@ -253,7 +251,13 @@ class TranscriptionQueue: ObservableObject {
                         if FileManager.default.fileExists(atPath: finalURL.path) {
                             try? FileManager.default.removeItem(at: finalURL)
                         }
-                        try FileManager.default.copyItem(at: sourceURL, to: finalURL)
+                        // Our own temp recordings are moved (no disk duplication);
+                        // user-provided files must stay in place, so they are copied.
+                        if sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path) {
+                            try FileManager.default.moveItem(at: sourceURL, to: finalURL)
+                        } else {
+                            try FileManager.default.copyItem(at: sourceURL, to: finalURL)
+                        }
                     }
                 }.value
 

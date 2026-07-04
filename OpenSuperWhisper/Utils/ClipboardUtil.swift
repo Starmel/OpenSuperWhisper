@@ -33,12 +33,12 @@ class ClipboardUtil {
         // Simulate Cmd+V using layout-aware keycode resolution
         simulatePaste()
 
-        // Add a small delay to ensure paste operation completes
-        Thread.sleep(forTimeInterval: 0.1)
-
-        // Restore original contents
+        // Restore original contents after the target app has processed the paste,
+        // without blocking the calling (main) thread.
         if let contents = savedContents {
-            restorePasteboardContents(contents)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                restorePasteboardContents(contents)
+            }
         }
     }
     

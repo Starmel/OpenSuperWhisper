@@ -141,9 +141,6 @@ class WhisperEngine: TranscriptionEngine {
             params.beamSearchBeamSize = Int32(settings.beamSize)
         }
         
-        params.printRealtime = true
-        params.print_realtime = true
-        
         var cParams = params.toC()
         cParams.abort_callback = abortCallback
         cParams.abort_callback_user_data = Unmanaged.passUnretained(abortFlag).toOpaque()
@@ -283,11 +280,15 @@ class WhisperEngine: TranscriptionEngine {
             
             group.wait()
             
+            guard !segmentResults.contains(where: { $0 == nil }) else { return nil }
+            
+            // Release each segment right after it is appended, so the peak stays
+            // near 1x of the total instead of holding both copies until the end.
             var result = [Float]()
-            result.reserveCapacity(Int(Double(totalFrames) * ratio) + 1024)
-            for segment in segmentResults {
-                guard let segment = segment else { return nil }
-                result.append(contentsOf: segment)
+            result.reserveCapacity(segmentResults.reduce(0) { $0 + ($1?.count ?? 0) })
+            for index in segmentResults.indices {
+                result.append(contentsOf: segmentResults[index]!)
+                segmentResults[index] = nil
             }
             
             return result.isEmpty ? nil : result
@@ -311,8 +312,14 @@ class WhisperEngine: TranscriptionEngine {
         }
         converter.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         
-        let outputChunkSize = AVAudioFrameCount(Double(inputChunkSize) * ratio) + 256
-        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: inputChunkSize),
+        // Buffers hold Float32 per channel, so cap the chunk by bytes: a chunk sized
+        // in frames alone balloons for multi-channel sources (8ch = 32 MB per buffer).
+        let maxChunkBytes = 8 * 1024 * 1024
+        let bytesPerFrame = Int(sourceFormat.channelCount) * MemoryLayout<Float>.size
+        let chunkFrames = min(inputChunkSize, AVAudioFrameCount(max(maxChunkBytes / bytesPerFrame, 65536)))
+        
+        let outputChunkSize = AVAudioFrameCount(Double(chunkFrames) * ratio) + 256
+        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: chunkFrames),
               let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputChunkSize) else {
             throw TranscriptionError.audioConversionFailed
         }
@@ -323,7 +330,7 @@ class WhisperEngine: TranscriptionEngine {
         var framesRead: AVAudioFramePosition = 0
         
         while framesRead < frameCount {
-            let framesToRead = min(AVAudioFrameCount(frameCount - framesRead), inputChunkSize)
+            let framesToRead = min(AVAudioFrameCount(frameCount - framesRead), chunkFrames)
             inputBuffer.frameLength = 0
             try audioFile.read(into: inputBuffer, frameCount: framesToRead)
             
