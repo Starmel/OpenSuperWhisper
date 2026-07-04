@@ -1,15 +1,19 @@
 import AVFoundation
 import AppKit
 import Foundation
+import IOKit.hid
 
 enum Permission {
     case microphone
     case accessibility
+    case inputMonitoring
 }
 
 class PermissionsManager: ObservableObject {
     @Published var isMicrophonePermissionGranted = false
     @Published var isAccessibilityPermissionGranted = false
+    @Published var isInputMonitoringPermissionGranted =
+        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
 
     private var permissionCheckTimer: Timer?
     private var windowObservers: [NSObjectProtocol] = []
@@ -73,6 +77,7 @@ class PermissionsManager: ObservableObject {
         permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.checkMicrophonePermission()
             self?.checkAccessibilityPermission()
+            self?.checkInputMonitoringPermission()
         }
     }
 
@@ -98,6 +103,29 @@ class PermissionsManager: ObservableObject {
         let granted = AXIsProcessTrusted()
         DispatchQueue.main.async { [weak self] in
             self?.isAccessibilityPermissionGranted = granted
+        }
+    }
+
+    func checkInputMonitoringPermission() {
+        let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+        DispatchQueue.main.async { [weak self] in
+            self?.isInputMonitoringPermissionGranted = granted
+        }
+    }
+
+    /// Shows the system Input Monitoring prompt if it hasn't been decided yet,
+    /// otherwise opens System Settings so the user can grant it manually.
+    func requestInputMonitoringPermissionOrOpenSystemPreferences() {
+        switch IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) {
+        case kIOHIDAccessTypeGranted:
+            isInputMonitoringPermissionGranted = true
+        case kIOHIDAccessTypeUnknown:
+            let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+            DispatchQueue.main.async { [weak self] in
+                self?.isInputMonitoringPermissionGranted = granted
+            }
+        default:
+            openSystemPreferences(for: .inputMonitoring)
         }
     }
 
@@ -131,6 +159,9 @@ class PermissionsManager: ObservableObject {
         case .accessibility:
             urlString =
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        case .inputMonitoring:
+            urlString =
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         }
 
         if let url = URL(string: urlString) {
