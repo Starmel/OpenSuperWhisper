@@ -101,6 +101,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         OpenSuperWhisperApp.startTranscriptionQueue()
         observeMicrophoneChanges()
+        
+        IndicatorWindowManager.shared.warmUp()
     }
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {

@@ -113,8 +113,8 @@ class ShortcutManager {
                 self.activeVm = vm
                 
                 let cursorPosition = FocusUtils.getCurrentCursorPosition()
-                let caretRect = await Task.detached { FocusUtils.getCaretRect() }.value
-                let indicatorPoint = caretRect.map { FocusUtils.convertAXPointToCocoa($0.origin) } ?? cursorPosition
+                let anchorPoint = await Self.resolveAnchorPoint(timeoutNanoseconds: 150_000_000)
+                let indicatorPoint = anchorPoint ?? cursorPosition
                 
                 IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: indicatorPoint)
             } else if !self.holdMode {
@@ -131,6 +131,37 @@ class ShortcutManager {
             }
             holdWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + holdThreshold, execute: workItem)
+        }
+    }
+    
+    /// Resolves the input anchor without letting a slow focused app delay the
+    /// indicator: whichever finishes first wins — the AX resolution or the
+    /// deadline. On timeout the caller falls back to the mouse position; the
+    /// late AX result is simply discarded.
+    private static func resolveAnchorPoint(timeoutNanoseconds: UInt64) async -> NSPoint? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<NSPoint?, Never>) in
+            let gate = AnchorGate(continuation)
+            Task.detached {
+                let point = FocusUtils.getInputAnchorPoint()
+                await gate.resume(point)
+            }
+            Task.detached {
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                await gate.resume(nil)
+            }
+        }
+    }
+    
+    private actor AnchorGate {
+        private var continuation: CheckedContinuation<NSPoint?, Never>?
+        
+        init(_ continuation: CheckedContinuation<NSPoint?, Never>) {
+            self.continuation = continuation
+        }
+        
+        func resume(_ value: NSPoint?) {
+            continuation?.resume(returning: value)
+            continuation = nil
         }
     }
     
