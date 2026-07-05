@@ -1047,6 +1047,52 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
 }
 
 @MainActor
+final class RemoveFillerWordsTests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        AppPreferences.shared.removeFillerWords = true
+        AppPreferences.shared.addSpaceAfterSentence = false
+    }
+
+    override func tearDown() {
+        AppPreferences.shared.removeFillerWords = false
+        AppPreferences.shared.addSpaceAfterSentence = true
+        super.tearDown()
+    }
+
+    func testRemovesUm() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("Um yeah I think so"), "yeah I think so")
+    }
+
+    func testRemovesUh() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("I uh think so"), "I think so")
+    }
+
+    func testCaseInsensitive() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("UM yeah"), "yeah")
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("UH yeah"), "yeah")
+    }
+
+    func testAbsorbsSurroundingComma() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("Um, I think"), "I think")
+    }
+
+    func testDoubleFillerNoExtraSpace() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("I um uh think"), "I think")
+    }
+
+    func testWholeWordOnly() {
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("umbrella"), "umbrella")
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("dumb"), "dumb")
+    }
+
+    func testDisabledLeavesTextUnchanged() {
+        AppPreferences.shared.removeFillerWords = false
+        XCTAssertEqual(IndicatorViewModel.applyPostProcessing("Um yeah"), "Um yeah")
+    }
+}
+
 final class NoMicrophoneGuardTests: XCTestCase {
 
     /// Forces `MicrophoneService.shared` to report no active microphone for the

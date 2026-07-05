@@ -142,6 +142,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var removeFillerWords: Bool {
+        didSet {
+            AppPreferences.shared.removeFillerWords = removeFillerWords
+        }
+    }
+
     @Published var autoCopyToClipboard: Bool {
         didSet {
             AppPreferences.shared.autoCopyToClipboard = autoCopyToClipboard
@@ -173,6 +179,7 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
+        self.removeFillerWords = prefs.removeFillerWords
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
 
@@ -888,6 +895,19 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }
+                    }
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Remove Filler Words")
+                                .font(.subheadline)
+                            Text("Strips um and uh from transcription output")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.removeFillerWords)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
                     }
                 }
                 .padding()

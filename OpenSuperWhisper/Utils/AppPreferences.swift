@@ -117,4 +117,7 @@ final class AppPreferences {
 
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
+
+    @UserDefault(key: "removeFillerWords", defaultValue: false)
+    var removeFillerWords: Bool
 }
