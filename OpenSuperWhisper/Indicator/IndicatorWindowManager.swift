@@ -246,6 +246,14 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         viewModel?.cleanup()
         hide()
     }
+    
+    @discardableResult
+    func requestCancel() -> Bool {
+        guard let viewModel else { return false }
+        guard viewModel.handleCancelRequest() else { return false }
+        stopForce()
+        return true
+    }
 
     func hide() {
         // Capture the session being hidden: a new recording may start while

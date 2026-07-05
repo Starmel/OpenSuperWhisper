@@ -130,6 +130,9 @@ final class AppPreferences {
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
 
+    @UserDefault(key: "escCancelWithoutConfirmation", defaultValue: false)
+    var escCancelWithoutConfirmation: Bool
+
     @UserDefault(key: "autoDeleteRecordingsEnabled", defaultValue: false)
     var autoDeleteRecordingsEnabled: Bool
 
