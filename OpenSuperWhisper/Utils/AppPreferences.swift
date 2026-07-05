@@ -66,9 +66,6 @@ final class AppPreferences {
     var whisperLanguage: String
     
     // Transcription settings
-    @UserDefault(key: "translateToEnglish", defaultValue: false)
-    var translateToEnglish: Bool
-    
     @UserDefault(key: "suppressBlankAudio", defaultValue: true)
     var suppressBlankAudio: Bool
     
@@ -132,6 +129,9 @@ final class AppPreferences {
 
     @UserDefault(key: "escCancelWithoutConfirmation", defaultValue: false)
     var escCancelWithoutConfirmation: Bool
+
+    @UserDefault(key: "startHiddenInMenuBar", defaultValue: false)
+    var startHiddenInMenuBar: Bool
 
     @UserDefault(key: "autoDeleteRecordingsEnabled", defaultValue: false)
     var autoDeleteRecordingsEnabled: Bool

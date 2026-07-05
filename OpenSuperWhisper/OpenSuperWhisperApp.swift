@@ -92,18 +92,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
     private var recordingRetentionTimer: Timer?
+    private var hideMainWindowAtLaunch = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !OpenSuperWhisperApp.isRunningTests else { return }
 
         setupStatusBarItem()
 
-        if let window = NSApplication.shared.windows.first {
-            self.mainWindow = window
-            window.delegate = self
+        // The WindowGroup window usually does not exist yet at this point:
+        // SwiftUI creates it after applicationDidFinishLaunching, so it is
+        // adopted lazily from windowDidBecomeKey instead.
+        if let window = Self.resolveMainWindow() {
+            adoptMainWindow(window)
+        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(anyWindowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
 
-            window.minSize = NSSize(width: 450, height: 400)
-            window.maxSize = NSSize(width: 450, height: 900)
+        // SwiftUI owns the WindowGroup window and can replace its delegate,
+        // so windowWillClose on AppDelegate is not guaranteed to fire. The
+        // notification is delivered regardless of who the delegate is.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(anyWindowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: nil
+        )
+
+        let prefs = AppPreferences.shared
+        if prefs.startHiddenInMenuBar && prefs.hasCompletedOnboarding {
+            hideMainWindowAtLaunch = true
+            mainWindow?.orderOut(nil)
+            NSApplication.shared.setActivationPolicy(.accessory)
         }
 
         OpenSuperWhisperApp.startTranscriptionQueue()
@@ -352,9 +375,61 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
     
+    /// The WindowGroup window must be told apart from the other windows the
+    /// app creates: the status item's NSStatusBarWindow, the borderless
+    /// indicator NSPanel and SwiftUI sheet host windows.
+    static func isMainAppWindow(_ window: NSWindow) -> Bool {
+        !(window is NSPanel) && !window.isSheet && window.styleMask.contains(.titled)
+    }
+
+    private static func resolveMainWindow() -> NSWindow? {
+        NSApplication.shared.windows.first(where: isMainAppWindow)
+    }
+
+    /// SwiftUI creates the WindowGroup window after applicationDidFinishLaunching
+    /// and can recreate it later, so the reference is (re)captured whenever a
+    /// main-type window becomes key.
+    @objc private func anyWindowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              Self.isMainAppWindow(window),
+              window !== mainWindow
+        else { return }
+        adoptMainWindow(window)
+    }
+
+    private func adoptMainWindow(_ window: NSWindow) {
+        mainWindow = window
+        window.delegate = self
+        window.minSize = NSSize(width: 450, height: 400)
+        window.maxSize = NSSize(width: 450, height: 900)
+
+        if hideMainWindowAtLaunch {
+            hideMainWindowAtLaunch = false
+            window.orderOut(nil)
+            NSApplication.shared.setActivationPolicy(.accessory)
+        }
+    }
+
+    @objc private func anyWindowWillClose(_ notification: Notification) {
+        guard let closing = notification.object as? NSWindow, Self.isMainAppWindow(closing) else { return }
+        // Deferred so the check runs after the window has actually closed.
+        DispatchQueue.main.async {
+            let anyMainWindowVisible = NSApplication.shared.windows.contains {
+                $0 !== closing && Self.isMainAppWindow($0) && $0.isVisible
+            }
+            if !anyMainWindowVisible {
+                NSApplication.shared.setActivationPolicy(.accessory)
+            }
+        }
+    }
+
     func showMainWindow() {
         NSApplication.shared.setActivationPolicy(.regular)
-        
+
+        if mainWindow == nil {
+            mainWindow = Self.resolveMainWindow()
+        }
+
         if let window = mainWindow {
             if !window.isVisible {
                 window.makeKeyAndOrderFront(nil)
@@ -369,10 +444,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 }
 
 extension AppDelegate: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        NSApplication.shared.setActivationPolicy(.accessory)
-    }
-    
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         return NSSize(width: 450, height: frameSize.height)
     }

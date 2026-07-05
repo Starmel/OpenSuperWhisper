@@ -82,12 +82,6 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    @Published var translateToEnglish: Bool {
-        didSet {
-            AppPreferences.shared.translateToEnglish = translateToEnglish
-        }
-    }
-
     @Published var suppressBlankAudio: Bool {
         didSet {
             AppPreferences.shared.suppressBlankAudio = suppressBlankAudio
@@ -176,6 +170,12 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.escCancelWithoutConfirmation = escCancelWithoutConfirmation
         }
     }
+
+    @Published var startHiddenInMenuBar: Bool {
+        didSet {
+            AppPreferences.shared.startHiddenInMenuBar = startHiddenInMenuBar
+        }
+    }
     
     @Published var addSpaceAfterSentence: Bool {
         didSet {
@@ -200,7 +200,6 @@ class SettingsViewModel: ObservableObject {
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
         self.selectedLanguage = prefs.whisperLanguage
-        self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
         self.showTimestamps = prefs.showTimestamps
         self.temperature = prefs.temperature
@@ -215,6 +214,7 @@ class SettingsViewModel: ObservableObject {
         self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
+        self.startHiddenInMenuBar = prefs.startHiddenInMenuBar
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
@@ -612,7 +612,6 @@ struct Settings {
     static let asianLanguages: Set<String> = ["zh", "ja", "ko"]
     
     var selectedLanguage: String
-    var translateToEnglish: Bool
     var suppressBlankAudio: Bool
     var showTimestamps: Bool
     var temperature: Double
@@ -633,7 +632,6 @@ struct Settings {
     init() {
         let prefs = AppPreferences.shared
         self.selectedLanguage = prefs.whisperLanguage
-        self.translateToEnglish = prefs.translateToEnglish
         self.suppressBlankAudio = prefs.suppressBlankAudio
         self.showTimestamps = prefs.showTimestamps
         self.temperature = prefs.temperature
@@ -882,16 +880,6 @@ struct SettingsView: View {
                         .background(Color(.controlBackgroundColor))
                         .cornerRadius(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        HStack {
-                            Text("Translate to English")
-                                .font(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.translateToEnglish)
-                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
-                                .labelsHidden()
-                        }
-                        .padding(.top, 4)
                         
                         if Settings.asianLanguages.contains(viewModel.selectedLanguage) {
                             HStack {
@@ -1373,6 +1361,31 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
+                // Application
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Application")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Start hidden in menu bar")
+                                .font(.subheadline)
+                            Text("Launch without opening the main window; use the menu bar icon to open it")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $viewModel.startHiddenInMenuBar)
+                            .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                            .labelsHidden()
                     }
                 }
                 .padding()
