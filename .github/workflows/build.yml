@@ -23,4 +23,11 @@ jobs:
       - name: Make run.sh executable
         run: chmod +x ./run.sh
       - name: Build with run.sh
-        run: ./run.sh build 
+        run: ./run.sh build --save-log=artifacts/xcodebuild_raw.log  
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-failed-${{ github.run_number }}
+          path: artifacts/xcodebuild_raw.log
+          retention-days: 30 
