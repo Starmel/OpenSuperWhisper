@@ -44,7 +44,13 @@ private final class AbortFlag {
 class WhisperEngine: TranscriptionEngine {
     var engineName: String { "Whisper" }
     
+    /// Silero VAD model shipped in the app bundle; always used to drop
+    /// non-speech audio before the encoder (faster, no hallucinations on silence).
+    static let vadModelPath = Bundle(for: WhisperEngine.self)
+        .path(forResource: "ggml-silero-v5.1.2", ofType: "bin")
+    
     private var context: MyWhisperContext?
+    private var vadContext: MyWhisperVadContext?
     private let abortFlag = AbortFlag()
     private var progressContext: ProgressContext?
     
@@ -89,7 +95,7 @@ class WhisperEngine: TranscriptionEngine {
         // Notify conversion start (0-10% is conversion phase)
         onProgressUpdate?(0.05)
         
-        guard let samples = try await convertAudioToPCM(fileURL: url) else {
+        guard let converted = try await convertAudioToPCM(fileURL: url) else {
             throw TranscriptionError.audioConversionFailed
         }
         
@@ -97,6 +103,20 @@ class WhisperEngine: TranscriptionEngine {
         onProgressUpdate?(0.10)
         
         try Task.checkCancellation()
+        
+        // VAD gate: whisper never sees non-speech audio, so silence cannot
+        // produce hallucinated text and long pauses are not decoded at all.
+        // (whisper_full_with_state has no built-in VAD path — params.vad works
+        // only through whisper_full, which would share decoding state.)
+        let speechSegments = try detectSpeech(in: converted)
+        if speechSegments.isEmpty {
+            return ""
+        }
+        // Timestamps of the trimmed audio would not match the original file,
+        // so trimming is applied only when timestamps are not requested.
+        let samples = settings.showTimestamps
+            ? converted
+            : Self.speechOnlySamples(from: converted, segments: speechSegments)
         
         let nThreads = max(2, min(ProcessInfo.processInfo.activeProcessorCount, 8))
         
@@ -120,6 +140,10 @@ class WhisperEngine: TranscriptionEngine {
         params.temperature = Float(settings.temperature)
         params.noSpeechThold = Float(settings.noSpeechThreshold)
         params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
+        // With noContext = false the initial prompt conditions only the first
+        // 30s window; carrying it keeps the user's vocabulary effective for the
+        // whole recording.
+        params.carryInitialPrompt = params.initialPrompt != nil
         
         typealias GGMLAbortCallback = @convention(c) (UnsafeMutableRawPointer?) -> Bool
         let abortCallback: GGMLAbortCallback = { userData in
@@ -206,6 +230,48 @@ class WhisperEngine: TranscriptionEngine {
     
     func cancelTranscription() {
         abortFlag.isSet = true
+    }
+    
+    // MARK: - VAD
+    
+    private func detectSpeech(in samples: [Float]) throws -> [WhisperVadSegment] {
+        if vadContext == nil {
+            guard let path = Self.vadModelPath,
+                  let vad = MyWhisperVadContext(modelPath: path) else {
+                throw TranscriptionError.contextInitializationFailed
+            }
+            vadContext = vad
+        }
+        guard let segments = vadContext?.speechSegments(in: samples) else {
+            throw TranscriptionError.processingFailed
+        }
+        return segments
+    }
+    
+    /// Keeps only speech, mirroring upstream whisper_full VAD stitching:
+    /// each segment (already padded by the VAD) gets 0.1s of the following
+    /// audio as overlap and segments are separated by 0.1s of silence, so the
+    /// decoder still sees natural pauses between phrases.
+    static func speechOnlySamples(from samples: [Float], segments: [WhisperVadSegment]) -> [Float] {
+        let samplesPerCs = 160 // 16 kHz / 100
+        let overlapSamples = 1600 // 0.1 s
+        let gapSamples = 1600 // 0.1 s
+        
+        var result = [Float]()
+        for (index, segment) in segments.enumerated() {
+            let start = min(max(0, Int(segment.startCs) * samplesPerCs), samples.count)
+            var end = min(Int(segment.endCs) * samplesPerCs, samples.count)
+            if index < segments.count - 1 {
+                end = min(end + overlapSamples, samples.count)
+            }
+            guard end > start else { continue }
+            
+            result.append(contentsOf: samples[start..<end])
+            if index < segments.count - 1 {
+                result.append(contentsOf: repeatElement(0, count: gapSamples))
+            }
+        }
+        return result
     }
     
     func getSupportedLanguages() -> [String] {
