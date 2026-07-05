@@ -1148,3 +1148,38 @@ final class TextUtilTests: XCTestCase {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
     }
 }
+
+final class MouseButtonTests: XCTestCase {
+
+    func testRawValueRoundTrips() {
+        for button in MouseButton.allCases {
+            XCTAssertEqual(MouseButton(rawValue: button.rawValue), button)
+        }
+    }
+
+    func testUnknownRawValueDefaultsToNil() {
+        XCTAssertNil(MouseButton(rawValue: "not-a-button"))
+    }
+
+    func testButtonNumberMapping() {
+        // macOS numbers buttons from zero: 2 = middle, 3+ = extra (thumb) buttons.
+        XCTAssertEqual(MouseButton.middle.buttonNumber, 2)
+        XCTAssertEqual(MouseButton.button4.buttonNumber, 3)
+        XCTAssertEqual(MouseButton.button5.buttonNumber, 4)
+        XCTAssertEqual(MouseButton.button6.buttonNumber, 5)
+    }
+
+    func testNoneIsNotAValidButtonNumber() {
+        XCTAssertEqual(MouseButton.none.buttonNumber, -1)
+    }
+
+    func testSelectableButtonsExcludeNone() {
+        let selectable = MouseButton.allCases.filter { $0 != .none }
+        XCTAssertFalse(selectable.contains(.none))
+        XCTAssertEqual(selectable.count, 4)
+        for button in selectable {
+            XCTAssertFalse(button.displayName.isEmpty)
+            XCTAssertFalse(button.shortSymbol.isEmpty)
+        }
+    }
+}
