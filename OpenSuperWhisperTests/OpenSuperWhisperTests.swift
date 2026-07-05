@@ -1864,6 +1864,64 @@ final class HebrewIvritSupportTests: XCTestCase {
     }
 }
 
+final class WhisperModelDownloadTests: XCTestCase {
+
+    private func httpResponse(statusCode: Int) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin")!,
+            statusCode: statusCode,
+            httpVersion: "HTTP/2",
+            headerFields: nil
+        )!
+    }
+
+    func testValidationError_successStatusCodes_returnNil() {
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 200)))
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 206)))
+    }
+
+    func testValidationError_nonHTTPResponse_returnsNil() {
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: nil))
+        let plainResponse = URLResponse(
+            url: URL(string: "https://huggingface.co")!,
+            mimeType: nil, expectedContentLength: 0, textEncodingName: nil
+        )
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: plainResponse))
+    }
+
+    func testValidationError_errorStatusCodes_returnError() {
+        for statusCode in [403, 404, 429, 500, 503] {
+            let error = WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: statusCode))
+            XCTAssertNotNil(error, "Expected error for HTTP \(statusCode)")
+            XCTAssertEqual((error as NSError?)?.code, statusCode)
+            XCTAssertTrue((error as NSError?)?.localizedDescription.contains("\(statusCode)") ?? false)
+        }
+    }
+
+    func testProgressFraction_knownLength_returnsFraction() {
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 1000),
+            0.5
+        )
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1000, expectedContentLength: 1000),
+            1.0
+        )
+    }
+
+    func testProgressFraction_unknownLength_returnsNil() {
+        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: NSURLSessionTransferSizeUnknown))
+        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 0))
+    }
+
+    func testProgressFraction_overflowPastExpected_clampsToOne() {
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1500, expectedContentLength: 1000),
+            1.0
+        )
+    }
+}
+
 final class MouseButtonTests: XCTestCase {
 
     func testRawValueRoundTrips() {
