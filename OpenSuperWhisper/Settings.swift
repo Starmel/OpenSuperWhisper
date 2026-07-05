@@ -143,6 +143,13 @@ class SettingsViewModel: ObservableObject {
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
     }
+
+    @Published var mouseButtonHotkey: MouseButton {
+        didSet {
+            AppPreferences.shared.mouseButtonHotkey = mouseButtonHotkey.rawValue
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+        }
+    }
     
     @Published var holdToRecord: Bool {
         didSet {
@@ -185,6 +192,7 @@ class SettingsViewModel: ObservableObject {
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
+        self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
@@ -238,6 +246,7 @@ class SettingsViewModel: ObservableObject {
     @MainActor
     func downloadModel(_ model: SettingsDownloadableModel) async throws {
         guard !isDownloading else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
         
         isDownloading = true
         downloadingModelName = model.name
@@ -338,6 +347,7 @@ class SettingsViewModel: ObservableObject {
     @MainActor
     func downloadFluidAudioModel(_ model: SettingsFluidAudioModel) async throws {
         guard !isDownloading else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
         
         isDownloading = true
         downloadingModelName = model.name
@@ -1125,8 +1135,16 @@ struct SettingsView: View {
         }
     }
     
-    private var useModifierKey: Bool {
-        viewModel.modifierOnlyHotkey != .none
+    private enum TriggerMode: Hashable {
+        case keyCombo
+        case modifier
+        case mouse
+    }
+
+    private var triggerMode: TriggerMode {
+        if viewModel.mouseButtonHotkey != .none { return .mouse }
+        if viewModel.modifierOnlyHotkey != .none { return .modifier }
+        return .keyCombo
     }
     
     private var shortcutSettings: some View {
@@ -1140,22 +1158,34 @@ struct SettingsView: View {
                     
                     VStack(alignment: .leading, spacing: 16) {
                         Picker("", selection: Binding(
-                            get: { useModifierKey },
-                            set: { newValue in
-                                if !newValue {
+                            get: { triggerMode },
+                            set: { newMode in
+                                switch newMode {
+                                case .keyCombo:
+                                    viewModel.mouseButtonHotkey = .none
                                     viewModel.modifierOnlyHotkey = .none
-                                } else if viewModel.modifierOnlyHotkey == .none {
-                                    viewModel.modifierOnlyHotkey =
-                                        ModifierKey(rawValue: AppPreferences.shared.lastModifierOnlyHotkey) ?? .leftCommand
+                                case .modifier:
+                                    viewModel.mouseButtonHotkey = .none
+                                    if viewModel.modifierOnlyHotkey == .none {
+                                        viewModel.modifierOnlyHotkey =
+                                            ModifierKey(rawValue: AppPreferences.shared.lastModifierOnlyHotkey) ?? .leftCommand
+                                    }
+                                case .mouse:
+                                    viewModel.modifierOnlyHotkey = .none
+                                    if viewModel.mouseButtonHotkey == .none {
+                                        viewModel.mouseButtonHotkey = .middle
+                                    }
                                 }
                             }
                         )) {
-                            Text("Key Combination").tag(false)
-                            Text("Single Modifier Key").tag(true)
+                            Text("Key Combination").tag(TriggerMode.keyCombo)
+                            Text("Single Modifier Key").tag(TriggerMode.modifier)
+                            Text("Mouse Button").tag(TriggerMode.mouse)
                         }
                         .pickerStyle(.segmented)
-                        
-                        if useModifierKey {
+
+                        switch triggerMode {
+                        case .modifier:
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text("Modifier Key")
@@ -1173,7 +1203,7 @@ struct SettingsView: View {
                                 .padding(.vertical, 10)
                                 .background(Color(.textBackgroundColor).opacity(0.5))
                                 .cornerRadius(8)
-                                
+
                                 Text("One-tap to toggle recording")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -1193,7 +1223,35 @@ struct SettingsView: View {
                                     .padding(.top, 4)
                                 }
                             }
-                        } else {
+                        case .mouse:
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Mouse Button")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Picker("", selection: $viewModel.mouseButtonHotkey) {
+                                        ForEach(MouseButton.allCases.filter { $0 != .none }) { button in
+                                            Text(button.displayName).tag(button)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 200)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
+
+                                Text("Click to toggle recording, or hold when Hold to Record is on. The left and right buttons are reserved — pick the middle or an extra (thumb) button.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Text("⚠️ This mode requires Accessibility permission so the button can be detected globally and used only as a recording trigger. Only the selected mouse button is intercepted — no other clicks or keystrokes are captured.")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                    .padding(.top, 4)
+                            }
+                        case .keyCombo:
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text("Shortcut")
@@ -1206,7 +1264,7 @@ struct SettingsView: View {
                                 .padding(.vertical, 10)
                                 .background(Color(.textBackgroundColor).opacity(0.5))
                                 .cornerRadius(8)
-                                
+
                                 if isRecordingNewShortcut {
                                     Text("Press your new shortcut combination...")
                                         .foregroundColor(.secondary)

@@ -1532,6 +1532,54 @@ final class IndicatorWindowGeometryTests: XCTestCase {
     }
 }
 
+@MainActor
+final class NoMicrophoneGuardTests: XCTestCase {
+
+    /// Forces `MicrophoneService.shared` to report no active microphone for the
+    /// duration of `body`, restoring the previous state afterwards.
+    private func withNoMicrophone(_ body: () -> Void) {
+        let service = MicrophoneService.shared
+        let savedSelected = service.selectedMicrophone
+        let savedCurrent = service.currentMicrophone
+
+        service.selectedMicrophone = nil
+        service.currentMicrophone = nil
+        defer {
+            service.selectedMicrophone = savedSelected
+            service.currentMicrophone = savedCurrent
+        }
+
+        XCTAssertNil(service.getActiveMicrophone(), "Precondition: no active microphone")
+        body()
+    }
+
+    func testIndicatorViewModel_startRecording_withNoMicrophone_showsNoMicrophoneState() {
+        withNoMicrophone {
+            let viewModel = IndicatorViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .noMicrophone,
+                          "Indicator should show the no-microphone state instead of a fake 'recording' state")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+
+            viewModel.cleanup()
+        }
+    }
+
+    func testContentViewModel_startRecording_withNoMicrophone_doesNotStartRecording() {
+        withNoMicrophone {
+            let viewModel = ContentViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .idle,
+                          "In-app recording must not begin when there is no microphone")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+        }
+    }
+}
+
 final class TextUtilTests: XCTestCase {
 
     // MARK: - wordCount
@@ -1701,5 +1749,40 @@ final class HebrewIvritSupportTests: XCTestCase {
         XCTAssertEqual(
             standard?.huggingFacePageURL?.absoluteString,
             "https://huggingface.co/ggerganov/whisper.cpp")
+    }
+}
+
+final class MouseButtonTests: XCTestCase {
+
+    func testRawValueRoundTrips() {
+        for button in MouseButton.allCases {
+            XCTAssertEqual(MouseButton(rawValue: button.rawValue), button)
+        }
+    }
+
+    func testUnknownRawValueDefaultsToNil() {
+        XCTAssertNil(MouseButton(rawValue: "not-a-button"))
+    }
+
+    func testButtonNumberMapping() {
+        // macOS numbers buttons from zero: 2 = middle, 3+ = extra (thumb) buttons.
+        XCTAssertEqual(MouseButton.middle.buttonNumber, 2)
+        XCTAssertEqual(MouseButton.button4.buttonNumber, 3)
+        XCTAssertEqual(MouseButton.button5.buttonNumber, 4)
+        XCTAssertEqual(MouseButton.button6.buttonNumber, 5)
+    }
+
+    func testNoneIsNotAValidButtonNumber() {
+        XCTAssertEqual(MouseButton.none.buttonNumber, -1)
+    }
+
+    func testSelectableButtonsExcludeNone() {
+        let selectable = MouseButton.allCases.filter { $0 != .none }
+        XCTAssertFalse(selectable.contains(.none))
+        XCTAssertEqual(selectable.count, 4)
+        for button in selectable {
+            XCTAssertFalse(button.displayName.isEmpty)
+            XCTAssertFalse(button.shortSymbol.isEmpty)
+        }
     }
 }
