@@ -8,6 +8,7 @@ enum RecordingState {
     case recording
     case decoding
     case busy
+    case noMicrophone
 }
 
 @MainActor
@@ -64,8 +65,12 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func showBusyMessage() {
-        state = .busy
-        
+        showAutoDismissingMessage(.busy)
+    }
+
+    private func showAutoDismissingMessage(_ message: RecordingState) {
+        state = message
+
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
@@ -73,10 +78,17 @@ class IndicatorViewModel: ObservableObject {
             }
         }
     }
-    
+
     func startRecording() {
         if isTranscriptionBusy {
             showBusyMessage()
+            return
+        }
+
+        // getActiveMicrophone() only reads the cached currentMicrophone, so
+        // this guard costs no CoreAudio HAL round-trip on the main thread.
+        guard MicrophoneService.shared.getActiveMicrophone() != nil else {
+            showAutoDismissingMessage(.noMicrophone)
             return
         }
         
@@ -174,6 +186,7 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func insertText(_ text: String) {
+        guard !text.isEmpty else { return }
         let finalText = Self.applyPostProcessing(text)
         let prefs = AppPreferences.shared
 
@@ -317,13 +330,25 @@ struct IndicatorWindow: View {
                     Image(systemName: "hourglass")
                         .foregroundColor(.orange)
                         .frame(width: 24)
-                    
+
                     Text("Processing...")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.orange)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
+            case .noMicrophone:
+                HStack(spacing: 8) {
+                    Image(systemName: "mic.slash")
+                        .foregroundColor(.orange)
+                        .frame(width: 24)
+
+                    Text("No microphone")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             case .idle:
                 EmptyView()
             }

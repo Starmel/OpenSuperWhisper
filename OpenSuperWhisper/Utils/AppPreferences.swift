@@ -113,6 +113,10 @@ final class AppPreferences {
     @UserDefault(key: "lastModifierOnlyHotkey", defaultValue: "leftCommand")
     var lastModifierOnlyHotkey: String
     
+    @UserDefault(key: "mouseButtonHotkey", defaultValue: "none")
+    var mouseButtonHotkey: String
+
+
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
     

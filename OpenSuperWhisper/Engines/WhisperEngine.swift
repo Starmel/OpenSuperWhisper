@@ -225,7 +225,7 @@ class WhisperEngine: TranscriptionEngine {
             processedText = AutocorrectWrapper.format(cleanedText)
         }
         
-        return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        return processedText
     }
     
     func cancelTranscription() {

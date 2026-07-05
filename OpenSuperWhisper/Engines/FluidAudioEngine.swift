@@ -74,7 +74,8 @@ class FluidAudioEngine: TranscriptionEngine {
         }
         
         // Perform actual transcription - FluidAudio will emit progress automatically
-        var decoderState = try TdtDecoderState()
+        // FluidAudio 0.15.x requires an explicit decoder state per transcription.
+        var decoderState = try TdtDecoderState(decoderLayers: await asrManager.decoderLayerCount)
         let result = try await asrManager.transcribe(url, decoderState: &decoderState)
         
         guard !isCancelled else {
@@ -92,7 +93,7 @@ class FluidAudioEngine: TranscriptionEngine {
         
         onProgressUpdate?(1.0)
         
-        return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        return processedText
     }
     
     func cancelTranscription() {
