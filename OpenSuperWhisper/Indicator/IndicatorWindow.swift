@@ -131,38 +131,30 @@ class IndicatorViewModel: ObservableObject {
             if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
+                    let duration = await AudioUtil.audioDuration(url: tempURL)
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
                     
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
                     let recordingId = UUID()
-                    let finalURL = Recording(
+                    let newRecording = Recording(
                         id: recordingId,
                         timestamp: timestamp,
                         fileName: fileName,
                         transcription: text,
-                        duration: 0,
+                        duration: duration,
                         status: .completed,
                         progress: 1.0,
                         sourceFileURL: nil
-                    ).url
+                    )
                     
                     // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                    try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
                     
                     // Save the recording to store
                     await MainActor.run {
-                        self.recordingStore.addRecording(Recording(
-                            id: recordingId,
-                            timestamp: timestamp,
-                            fileName: fileName,
-                            transcription: text,
-                            duration: 0,
-                            status: .completed,
-                            progress: 1.0,
-                            sourceFileURL: nil
-                        ))
+                        self.recordingStore.addRecording(newRecording)
                     }
                     
                     insertText(text)

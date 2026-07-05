@@ -13,13 +13,17 @@ import UniformTypeIdentifiers
 
 @main
 struct OpenSuperWhisperApp: App {
+    static let isRunningTests = NSClassFromString("XCTestCase") != nil
+
     @StateObject private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if !appState.hasCompletedOnboarding {
+                if Self.isRunningTests {
+                    EmptyView()
+                } else if !appState.hasCompletedOnboarding {
                     OnboardingView()
                 } else {
                     ContentView()
@@ -48,6 +52,7 @@ struct OpenSuperWhisperApp: App {
     }
 
     init() {
+        guard !Self.isRunningTests else { return }
         _ = ShortcutManager.shared
         _ = MicrophoneService.shared
         WhisperModelManager.shared.ensureDefaultModelPresent()
@@ -86,8 +91,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var languageSubmenu: NSMenu?
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
+    private var recordingRetentionTimer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !OpenSuperWhisperApp.isRunningTests else { return }
 
         setupStatusBarItem()
 
@@ -103,6 +110,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         observeMicrophoneChanges()
         
         IndicatorWindowManager.shared.warmUp()
+        
+        startRecordingRetentionSchedule()
+
+        Task { @MainActor in
+            await RecordingStore.shared.backfillMissingDurations()
+        }
+    }
+
+    private func startRecordingRetentionSchedule() {
+        cleanupOutdatedRecordings()
+        
+        let timer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
+            self?.cleanupOutdatedRecordings()
+        }
+        timer.tolerance = 60 * 60
+        recordingRetentionTimer = timer
+    }
+
+    private func cleanupOutdatedRecordings() {
+        let prefs = AppPreferences.shared
+        guard prefs.autoDeleteRecordingsEnabled else { return }
+        let days = prefs.autoDeleteRecordingsAfterDays
+        Task { @MainActor in
+            try? await RecordingStore.shared.deleteRecordings(olderThanDays: days)
+        }
     }
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
@@ -182,14 +214,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let transcriptionLanguageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
         
-        // Add language options
-        for languageCode in LanguageUtil.availableLanguages {
-            let languageName = LanguageUtil.languageNames[languageCode] ?? languageCode
-            let languageItem = NSMenuItem(title: languageName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
-            languageItem.target = self
-            languageItem.representedObject = languageCode
-            languageItem.state = (AppPreferences.shared.whisperLanguage == languageCode) ? .on : .off
-            languageSubmenu?.addItem(languageItem)
+        if let languageSubmenu {
+            populateLanguageSubmenu(languageSubmenu)
         }
         
         transcriptionLanguageItem.submenu = languageSubmenu
@@ -304,13 +330,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     private func updateLanguageMenuSelection() {
         guard let languageSubmenu = languageSubmenu else { return }
+        populateLanguageSubmenu(languageSubmenu)
+    }
+    
+    private func populateLanguageSubmenu(_ submenu: NSMenu) {
+        submenu.removeAllItems()
         
+        let supportedLanguages = LanguageUtil.supportedLanguages(
+            engine: AppPreferences.shared.selectedEngine,
+            fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion
+        )
         let currentLanguage = AppPreferences.shared.whisperLanguage
         
-        for item in languageSubmenu.items {
-            if let languageCode = item.representedObject as? String {
-                item.state = (languageCode == currentLanguage) ? .on : .off
-            }
+        for languageCode in supportedLanguages {
+            let languageName = LanguageUtil.languageNames[languageCode] ?? languageCode
+            let languageItem = NSMenuItem(title: languageName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            languageItem.target = self
+            languageItem.representedObject = languageCode
+            languageItem.state = (currentLanguage == languageCode) ? .on : .off
+            submenu.addItem(languageItem)
         }
     }
     

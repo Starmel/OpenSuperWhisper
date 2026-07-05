@@ -6,6 +6,13 @@ class LanguageUtil {
         "he", "sv", "it", "id", "hi", "fi",
     ]
 
+    static let parakeetV2Languages = ["en"]
+
+    static let parakeetV3Languages = [
+        "en", "de", "es", "ru", "fr", "pt", "pl", "nl", "sv", "it", "fi",
+        "bg", "hr", "cs", "da", "el", "et", "hu", "lv", "lt", "mt", "ro", "sk", "sl", "uk",
+    ]
+
     static let languageNames = [
         "auto": "Auto-detect",
         "en": "English",
@@ -28,7 +35,30 @@ class LanguageUtil {
         "id": "Indonesian",
         "hi": "Hindi",
         "fi": "Finnish",
+        "bg": "Bulgarian",
+        "hr": "Croatian",
+        "cs": "Czech",
+        "da": "Danish",
+        "el": "Greek",
+        "et": "Estonian",
+        "hu": "Hungarian",
+        "lv": "Latvian",
+        "lt": "Lithuanian",
+        "mt": "Maltese",
+        "ro": "Romanian",
+        "sk": "Slovak",
+        "sl": "Slovenian",
+        "uk": "Ukrainian",
     ]
+
+    static func supportedLanguages(engine: String, fluidAudioModelVersion: String) -> [String] {
+        guard engine == "fluidaudio" else { return availableLanguages }
+        return fluidAudioModelVersion == "v2" ? parakeetV2Languages : parakeetV3Languages
+    }
+
+    static func fallbackLanguage(engine: String) -> String {
+        engine == "fluidaudio" ? "en" : "auto"
+    }
 
     static func getSystemLanguage() -> String {
         if let preferredLanguage = Locale.preferredLanguages.first {

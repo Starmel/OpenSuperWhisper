@@ -188,16 +188,14 @@ class ContentViewModel: ObservableObject {
             if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
+                    let duration = await AudioUtil.audioDuration(url: tempURL)
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
-                    // Capture the current recording duration
-                    let duration = await MainActor.run { self.recordingDuration }
-                    
                     // Create a new Recording instance
                     let timestamp = Date()
                     let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
                     let recordingId = UUID()
-                    let finalURL = Recording(
+                    let newRecording = Recording(
                         id: recordingId,
                         timestamp: timestamp,
                         fileName: fileName,
@@ -206,23 +204,13 @@ class ContentViewModel: ObservableObject {
                         status: .completed,
                         progress: 1.0,
                         sourceFileURL: nil
-                    ).url
+                    )
 
                     // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
+                    try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
 
                     // Save the recording to store
                     await MainActor.run {
-                        let newRecording = Recording(
-                            id: recordingId,
-                            timestamp: timestamp,
-                            fileName: fileName,
-                            transcription: text,
-                            duration: self.recordingDuration,
-                            status: .completed,
-                            progress: 1.0,
-                            sourceFileURL: nil
-                        )
                         self.recordingStore.addRecording(newRecording)
                         
                         // Clear search and show the new recording
@@ -886,8 +874,6 @@ struct RecordingRow: View {
                         Text(recording.timestamp, style: .time)
                         Text("·")
                         Text(TextUtil.formatDuration(recording.duration))
-                        Text("·")
-                        Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
