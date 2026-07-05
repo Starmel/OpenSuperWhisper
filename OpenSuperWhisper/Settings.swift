@@ -15,6 +15,7 @@ class SettingsViewModel: ObservableObject {
             } else {
                 initializeFluidAudioModels()
             }
+            resetLanguageIfUnsupported()
             Task { @MainActor in
                 TranscriptionService.shared.reloadEngine()
             }
@@ -30,6 +31,19 @@ class SettingsViewModel: ObservableObject {
                 }
             }
             initializeFluidAudioModels()
+            resetLanguageIfUnsupported()
+        }
+    }
+    
+    var supportedLanguages: [String] {
+        LanguageUtil.supportedLanguages(engine: selectedEngine, fluidAudioModelVersion: fluidAudioModelVersion)
+    }
+    
+    private func resetLanguageIfUnsupported() {
+        if !supportedLanguages.contains(selectedLanguage) {
+            selectedLanguage = LanguageUtil.fallbackLanguage(engine: selectedEngine)
+        } else {
+            NotificationCenter.default.post(name: .appPreferencesLanguageChanged, object: nil)
         }
     }
     
@@ -204,6 +218,13 @@ class SettingsViewModel: ObservableObject {
         loadAvailableModels()
         initializeDownloadableModels()
         initializeFluidAudioModels()
+        
+        if !supportedLanguages.contains(selectedLanguage) {
+            let fallback = LanguageUtil.fallbackLanguage(engine: selectedEngine)
+            selectedLanguage = fallback
+            AppPreferences.shared.whisperLanguage = fallback
+            NotificationCenter.default.post(name: .appPreferencesLanguageChanged, object: nil)
+        }
     }
     
     func initializeFluidAudioModels() {
@@ -555,6 +576,10 @@ struct SettingsDownloadableModels {
     }
 }
 
+func countLabel(_ count: Int, singular: String, plural: String) -> String {
+    count == 1 ? "\(count) \(singular)" : "\(count) \(plural)"
+}
+
 func formatModelSize(megabytes: Int) -> String {
     let formatter = ByteCountFormatter()
     formatter.allowedUnits = [.useMB, .useGB]
@@ -839,7 +864,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                         
                         Picker("Language", selection: $viewModel.selectedLanguage) {
-                            ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                            ForEach(viewModel.supportedLanguages, id: \.self) { code in
                                 Text(LanguageUtil.languageNames[code] ?? code)
                                     .tag(code)
                             }
@@ -1027,6 +1052,12 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
+                
+                RecordingStorageSettingsView()
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
             }
             .padding()
         }
@@ -1141,6 +1172,24 @@ struct SettingsView: View {
         case mouse
     }
 
+    @ViewBuilder
+    private func permissionWarning(message: String, isGranted: Bool, grantAction: @escaping () -> Void) -> some View {
+        if permissionsManager.hasCompletedInitialCheck && !isGranted {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                
+                Button("Grant Permission") {
+                    grantAction()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.top, 4)
+        }
+    }
+
     private var triggerMode: TriggerMode {
         if viewModel.mouseButtonHotkey != .none { return .mouse }
         if viewModel.modifierOnlyHotkey != .none { return .modifier }
@@ -1208,19 +1257,11 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
-                                if !permissionsManager.isInputMonitoringPermissionGranted {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.")
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
-                                        
-                                        Button("Grant Permission") {
-                                            permissionsManager.requestInputMonitoringPermissionOrOpenSystemPreferences()
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
-                                    }
-                                    .padding(.top, 4)
+                                permissionWarning(
+                                    message: "⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.",
+                                    isGranted: permissionsManager.isInputMonitoringPermissionGranted
+                                ) {
+                                    permissionsManager.requestInputMonitoringPermissionOrOpenSystemPreferences()
                                 }
                             }
                         case .mouse:
@@ -1246,10 +1287,12 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
-                                Text("⚠️ This mode requires Accessibility permission so the button can be detected globally and used only as a recording trigger. Only the selected mouse button is intercepted — no other clicks or keystrokes are captured.")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                                    .padding(.top, 4)
+                                permissionWarning(
+                                    message: "⚠️ This mode requires Accessibility permission so the button can be detected globally and used only as a recording trigger. Only the selected mouse button is intercepted — no other clicks or keystrokes are captured.",
+                                    isGranted: permissionsManager.isAccessibilityPermissionGranted
+                                ) {
+                                    permissionsManager.requestAccessibilityPermissionOrOpenSystemPreferences()
+                                }
                             }
                         case .keyCombo:
                             VStack(alignment: .leading, spacing: 8) {
@@ -1513,6 +1556,139 @@ struct FluidAudioModelDownloadItemView: View {
         } message: {
             Text(errorMessage)
         }
+    }
+}
+
+struct RecordingStorageSettingsView: View {
+    @State private var autoDeleteEnabled = AppPreferences.shared.autoDeleteRecordingsEnabled
+    @State private var retentionDays = AppPreferences.shared.autoDeleteRecordingsAfterDays
+    @State private var diskUsage: Int64 = 0
+    @State private var showConfirmation = false
+    @State private var pendingDays = 0
+    @State private var pendingCount = 0
+    @State private var pendingOldestDate: Date?
+
+    private let dayOptions = [1, 7, 14, 30, 90]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("History Storage")
+                .font(.headline)
+                .foregroundColor(.primary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Recordings on disk:")
+                        .font(.subheadline)
+                    Spacer()
+                    Text(ByteCountFormatter.string(fromByteCount: diskUsage, countStyle: .file))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Delete recordings older than")
+                        .font(.subheadline)
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { retentionDays },
+                        set: { newValue in
+                            if autoDeleteEnabled {
+                                requestAutoDelete(days: newValue)
+                            } else {
+                                retentionDays = newValue
+                                AppPreferences.shared.autoDeleteRecordingsAfterDays = newValue
+                            }
+                        }
+                    )) {
+                        ForEach(dayOptions, id: \.self) { days in
+                            Text(countLabel(days, singular: "day", plural: "days")).tag(days)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-delete old recordings")
+                            .font(.subheadline)
+                        Text("Removes both audio files and their transcriptions from history")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { autoDeleteEnabled },
+                        set: { newValue in
+                            if newValue {
+                                requestAutoDelete(days: retentionDays)
+                            } else {
+                                autoDeleteEnabled = false
+                                AppPreferences.shared.autoDeleteRecordingsEnabled = false
+                            }
+                        }
+                    ))
+                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                    .labelsHidden()
+                    .help("Automatically delete recordings and their transcriptions older than the selected number of days")
+                }
+            }
+        }
+        .onAppear {
+            refreshDiskUsage()
+        }
+        .alert("Delete Old Recordings?", isPresented: $showConfirmation) {
+            Button("Delete", role: .destructive) {
+                confirmAutoDelete()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(countLabel(pendingCount, singular: "recording", plural: "recordings")) with \(pendingCount == 1 ? "its transcription" : "their transcriptions") starting from \(formattedDate(pendingOldestDate)) will be deleted.")
+        }
+    }
+
+    private func requestAutoDelete(days: Int) {
+        Task { @MainActor in
+            let result: (count: Int, oldestDate: Date?) = (try? await RecordingStore.shared.recordingsOlderThan(days: days)) ?? (count: 0, oldestDate: nil)
+            if result.count > 0 {
+                pendingDays = days
+                pendingCount = result.count
+                pendingOldestDate = result.oldestDate
+                showConfirmation = true
+            } else {
+                applyAutoDelete(days: days)
+            }
+        }
+    }
+
+    private func confirmAutoDelete() {
+        applyAutoDelete(days: pendingDays)
+    }
+
+    private func applyAutoDelete(days: Int) {
+        retentionDays = days
+        autoDeleteEnabled = true
+        AppPreferences.shared.autoDeleteRecordingsAfterDays = days
+        AppPreferences.shared.autoDeleteRecordingsEnabled = true
+        Task { @MainActor in
+            try? await RecordingStore.shared.deleteRecordings(olderThanDays: days)
+            refreshDiskUsage()
+        }
+    }
+
+    private func refreshDiskUsage() {
+        Task.detached {
+            let usage = RecordingStore.recordingsDiskUsage()
+            await MainActor.run {
+                diskUsage = usage
+            }
+        }
+    }
+
+    private func formattedDate(_ date: Date?) -> String {
+        guard let date else { return "-" }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
