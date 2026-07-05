@@ -328,7 +328,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            if !permissionsManager.isMicrophonePermissionGranted
+            if permissionsManager.hasCompletedInitialCheck,
+               !permissionsManager.isMicrophonePermissionGranted
                 || !permissionsManager.isAccessibilityPermissionGranted
             {
                 PermissionsView(permissionsManager: permissionsManager)
