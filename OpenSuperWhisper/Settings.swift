@@ -171,6 +171,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var escCancelWithoutConfirmation: Bool {
+        didSet {
+            AppPreferences.shared.escCancelWithoutConfirmation = escCancelWithoutConfirmation
+        }
+    }
+    
     @Published var addSpaceAfterSentence: Bool {
         didSet {
             AppPreferences.shared.addSpaceAfterSentence = addSpaceAfterSentence
@@ -208,6 +214,7 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
+        self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
@@ -1351,6 +1358,20 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                                 .help("Play a notification sound when recording begins")
+                        }
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Cancel without confirmation")
+                                    .font(.subheadline)
+                                Text("Skip the double-Esc confirmation for recordings longer than 10 seconds")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.escCancelWithoutConfirmation)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
                         }
                     }
                 }

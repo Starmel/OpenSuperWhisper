@@ -19,13 +19,20 @@ protocol IndicatorViewDelegate: AnyObject {
 
 @MainActor
 class IndicatorViewModel: ObservableObject {
+    static let cancelConfirmationThreshold: TimeInterval = 10.0
+    static let cancelConfirmationWindow: TimeInterval = 5.0
+    
     @Published var state: RecordingState = .idle
     @Published var isBlinking = false
+    @Published var isConfirmingCancel = false
     @Published var recorder: AudioRecorder = .shared
+    
+    var recordingStartedAt: Date?
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
+    private var confirmCancelTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
@@ -99,8 +106,35 @@ class IndicatorViewModel: ObservableObject {
         // into .connecting/.recording.
         state = .recording
         startBlinking()
+        recordingStartedAt = Date()
         
         recorder.startRecording()
+    }
+    
+    func handleCancelRequest() -> Bool {
+        guard state == .recording,
+              !AppPreferences.shared.escCancelWithoutConfirmation,
+              !isConfirmingCancel,
+              let startedAt = recordingStartedAt,
+              Date().timeIntervalSince(startedAt) >= Self.cancelConfirmationThreshold
+        else {
+            return true
+        }
+        
+        isConfirmingCancel = true
+        confirmCancelTimer?.invalidate()
+        confirmCancelTimer = Timer.scheduledTimer(withTimeInterval: Self.cancelConfirmationWindow, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.resetCancelConfirmation()
+            }
+        }
+        return false
+    }
+    
+    private func resetCancelConfirmation() {
+        confirmCancelTimer?.invalidate()
+        confirmCancelTimer = nil
+        isConfirmingCancel = false
     }
     
     func startDecoding() {
@@ -108,6 +142,7 @@ class IndicatorViewModel: ObservableObject {
         // restart decoding or hide the window while transcription is in flight.
         guard state == .recording || state == .connecting else { return }
         
+        resetCancelConfirmation()
         stopBlinking()
         
         if isTranscriptionBusy {
@@ -228,6 +263,8 @@ class IndicatorViewModel: ObservableObject {
 
     func cleanup() {
         stopBlinking()
+        resetCancelConfirmation()
+        recordingStartedAt = nil
         hideTimer?.invalidate()
         hideTimer = nil
         cancellables.removeAll()
@@ -259,6 +296,27 @@ struct RecordingIndicator: View {
             .shadow(color: .red.opacity(0.5), radius: 4)
             .opacity(isBlinking ? 0.3 : 1.0)
             .animation(.easeInOut(duration: 0.4), value: isBlinking)
+    }
+}
+
+struct CancelConfirmationBar: View {
+    @State private var progress: CGFloat = 1
+    
+    var body: some View {
+        GeometryReader { geo in
+            Capsule()
+                .fill(Color.orange)
+                .frame(width: geo.size.width * progress, height: 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 2)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 3)
+        .onAppear {
+            withAnimation(.linear(duration: IndicatorViewModel.cancelConfirmationWindow)) {
+                progress = 0
+            }
+        }
     }
 }
 
@@ -303,10 +361,19 @@ struct IndicatorWindow: View {
                     RecordingIndicator(isBlinking: viewModel.isBlinking)
                         .frame(width: 24)
                     
-                    Text("Recording...")
-                        .font(.system(size: 13, weight: .semibold))
+                    if viewModel.isConfirmingCancel {
+                        Text("Press Esc to cancel")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.orange)
+                            .transition(.opacity)
+                    } else {
+                        Text("Recording...")
+                            .font(.system(size: 13, weight: .semibold))
+                            .transition(.opacity)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isConfirmingCancel)
                 
             case .decoding:
                 HStack(spacing: 8) {
@@ -356,6 +423,11 @@ struct IndicatorWindow: View {
                     rect
                         .fill(Material.thinMaterial)
                 }
+        }
+        .overlay(alignment: .bottom) {
+            if viewModel.isConfirmingCancel {
+                CancelConfirmationBar()
+            }
         }
         .clipShape(rect)
         .frame(width: Self.cardSize.width)

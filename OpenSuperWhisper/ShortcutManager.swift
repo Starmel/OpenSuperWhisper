@@ -62,8 +62,7 @@ class ShortcutManager {
 
         KeyboardShortcuts.onKeyUp(for: .escape) { [weak self] in
             Task { @MainActor in
-                if self?.activeVm != nil {
-                    IndicatorWindowManager.shared.stopForce()
+                if self?.activeVm != nil, IndicatorWindowManager.shared.requestCancel() {
                     self?.activeVm = nil
                 }
             }

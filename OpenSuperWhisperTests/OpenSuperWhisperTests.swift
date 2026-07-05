@@ -1580,6 +1580,114 @@ final class NoMicrophoneGuardTests: XCTestCase {
     }
 }
 
+@MainActor
+final class EscapeCancelConfirmationTests: XCTestCase {
+
+    private let prefsKey = "escCancelWithoutConfirmation"
+    private var savedPrefValue: Any?
+
+    override func setUp() {
+        super.setUp()
+        savedPrefValue = UserDefaults.standard.object(forKey: prefsKey)
+        UserDefaults.standard.removeObject(forKey: prefsKey)
+    }
+
+    override func tearDown() {
+        if let savedPrefValue {
+            UserDefaults.standard.set(savedPrefValue, forKey: prefsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: prefsKey)
+        }
+        super.tearDown()
+    }
+
+    private func makeRecordingViewModel(elapsed: TimeInterval) -> IndicatorViewModel {
+        let viewModel = IndicatorViewModel()
+        viewModel.state = .recording
+        viewModel.recordingStartedAt = Date().addingTimeInterval(-elapsed)
+        return viewModel
+    }
+
+    func testShortRecording_cancelsImmediately() {
+        let viewModel = makeRecordingViewModel(elapsed: 3)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Recordings shorter than the threshold must cancel on the first Esc")
+        XCTAssertFalse(viewModel.isConfirmingCancel)
+
+        viewModel.cleanup()
+    }
+
+    func testLongRecording_firstEscArmsConfirmation_secondEscCancels() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest(),
+                       "First Esc on a long recording must not cancel")
+        XCTAssertTrue(viewModel.isConfirmingCancel,
+                      "First Esc must arm the confirmation state")
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Second Esc within the confirmation window must cancel")
+
+        viewModel.cleanup()
+    }
+
+    func testLongRecording_withToggleEnabled_cancelsImmediately() {
+        UserDefaults.standard.set(true, forKey: prefsKey)
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "With the toggle enabled Esc must cancel without confirmation")
+        XCTAssertFalse(viewModel.isConfirmingCancel)
+
+        viewModel.cleanup()
+    }
+
+    func testDecodingState_cancelsImmediately() {
+        let viewModel = IndicatorViewModel()
+        viewModel.state = .decoding
+        viewModel.recordingStartedAt = Date().addingTimeInterval(-15)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Esc outside the recording state must cancel immediately")
+
+        viewModel.cleanup()
+    }
+
+    func testConfirmationWindowExpiry_resetsConfirmation() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest())
+        XCTAssertTrue(viewModel.isConfirmingCancel)
+
+        let expectation = expectation(description: "confirmation window expired")
+        DispatchQueue.main.asyncAfter(deadline: .now() + IndicatorViewModel.cancelConfirmationWindow + 0.5) {
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: IndicatorViewModel.cancelConfirmationWindow + 2)
+
+        XCTAssertFalse(viewModel.isConfirmingCancel,
+                       "Confirmation must reset after the window expires")
+        XCTAssertFalse(viewModel.handleCancelRequest(),
+                       "After expiry the next Esc must arm the confirmation again")
+
+        viewModel.cleanup()
+    }
+
+    func testStartDecoding_resetsConfirmation() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest())
+        XCTAssertTrue(viewModel.isConfirmingCancel)
+
+        viewModel.startDecoding()
+
+        XCTAssertFalse(viewModel.isConfirmingCancel,
+                       "Finishing the recording normally must reset the confirmation state")
+
+        viewModel.cleanup()
+    }
+}
+
 final class TextUtilTests: XCTestCase {
 
     // MARK: - formatDuration
