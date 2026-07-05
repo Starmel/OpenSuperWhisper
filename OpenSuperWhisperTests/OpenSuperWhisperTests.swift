@@ -247,6 +247,71 @@ final class WhisperStateIsolationTests: XCTestCase {
             "Transcription changed after a silent recording — decoding state leaks between calls"
         )
     }
+
+    // The bundled Silero VAD is always on in production: silence must yield no
+    // speech segments (no hallucinations), while trimmed speech still
+    // transcribes correctly.
+    func testBundledVadDropsSilenceAndKeepsSpeech() async throws {
+        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
+        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: modelURL.path)
+                && FileManager.default.fileExists(atPath: audioURL.path),
+            "tiny model / jfk sample not present in repo root"
+        )
+
+        let vadModelPath = try XCTUnwrap(
+            WhisperEngine.vadModelPath,
+            "Silero VAD model must be bundled with the app"
+        )
+        let vad = try XCTUnwrap(MyWhisperVadContext(modelPath: vadModelPath))
+
+        // Pure silence: no speech segments at all.
+        let silence = [Float](repeating: 0, count: 16000 * 3)
+        let silenceSegments = try XCTUnwrap(vad.speechSegments(in: silence))
+        XCTAssertTrue(silenceSegments.isEmpty, "VAD must not detect speech in pure silence")
+
+        // Speech padded with 5s of silence on both sides: VAD trims the
+        // padding and the trimmed audio still transcribes correctly.
+        let engine = WhisperEngine()
+        let converted = try await engine.convertAudioToPCM(fileURL: audioURL)
+        let speech = try XCTUnwrap(converted)
+        let padding = [Float](repeating: 0, count: 16000 * 5)
+        let padded = padding + speech + padding
+
+        let segments = try XCTUnwrap(vad.speechSegments(in: padded))
+        XCTAssertFalse(segments.isEmpty, "VAD must detect speech in the padded sample")
+
+        let trimmed = WhisperEngine.speechOnlySamples(from: padded, segments: segments)
+        XCTAssertLessThan(
+            trimmed.count, padded.count - 8 * 16000,
+            "VAD trimming must drop most of the 10s of padded silence"
+        )
+
+        let context = try XCTUnwrap(
+            MyWhisperContext.initFromFileNoState(path: modelURL.path, params: WhisperContextParams())
+        )
+        var params = WhisperFullParams()
+        params.noContext = false
+        params.language = "en"
+        var cParams = params.toC()
+
+        XCTAssertTrue(context.initState())
+        defer { context.freeState() }
+        guard context.full(samples: trimmed, params: &cParams) else {
+            XCTFail("whisper_full_with_state failed on VAD-trimmed audio")
+            return
+        }
+
+        var text = ""
+        for i in 0..<context.fullNSegments {
+            text += context.fullGetSegmentText(iSegment: i) ?? ""
+        }
+        XCTAssertTrue(
+            text.lowercased().contains("your country"),
+            "Speech not recognized after VAD trimming: \(text)"
+        )
+    }
 }
 
 final class AudioRecorderTempCleanupTests: XCTestCase {

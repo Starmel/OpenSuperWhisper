@@ -29,6 +29,7 @@ public struct WhisperFullParams {
     public var tdrzEnable: Bool = false
     public var suppressRegex: String?
     public var initialPrompt: String?
+    public var carryInitialPrompt: Bool = false
     public var promptTokens: [WhisperToken]?
     public var language: String?
     public var detectLanguage: Bool = false
@@ -93,6 +94,7 @@ public struct WhisperFullParams {
         if let initialPrompt = initialPrompt {
             cParams.initial_prompt = UnsafePointer(strdup(initialPrompt))
         }
+        cParams.carry_initial_prompt = carryInitialPrompt
 
         if let promptTokens = promptTokens, !promptTokens.isEmpty {
             let count = promptTokens.count
