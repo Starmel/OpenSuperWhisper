@@ -158,6 +158,10 @@ class TranscriptionQueue: ObservableObject {
         startProcessingQueue()
     }
 
+    nonisolated static func shouldDiscardEmptyDictation(text: String, sourceURL: URL) -> Bool {
+        text.isEmpty && sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
+    }
+
     private func processQueue() async {
         while let recording = recordingStore.getNextPendingRecording() {
             currentRecordingId = recording.id
@@ -232,6 +236,14 @@ class TranscriptionQueue: ObservableObject {
                 let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings)
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
+                    return
+                }
+
+                if Self.shouldDiscardEmptyDictation(text: text, sourceURL: sourceURL) {
+                    await Task.detached(priority: .utility) {
+                        try? FileManager.default.removeItem(at: sourceURL)
+                    }.value
+                    await recordingStore.deleteRecordingSync(recording)
                     return
                 }
 
