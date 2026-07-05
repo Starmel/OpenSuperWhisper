@@ -133,7 +133,6 @@ class WhisperEngine: TranscriptionEngine {
         params.noContext = false
         params.noTimestamps = !settings.showTimestamps
         params.suppressBlank = settings.suppressBlankAudio
-        params.translate = settings.translateToEnglish
         let isAutoDetect = settings.selectedLanguage == "auto"
         params.language = isAutoDetect ? nil : settings.selectedLanguage
         params.detectLanguage = false // means that it only detects the language and does not process the transcription

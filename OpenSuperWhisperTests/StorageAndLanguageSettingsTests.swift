@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import OpenSuperWhisper
 
@@ -109,5 +110,142 @@ final class CountLabelTests: XCTestCase {
         XCTAssertEqual(countLabel(7, singular: "day", plural: "days"), "7 days")
         XCTAssertEqual(countLabel(1, singular: "recording", plural: "recordings"), "1 recording")
         XCTAssertEqual(countLabel(0, singular: "recording", plural: "recordings"), "0 recordings")
+    }
+}
+
+@MainActor
+final class IndicatorPanelFullScreenTests: XCTestCase {
+
+    func testIndicatorPanel_isVisibleOverFullScreenApps() throws {
+        let manager = IndicatorWindowManager.shared
+        manager.warmUp()
+
+        let window = try XCTUnwrap(manager.window)
+
+        XCTAssertTrue(window.collectionBehavior.contains(.fullScreenAuxiliary),
+                      "Panel must join full-screen spaces as an auxiliary window")
+        XCTAssertTrue(window.collectionBehavior.contains(.canJoinAllSpaces),
+                      "Panel must follow the user across all spaces")
+        XCTAssertGreaterThanOrEqual(window.level.rawValue, NSWindow.Level.statusBar.rawValue)
+    }
+}
+
+final class ClipboardRestoreTests: XCTestCase {
+
+    private var pasteboard: NSPasteboard!
+
+    override func setUp() {
+        super.setUp()
+        pasteboard = NSPasteboard(name: NSPasteboard.Name("osw-clipboard-test-\(UUID().uuidString)"))
+    }
+
+    override func tearDown() {
+        pasteboard.releaseGlobally()
+        pasteboard = nil
+        super.tearDown()
+    }
+
+    private func setString(_ string: String) -> Int {
+        pasteboard.declareTypes([.string], owner: nil)
+        pasteboard.setString(string, forType: .string)
+        return pasteboard.changeCount
+    }
+
+    func testRestoreIfUnchanged_pasteboardUntouched_restoresOriginal() throws {
+        _ = setString("original")
+        let saved = try XCTUnwrap(ClipboardUtil.saveCurrentPasteboardContents(from: pasteboard))
+
+        let changeCount = setString("transcription")
+
+        let restored = ClipboardUtil.restoreIfUnchanged(saved, expectedChangeCount: changeCount, pasteboard: pasteboard)
+
+        XCTAssertTrue(restored)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
+    func testRestoreIfUnchanged_pasteboardChangedMeanwhile_keepsNewContents() throws {
+        _ = setString("original")
+        let saved = try XCTUnwrap(ClipboardUtil.saveCurrentPasteboardContents(from: pasteboard))
+
+        let changeCount = setString("transcription")
+        _ = setString("copied by user during the delay")
+
+        let restored = ClipboardUtil.restoreIfUnchanged(saved, expectedChangeCount: changeCount, pasteboard: pasteboard)
+
+        XCTAssertFalse(restored)
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied by user during the delay")
+    }
+
+    func testRestoreDelay_coversSlowPasteConsumers() {
+        XCTAssertGreaterThanOrEqual(ClipboardUtil.clipboardRestoreDelay, 1.0,
+                                    "Browsers and Electron apps can service Cmd+V hundreds of ms after posting")
+    }
+}
+
+@MainActor
+final class MainWindowResolutionTests: XCTestCase {
+
+    func testTitledWindow_isMainAppWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 650),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: true
+        )
+        XCTAssertTrue(AppDelegate.isMainAppWindow(window))
+    }
+
+    func testBorderlessPanel_isNotMainAppWindow() {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: true
+        )
+        XCTAssertFalse(AppDelegate.isMainAppWindow(panel))
+    }
+
+    func testBorderlessWindow_isNotMainAppWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: true
+        )
+        XCTAssertFalse(AppDelegate.isMainAppWindow(window))
+    }
+}
+
+final class StartHiddenPreferenceTests: XCTestCase {
+
+    private let key = "startHiddenInMenuBar"
+    private var originalValue: Any?
+
+    override func setUp() {
+        super.setUp()
+        originalValue = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    override func tearDown() {
+        if let originalValue {
+            UserDefaults.standard.set(originalValue, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        super.tearDown()
+    }
+
+    func testStartHiddenInMenuBar_defaultsToFalse() {
+        XCTAssertFalse(AppPreferences.shared.startHiddenInMenuBar)
+    }
+
+    func testStartHiddenInMenuBar_persistsChanges() {
+        AppPreferences.shared.startHiddenInMenuBar = true
+        XCTAssertTrue(AppPreferences.shared.startHiddenInMenuBar)
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: key))
+
+        AppPreferences.shared.startHiddenInMenuBar = false
+        XCTAssertFalse(AppPreferences.shared.startHiddenInMenuBar)
     }
 }
