@@ -115,6 +115,7 @@ class OnboardingViewModel: ObservableObject {
     @MainActor
     func downloadModel(_ model: OnboardingUnifiedModel) async throws {
         guard !isDownloading else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
         
         isDownloading = true
         downloadingModelName = model.name

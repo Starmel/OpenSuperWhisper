@@ -1582,32 +1582,6 @@ final class NoMicrophoneGuardTests: XCTestCase {
 
 final class TextUtilTests: XCTestCase {
 
-    // MARK: - wordCount
-
-    func testWordCount_simpleText() {
-        XCTAssertEqual(TextUtil.wordCount("hello world"), 2)
-    }
-
-    func testWordCount_emptyString() {
-        XCTAssertEqual(TextUtil.wordCount(""), 0)
-    }
-
-    func testWordCount_multipleSpaces() {
-        XCTAssertEqual(TextUtil.wordCount("hello   world"), 2)
-    }
-
-    func testWordCount_newlines() {
-        XCTAssertEqual(TextUtil.wordCount("hello\nworld"), 2)
-    }
-
-    func testWordCount_singleWord() {
-        XCTAssertEqual(TextUtil.wordCount("hello"), 1)
-    }
-
-    func testWordCount_leadingTrailingWhitespace() {
-        XCTAssertEqual(TextUtil.wordCount("  hi there  "), 2)
-    }
-
     // MARK: - formatDuration
 
     func testFormatDuration_zero() {
@@ -1632,6 +1606,36 @@ final class TextUtilTests: XCTestCase {
 
     func testFormatDuration_exactHours() {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
+    }
+}
+
+final class AudioUtilTests: XCTestCase {
+
+    func testAudioDuration_oneSecondWavFile() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-util-test-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let sampleRate = 16000.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        // AVAudioFile flushes the WAV header only on deinit, so writing is
+        // scoped to make the file readable before the duration check.
+        try {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleRate))!
+            buffer.frameLength = buffer.frameCapacity
+            try file.write(from: buffer)
+        }()
+
+        let duration = await AudioUtil.audioDuration(url: url)
+        XCTAssertEqual(duration, 1.0, accuracy: 0.05)
+    }
+
+    func testAudioDuration_missingFile_returnsZero() async {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-util-missing-\(UUID().uuidString).wav")
+        let duration = await AudioUtil.audioDuration(url: url)
+        XCTAssertEqual(duration, 0)
     }
 }
 

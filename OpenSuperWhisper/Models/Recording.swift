@@ -366,6 +366,108 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    nonisolated static func retentionCutoffDate(daysToKeep: Int, now: Date = Date()) -> Date? {
+        guard daysToKeep > 0 else { return nil }
+        return Calendar.current.date(byAdding: .day, value: -daysToKeep, to: now)
+    }
+
+    nonisolated static func isDeletableRecordingURL(_ url: URL) -> Bool {
+        let recordingsPath = Recording.recordingsDirectory.standardizedFileURL.path
+        let filePath = url.standardizedFileURL.path
+        return filePath.hasPrefix(recordingsPath + "/") && filePath != recordingsPath
+    }
+
+    private nonisolated static let pendingStatuses = [
+        RecordingStatus.pending.rawValue,
+        RecordingStatus.converting.rawValue,
+        RecordingStatus.transcribing.rawValue
+    ]
+
+    nonisolated func recordingsOlderThan(days: Int) async throws -> (count: Int, oldestDate: Date?) {
+        guard let cutoff = Self.retentionCutoffDate(daysToKeep: days) else { return (0, nil) }
+        return try await dbQueue.read { db in
+            let request = Recording
+                .filter(Recording.Columns.timestamp < cutoff)
+                .filter(!Self.pendingStatuses.contains(Recording.Columns.status))
+            let count = try request.fetchCount(db)
+            let oldest = try request
+                .order(Recording.Columns.timestamp.asc)
+                .limit(1)
+                .fetchOne(db)
+            return (count, oldest?.timestamp)
+        }
+    }
+
+    func deleteRecordings(olderThanDays days: Int) async throws {
+        guard let cutoff = Self.retentionCutoffDate(daysToKeep: days) else { return }
+        let outdated = try await dbQueue.read { db in
+            try Recording
+                .filter(Recording.Columns.timestamp < cutoff)
+                .filter(!Self.pendingStatuses.contains(Recording.Columns.status))
+                .fetchAll(db)
+        }
+        guard !outdated.isEmpty else { return }
+
+        for recording in outdated where Self.isDeletableRecordingURL(recording.url) {
+            try? FileManager.default.removeItem(at: recording.url)
+        }
+        let ids = outdated.map { $0.id }
+        try await dbQueue.write { db in
+            _ = try Recording
+                .filter(ids.contains(Recording.Columns.id))
+                .deleteAll(db)
+        }
+        NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+    }
+
+    /// Recordings created through the indicator flow used to be saved with
+    /// duration = 0. Restores real durations from the audio files on disk.
+    nonisolated func backfillMissingDurations() async {
+        let zeroDurationRecordings = (try? await dbQueue.read { db in
+            try Recording
+                .filter(Recording.Columns.duration <= 0)
+                .filter(Recording.Columns.status == RecordingStatus.completed.rawValue)
+                .fetchAll(db)
+        }) ?? []
+        guard !zeroDurationRecordings.isEmpty else { return }
+
+        var updatedAny = false
+        for recording in zeroDurationRecordings {
+            guard FileManager.default.fileExists(atPath: recording.url.path) else { continue }
+            let duration = await AudioUtil.audioDuration(url: recording.url)
+            guard duration > 0 else { continue }
+            do {
+                try await dbQueue.write { db in
+                    _ = try Recording
+                        .filter(Recording.Columns.id == recording.id)
+                        .updateAll(db, [Recording.Columns.duration.set(to: duration)])
+                }
+                updatedAny = true
+            } catch {
+                print("Failed to backfill duration for \(recording.id): \(error)")
+            }
+        }
+
+        if updatedAny {
+            await MainActor.run {
+                NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+            }
+        }
+    }
+
+    nonisolated static func recordingsDiskUsage() -> Int64 {
+        let fileManager = FileManager.default
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: Recording.recordingsDirectory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+
+        return files.reduce(Int64(0)) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            return total + Int64(size)
+        }
+    }
+
     func searchRecordings(query: String) -> [Recording] {
         do {
             return try dbQueue.read { db in

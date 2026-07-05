@@ -13,6 +13,10 @@ class PermissionsManager: ObservableObject {
     @Published var isMicrophonePermissionGranted = false
     @Published var isAccessibilityPermissionGranted = false
     @Published var isInputMonitoringPermissionGranted = false
+    /// False until the first async TCC check completes; the UI must not show
+    /// "permission missing" warnings while the actual status is still unknown,
+    /// otherwise they flash on every settings screen open.
+    @Published private(set) var hasCompletedInitialCheck = false
 
     // TCC status queries (AVCaptureDevice.authorizationStatus, IOHIDCheckAccess)
     // are synchronous XPC round-trips to tccd taking 40-100 ms — they must
@@ -125,6 +129,7 @@ class PermissionsManager: ObservableObject {
                 self.isMicrophonePermissionGranted = microphone
                 self.isAccessibilityPermissionGranted = accessibility
                 self.isInputMonitoringPermissionGranted = inputMonitoring
+                self.hasCompletedInitialCheck = true
             }
         }
     }
@@ -153,6 +158,14 @@ class PermissionsManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isInputMonitoringPermissionGranted = granted
             }
+        }
+    }
+
+    func requestAccessibilityPermissionOrOpenSystemPreferences() {
+        if AXIsProcessTrusted() {
+            isAccessibilityPermissionGranted = true
+        } else {
+            openSystemPreferences(for: .accessibility)
         }
     }
 

@@ -1,5 +1,4 @@
 import Foundation
-import AVFoundation
 import Combine
 
 @MainActor
@@ -96,11 +95,7 @@ class TranscriptionQueue: ObservableObject {
 
     func addFileToQueue(url: URL) async {
         do {
-            let durationInSeconds = await (try? Task.detached(priority: .userInitiated) {
-                let asset = AVAsset(url: url)
-                let duration = try await asset.load(.duration)
-                return CMTimeGetSeconds(duration)
-            }.value) ?? 0.0
+            let durationInSeconds = await AudioUtil.audioDuration(url: url)
 
             let timestamp = Date()
             let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
