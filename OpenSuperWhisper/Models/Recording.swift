@@ -337,6 +337,16 @@ class RecordingStore: ObservableObject {
         }
     }
     
+    func deleteRecordingSync(_ recording: Recording) async {
+        do {
+            try await deleteRecordingFromDB(recording)
+            try? FileManager.default.removeItem(at: recording.url)
+            NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
+        } catch {
+            print("Failed to delete recording: \(error)")
+        }
+    }
+
     private nonisolated func deleteRecordingFromDB(_ recording: Recording) async throws {
         try await dbQueue.write { db in
             _ = try recording.delete(db)

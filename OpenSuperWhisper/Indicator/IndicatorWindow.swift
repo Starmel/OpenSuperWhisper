@@ -134,31 +134,33 @@ class IndicatorViewModel: ObservableObject {
                     let duration = await AudioUtil.audioDuration(url: tempURL)
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
                     
-                    // Create a new Recording instance
-                    let timestamp = Date()
-                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                    let recordingId = UUID()
-                    let newRecording = Recording(
-                        id: recordingId,
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: duration,
-                        status: .completed,
-                        progress: 1.0,
-                        sourceFileURL: nil
-                    )
-                    
-                    // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
-                    
-                    // Save the recording to store
-                    await MainActor.run {
-                        self.recordingStore.addRecording(newRecording)
+                    if text.isEmpty {
+                        try? FileManager.default.removeItem(at: tempURL)
+                        print("No speech detected, dictation discarded")
+                    } else {
+                        let timestamp = Date()
+                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                        let recordingId = UUID()
+                        let newRecording = Recording(
+                            id: recordingId,
+                            timestamp: timestamp,
+                            fileName: fileName,
+                            transcription: text,
+                            duration: duration,
+                            status: .completed,
+                            progress: 1.0,
+                            sourceFileURL: nil
+                        )
+                        
+                        try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+                        
+                        await MainActor.run {
+                            self.recordingStore.addRecording(newRecording)
+                        }
+                        
+                        insertText(text)
+                        print("Transcription result: \(text)")
                     }
-                    
-                    insertText(text)
-                    print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
                     try? FileManager.default.removeItem(at: tempURL)
