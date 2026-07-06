@@ -172,9 +172,7 @@ class ContentViewModel: ObservableObject {
             startDurationTimerIfNeeded()
         }
         
-        Task.detached { [recorder] in
-            recorder.startRecording()
-        }
+        recorder.startRecording()
     }
 
     func startDecoding() {
@@ -184,58 +182,47 @@ class ContentViewModel: ObservableObject {
         
         IndicatorWindowManager.shared.hide()
 
-        if let tempURL = recorder.stopRecording() {
-            Task { [weak self] in
-                guard let self = self else { return }
-
+        Task { [weak self] in
+            guard let self = self else { return }
+            
+            if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
+                    let duration = await AudioUtil.audioDuration(url: tempURL)
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
 
-                    // Capture the current recording duration
-                    let duration = await MainActor.run { self.recordingDuration }
-                    
-                    // Create a new Recording instance
-                    let timestamp = Date()
-                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                    let recordingId = UUID()
-                    let finalURL = Recording(
-                        id: recordingId,
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: duration,
-                        status: .completed,
-                        progress: 1.0,
-                        sourceFileURL: nil
-                    ).url
-
-                    // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-
-                    // Save the recording to store
-                    await MainActor.run {
+                    if text.isEmpty {
+                        try? FileManager.default.removeItem(at: tempURL)
+                        print("No speech detected, dictation discarded")
+                    } else {
+                        let timestamp = Date()
+                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                        let recordingId = UUID()
                         let newRecording = Recording(
                             id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
-                            duration: self.recordingDuration,
+                            duration: duration,
                             status: .completed,
                             progress: 1.0,
                             sourceFileURL: nil
                         )
-                        self.recordingStore.addRecording(newRecording)
-                        
-                        // Clear search and show the new recording
-                        if !self.currentSearchQuery.isEmpty {
-                            self.shouldClearSearch = true
-                            self.currentSearchQuery = ""
-                        }
-                        self.recordings.insert(newRecording, at: 0)
-                    }
 
-                    print("Transcription result: \(text)")
+                        try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+
+                        await MainActor.run {
+                            self.recordingStore.addRecording(newRecording)
+                            
+                            if !self.currentSearchQuery.isEmpty {
+                                self.shouldClearSearch = true
+                                self.currentSearchQuery = ""
+                            }
+                            self.recordings.insert(newRecording, at: 0)
+                        }
+
+                        print("Transcription result: \(text)")
+                    }
                 } catch {
                     print("Error transcribing audio: \(error)")
                     try? FileManager.default.removeItem(at: tempURL)
@@ -245,10 +232,12 @@ class ContentViewModel: ObservableObject {
                     self.state = .idle
                     self.recordingDuration = 0
                 }
+            } else {
+                await MainActor.run {
+                    self.state = .idle
+                    self.recordingDuration = 0
+                }
             }
-        } else {
-            state = .idle
-            recordingDuration = 0
         }
     }
 
@@ -340,7 +329,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            if !permissionsManager.isMicrophonePermissionGranted
+            if permissionsManager.hasCompletedInitialCheck,
+               !permissionsManager.isMicrophonePermissionGranted
                 || !permissionsManager.isAccessibilityPermissionGranted
             {
                 PermissionsView(permissionsManager: permissionsManager)
@@ -886,8 +876,6 @@ struct RecordingRow: View {
                         Text(recording.timestamp, style: .time)
                         Text("·")
                         Text(TextUtil.formatDuration(recording.duration))
-                        Text("·")
-                        Text("^[\(TextUtil.wordCount(recording.transcription)) word](inflect: true)")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)

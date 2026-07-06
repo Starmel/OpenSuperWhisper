@@ -851,6 +851,9 @@
 				CURRENT_PROJECT_VERSION = 13;
 				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
+				DEPLOYMENT_POSTPROCESSING = YES;
+				STRIP_INSTALLED_PRODUCT = YES;
+				STRIP_STYLE = all;
 				DEVELOPMENT_ASSET_PATHS = "\"OpenSuperWhisper/Preview Content\"";
 				DEVELOPMENT_TEAM = 8LLDD7HWZK;
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = 8LLDD7HWZK;
@@ -1047,7 +1050,7 @@
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.7.9;
+				minimumVersion = 0.15.4;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

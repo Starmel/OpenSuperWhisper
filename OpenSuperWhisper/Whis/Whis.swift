@@ -13,6 +13,56 @@ public typealias WhisperPos = Int32
 public typealias WhisperToken = Int32
 public typealias WhisperSeqId = Int32
 
+// MARK: - VAD (Silero)
+
+/// Speech segment detected by VAD, in centiseconds of the original audio.
+public struct WhisperVadSegment {
+    public let startCs: Int64
+    public let endCs: Int64
+    
+    public init(startCs: Int64, endCs: Int64) {
+        self.startCs = startCs
+        self.endCs = endCs
+    }
+}
+
+public class MyWhisperVadContext {
+    private var vctx: OpaquePointer?
+    
+    public init?(modelPath: String) {
+        let params = whisper_vad_default_context_params()
+        vctx = modelPath.withCString { whisper_vad_init_from_file_with_params($0, params) }
+        guard vctx != nil else { return nil }
+    }
+    
+    deinit {
+        if let vctx = vctx {
+            whisper_vad_free(vctx)
+        }
+    }
+    
+    public func speechSegments(in samples: [Float]) -> [WhisperVadSegment]? {
+        guard let vctx = vctx else { return nil }
+        
+        let segmentsPtr = samples.withUnsafeBufferPointer { buffer in
+            whisper_vad_segments_from_samples(vctx, whisper_vad_default_params(), buffer.baseAddress, Int32(buffer.count))
+        }
+        guard let segmentsPtr = segmentsPtr else { return nil }
+        defer { whisper_vad_free_segments(segmentsPtr) }
+        
+        let count = Int(whisper_vad_segments_n_segments(segmentsPtr))
+        var result: [WhisperVadSegment] = []
+        result.reserveCapacity(count)
+        for i in 0..<count {
+            result.append(WhisperVadSegment(
+                startCs: Int64(whisper_vad_segments_get_segment_t0(segmentsPtr, Int32(i))),
+                endCs: Int64(whisper_vad_segments_get_segment_t1(segmentsPtr, Int32(i)))
+            ))
+        }
+        return result
+    }
+}
+
 // MARK: - Wrapper Class
 
 public class MyWhisperContext {
@@ -27,10 +77,7 @@ public class MyWhisperContext {
     
     deinit {
         freeContext()
-        if let state = state {
-            whisper_free_state(state)
-            self.state = nil
-        }
+        freeState()
     }
     
     // MARK: - Initialization
@@ -74,12 +121,17 @@ public class MyWhisperContext {
     
     public func initState() -> Bool {
         guard let ctx = ctx else { return false }
-        let state = whisper_init_state(ctx)
+        freeState()
+        guard let state = whisper_init_state(ctx) else { return false }
+        self.state = state
+        return true
+    }
+    
+    public func freeState() {
         if let state = state {
-            self.state = state
-            return true
+            whisper_free_state(state)
+            self.state = nil
         }
-        return false
     }
     
     // MARK: - OpenVINO

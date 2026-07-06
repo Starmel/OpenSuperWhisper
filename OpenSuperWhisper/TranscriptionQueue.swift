@@ -1,5 +1,4 @@
 import Foundation
-import AVFoundation
 import Combine
 
 @MainActor
@@ -31,13 +30,11 @@ class TranscriptionQueue: ObservableObject {
                       newProgress > 0,
                       newProgress < 1.0 else { return }
                 
-                Task {
-                    await self.recordingStore.updateRecordingStatusOnly(
-                        recordingId,
-                        progress: newProgress,
-                        status: .transcribing
-                    )
-                }
+                self.recordingStore.updateRecordingProgressTransient(
+                    recordingId,
+                    progress: newProgress,
+                    status: .transcribing
+                )
             }
     }
 
@@ -98,11 +95,7 @@ class TranscriptionQueue: ObservableObject {
 
     func addFileToQueue(url: URL) async {
         do {
-            let durationInSeconds = await (try? Task.detached(priority: .userInitiated) {
-                let asset = AVAsset(url: url)
-                let duration = try await asset.load(.duration)
-                return CMTimeGetSeconds(duration)
-            }.value) ?? 0.0
+            let durationInSeconds = await AudioUtil.audioDuration(url: url)
 
             let timestamp = Date()
             let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
@@ -163,6 +156,10 @@ class TranscriptionQueue: ObservableObject {
         }
 
         startProcessingQueue()
+    }
+
+    nonisolated static func shouldDiscardEmptyDictation(text: String, sourceURL: URL) -> Bool {
+        text.isEmpty && sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
     }
 
     private func processQueue() async {
@@ -242,6 +239,14 @@ class TranscriptionQueue: ObservableObject {
                     return
                 }
 
+                if Self.shouldDiscardEmptyDictation(text: text, sourceURL: sourceURL) {
+                    await Task.detached(priority: .utility) {
+                        try? FileManager.default.removeItem(at: sourceURL)
+                    }.value
+                    await recordingStore.deleteRecordingSync(recording)
+                    return
+                }
+
                 let finalURL = recording.url
                 try await Task.detached(priority: .userInitiated) {
                     try? FileManager.default.createDirectory(
@@ -253,7 +258,13 @@ class TranscriptionQueue: ObservableObject {
                         if FileManager.default.fileExists(atPath: finalURL.path) {
                             try? FileManager.default.removeItem(at: finalURL)
                         }
-                        try FileManager.default.copyItem(at: sourceURL, to: finalURL)
+                        // Our own temp recordings are moved (no disk duplication);
+                        // user-provided files must stay in place, so they are copied.
+                        if sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path) {
+                            try FileManager.default.moveItem(at: sourceURL, to: finalURL)
+                        } else {
+                            try FileManager.default.copyItem(at: sourceURL, to: finalURL)
+                        }
                     }
                 }.value
 

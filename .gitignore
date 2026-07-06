@@ -122,3 +122,8 @@ default.profraw
 .cursorrules
 OpenSuperWhisper.dmg.sha256
 dev_config.json
+
+# Issue Agent
+/issues/
+agent/.venv/
+agent/logs/
