@@ -63,11 +63,14 @@ class WhisperEngine: TranscriptionEngine {
     }
     
     func initialize() async throws {
+        try loadModel()
+        unloadModel()
+    }
+    private func loadModel() throws {
         let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
         guard let modelPath = modelPath else {
             throw TranscriptionError.contextInitializationFailed
         }
-        
         let params = WhisperContextParams()
         context = MyWhisperContext.initFromFile(path: modelPath, params: params)
         
@@ -75,8 +78,14 @@ class WhisperEngine: TranscriptionEngine {
             throw TranscriptionError.contextInitializationFailed
         }
     }
+    private func unloadModel(){
+        context = nil
+    }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        try loadModel()
+        defer { unloadModel() }
+
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
