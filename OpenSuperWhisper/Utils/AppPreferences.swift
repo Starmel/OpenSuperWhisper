@@ -59,13 +59,13 @@ final class AppPreferences {
     @UserDefault(key: "fluidAudioModelVersion", defaultValue: "v3")
     var fluidAudioModelVersion: String
     
+    @UserDefault(key: "qwen3Variant", defaultValue: "f32")
+    var qwen3Variant: String
+    
     @UserDefault(key: "whisperLanguage", defaultValue: "en")
     var whisperLanguage: String
     
     // Transcription settings
-    @UserDefault(key: "translateToEnglish", defaultValue: false)
-    var translateToEnglish: Bool
-    
     @UserDefault(key: "suppressBlankAudio", defaultValue: true)
     var suppressBlankAudio: Bool
     
@@ -104,9 +104,15 @@ final class AppPreferences {
     
     @UserDefault(key: "modifierOnlyHotkey", defaultValue: "none")
     var modifierOnlyHotkey: String
-
+    
+    /// Last non-none modifier key, used to restore the user's choice
+    /// when switching back to Single Modifier Key mode.
+    @UserDefault(key: "lastModifierOnlyHotkey", defaultValue: "leftCommand")
+    var lastModifierOnlyHotkey: String
+    
     @UserDefault(key: "mouseButtonHotkey", defaultValue: "none")
     var mouseButtonHotkey: String
+
 
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
@@ -115,9 +121,21 @@ final class AppPreferences {
     var addSpaceAfterSentence: Bool
 
     // Clipboard settings
-    @UserDefault(key: "autoCopyToClipboard", defaultValue: true)
+    @UserDefault(key: "autoCopyToClipboard", defaultValue: false)
     var autoCopyToClipboard: Bool
 
     @UserDefault(key: "autoPasteTranscription", defaultValue: true)
     var autoPasteTranscription: Bool
+
+    @UserDefault(key: "escCancelWithoutConfirmation", defaultValue: false)
+    var escCancelWithoutConfirmation: Bool
+
+    @UserDefault(key: "startHiddenInMenuBar", defaultValue: false)
+    var startHiddenInMenuBar: Bool
+
+    @UserDefault(key: "autoDeleteRecordingsEnabled", defaultValue: false)
+    var autoDeleteRecordingsEnabled: Bool
+
+    @UserDefault(key: "autoDeleteRecordingsAfterDays", defaultValue: 30)
+    var autoDeleteRecordingsAfterDays: Int
 }

@@ -23,13 +23,13 @@ public struct WhisperFullParams {
     public var tholdPtsum: Float = 0.01
     public var maxLen: Int32 = 0
     public var splitOnWord: Bool = false
-    public var print_realtime: Bool = false
     public var maxTokens: Int32 = 0
     public var debugMode: Bool = false
     public var audioCtx: Int32 = 0
     public var tdrzEnable: Bool = false
     public var suppressRegex: String?
     public var initialPrompt: String?
+    public var carryInitialPrompt: Bool = false
     public var promptTokens: [WhisperToken]?
     public var language: String?
     public var detectLanguage: Bool = false
@@ -82,7 +82,6 @@ public struct WhisperFullParams {
         cParams.thold_ptsum = tholdPtsum
         cParams.max_len = maxLen
         cParams.split_on_word = splitOnWord
-        cParams.print_realtime = print_realtime
         cParams.max_tokens = maxTokens
         cParams.debug_mode = debugMode
         cParams.audio_ctx = audioCtx
@@ -95,6 +94,7 @@ public struct WhisperFullParams {
         if let initialPrompt = initialPrompt {
             cParams.initial_prompt = UnsafePointer(strdup(initialPrompt))
         }
+        cParams.carry_initial_prompt = carryInitialPrompt
 
         if let promptTokens = promptTokens, !promptTokens.isEmpty {
             let count = promptTokens.count

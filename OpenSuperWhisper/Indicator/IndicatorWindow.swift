@@ -19,14 +19,20 @@ protocol IndicatorViewDelegate: AnyObject {
 
 @MainActor
 class IndicatorViewModel: ObservableObject {
+    static let cancelConfirmationThreshold: TimeInterval = 10.0
+    static let cancelConfirmationWindow: TimeInterval = 5.0
+    
     @Published var state: RecordingState = .idle
     @Published var isBlinking = false
+    @Published var isConfirmingCancel = false
     @Published var recorder: AudioRecorder = .shared
-    @Published var isVisible = false
+    
+    var recordingStartedAt: Date?
     
     var delegate: IndicatorViewDelegate?
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
+    private var confirmCancelTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
@@ -86,77 +92,110 @@ class IndicatorViewModel: ObservableObject {
             return
         }
 
+        // getActiveMicrophone() only reads the cached currentMicrophone, so
+        // this guard costs no CoreAudio HAL round-trip on the main thread.
         guard MicrophoneService.shared.getActiveMicrophone() != nil else {
             showAutoDismissingMessage(.noMicrophone)
             return
         }
-
-        if MicrophoneService.shared.isActiveMicrophoneRequiresConnection() {
-            state = .connecting
-            stopBlinking()
-        } else {
-            state = .recording
-            startBlinking()
+        
+        // Optimistically assume recording: querying the microphone here costs
+        // CoreAudio HAL round-trips on the main thread right before the appear
+        // animation. The recorder resolves the real state on its own queue and
+        // publishes isConnecting/isRecording, which the sinks above translate
+        // into .connecting/.recording.
+        state = .recording
+        startBlinking()
+        recordingStartedAt = Date()
+        
+        recorder.startRecording()
+    }
+    
+    func handleCancelRequest() -> Bool {
+        guard state == .recording,
+              !AppPreferences.shared.escCancelWithoutConfirmation,
+              !isConfirmingCancel,
+              let startedAt = recordingStartedAt,
+              Date().timeIntervalSince(startedAt) >= Self.cancelConfirmationThreshold
+        else {
+            return true
         }
         
-        Task.detached { [recorder] in
-            recorder.startRecording()
+        isConfirmingCancel = true
+        confirmCancelTimer?.invalidate()
+        confirmCancelTimer = Timer.scheduledTimer(withTimeInterval: Self.cancelConfirmationWindow, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.resetCancelConfirmation()
+            }
         }
+        return false
+    }
+    
+    private func resetCancelConfirmation() {
+        confirmCancelTimer?.invalidate()
+        confirmCancelTimer = nil
+        isConfirmingCancel = false
     }
     
     func startDecoding() {
+        // A second stop request (double hotkey press, hold-mode key-up) must not
+        // restart decoding or hide the window while transcription is in flight.
+        guard state == .recording || state == .connecting else { return }
+        
+        resetCancelConfirmation()
         stopBlinking()
         
         if isTranscriptionBusy {
-            recorder.cancelRecording()
+            // The engine is busy with another transcription: keep the user's audio
+            // and put it into the queue instead of deleting it.
+            Task { [weak self] in
+                guard let self = self else { return }
+                if let tempURL = await self.recorder.stopRecording() {
+                    await self.transcriptionQueue.addFileToQueue(url: tempURL)
+                }
+            }
             showBusyMessage()
             return
         }
         
         state = .decoding
         
-        if let tempURL = recorder.stopRecording() {
-            Task { [weak self] in
-                guard let self = self else { return }
-                
+        Task { [weak self] in
+            guard let self = self else { return }
+            
+            if let tempURL = await self.recorder.stopRecording() {
                 do {
                     print("start decoding...")
+                    let duration = await AudioUtil.audioDuration(url: tempURL)
                     let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
                     
-                    // Create a new Recording instance
-                    let timestamp = Date()
-                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                    let recordingId = UUID()
-                    let finalURL = Recording(
-                        id: recordingId,
-                        timestamp: timestamp,
-                        fileName: fileName,
-                        transcription: text,
-                        duration: 0,
-                        status: .completed,
-                        progress: 1.0,
-                        sourceFileURL: nil
-                    ).url
-                    
-                    // Move the temporary recording to final location
-                    try recorder.moveTemporaryRecording(from: tempURL, to: finalURL)
-                    
-                    // Save the recording to store
-                    await MainActor.run {
-                        self.recordingStore.addRecording(Recording(
+                    if text.isEmpty {
+                        try? FileManager.default.removeItem(at: tempURL)
+                        print("No speech detected, dictation discarded")
+                    } else {
+                        let timestamp = Date()
+                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                        let recordingId = UUID()
+                        let newRecording = Recording(
                             id: recordingId,
                             timestamp: timestamp,
                             fileName: fileName,
                             transcription: text,
-                            duration: 0,
+                            duration: duration,
                             status: .completed,
                             progress: 1.0,
                             sourceFileURL: nil
-                        ))
+                        )
+                        
+                        try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+                        
+                        await MainActor.run {
+                            self.recordingStore.addRecording(newRecording)
+                        }
+                        
+                        insertText(text)
+                        print("Transcription result: \(text)")
                     }
-                    
-                    insertText(text)
-                    print("Transcription result: \(text)")
                 } catch {
                     print("Error transcribing audio: \(error)")
                     try? FileManager.default.removeItem(at: tempURL)
@@ -165,12 +204,9 @@ class IndicatorViewModel: ObservableObject {
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
                 }
-            }
-        } else {
-            
-            print("!!! Not found record url !!!")
-            
-            Task {
+            } else {
+                print("!!! Not found record url !!!")
+                
                 await MainActor.run {
                     self.delegate?.didFinishDecoding()
                 }
@@ -227,6 +263,8 @@ class IndicatorViewModel: ObservableObject {
 
     func cleanup() {
         stopBlinking()
+        resetCancelConfirmation()
+        recordingStartedAt = nil
         hideTimer?.invalidate()
         hideTimer = nil
         cancellables.removeAll()
@@ -236,17 +274,6 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = nil
         recorder.cancelRecording()
-    }
-
-    @MainActor
-    func hideWithAnimation() async {
-        await withCheckedContinuation { continuation in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                self.isVisible = false
-            } completion: {
-                continuation.resume()
-            }
-        }
     }
 }
 
@@ -272,7 +299,37 @@ struct RecordingIndicator: View {
     }
 }
 
+struct CancelConfirmationBar: View {
+    @State private var progress: CGFloat = 1
+    
+    var body: some View {
+        GeometryReader { geo in
+            Capsule()
+                .fill(Color.orange)
+                .frame(width: geo.size.width * progress, height: 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 2)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 3)
+        .onAppear {
+            withAnimation(.linear(duration: IndicatorViewModel.cancelConfirmationWindow)) {
+                progress = 0
+            }
+        }
+    }
+}
+
 struct IndicatorWindow: View {
+    /// Geometry shared with IndicatorWindowManager. The panel must be larger
+    /// than the card: everything drawn outside the window bounds is cut off,
+    /// so the appear offset (moves the card down) and the spring overshoot
+    /// need margins, otherwise the card edges are visibly clipped mid-animation.
+    static let cardSize = CGSize(width: 200, height: 36)
+    static let windowSize = CGSize(width: 256, height: 96)
+    static let appearOffset: CGFloat = 20
+    static let appearInitialScale: CGFloat = 0.5
+    
     @ObservedObject var viewModel: IndicatorViewModel
     @Environment(\.colorScheme) private var colorScheme
     
@@ -304,10 +361,19 @@ struct IndicatorWindow: View {
                     RecordingIndicator(isBlinking: viewModel.isBlinking)
                         .frame(width: 24)
                     
-                    Text("Recording...")
-                        .font(.system(size: 13, weight: .semibold))
+                    if viewModel.isConfirmingCancel {
+                        Text("Press Esc to cancel")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.orange)
+                            .transition(.opacity)
+                    } else {
+                        Text("Recording...")
+                            .font(.system(size: 13, weight: .semibold))
+                            .transition(.opacity)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isConfirmingCancel)
                 
             case .decoding:
                 HStack(spacing: 8) {
@@ -349,7 +415,7 @@ struct IndicatorWindow: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(height: 36)
+        .frame(height: Self.cardSize.height)
         .background {
             rect
                 .fill(backgroundColor)
@@ -357,17 +423,25 @@ struct IndicatorWindow: View {
                     rect
                         .fill(Material.thinMaterial)
                 }
-                .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
+        }
+        .overlay(alignment: .bottom) {
+            if viewModel.isConfirmingCancel {
+                CancelConfirmationBar()
+            }
         }
         .clipShape(rect)
-        .frame(width: 200)
-        .scaleEffect(viewModel.isVisible ? 1 : 0.5)
-        .offset(y: viewModel.isVisible ? 0 : 20)
-        .opacity(viewModel.isVisible ? 1 : 0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isVisible)
-        .onAppear {
-            viewModel.isVisible = true
-        }
+        .frame(width: Self.cardSize.width)
+        // The ideal size of the root view must match the panel: NSHostingView
+        // resizes the window down to SwiftUI's ideal size, and a window sized
+        // to the bare card clips the appear offset, bounce overshoot and shadow.
+        .frame(width: Self.windowSize.width, height: Self.windowSize.height)
+        // The appear/hide animation is NOT done in SwiftUI on purpose:
+        // animating scaleEffect/offset/opacity re-rasterizes the card (material
+        // + gradients + shadow) on the CPU every frame and stalls the main
+        // thread in CABackingStoreUpdate/wait_for_synchronize (20-60 ms per
+        // frame in traces). IndicatorWindowManager animates the hosting view's
+        // layer with CASpringAnimation instead: content is drawn once and the
+        // spring runs entirely in the render server on the GPU.
     }
 }
 
@@ -380,7 +454,7 @@ struct IndicatorWindowPreview: View {
     
     @StateObject private var decodingVM = {
         let vm = IndicatorViewModel()
-        vm.startDecoding()
+        vm.state = .decoding
         return vm
     }()
     

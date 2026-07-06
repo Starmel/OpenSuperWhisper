@@ -315,7 +315,10 @@ class MicrophoneService: ObservableObject {
         guard let deviceID = getCoreAudioDeviceID(for: device) else {
             return false
         }
-        
+        return setSystemDefaultInputDevice(deviceID)
+    }
+    
+    func setSystemDefaultInputDevice(_ deviceID: AudioDeviceID) -> Bool {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,

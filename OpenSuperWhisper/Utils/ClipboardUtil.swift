@@ -4,6 +4,13 @@ import Carbon
 
 class ClipboardUtil {
 
+    typealias PasteboardContents = ([NSPasteboard.PasteboardType: Any], [NSPasteboard.PasteboardType])
+
+    /// Slow consumers (browsers, Electron apps) can service the synthesized
+    /// Cmd+V long after the event is posted. Restoring the original clipboard
+    /// earlier makes them paste the old contents instead of the transcription.
+    static let clipboardRestoreDelay: TimeInterval = 1.5
+
     /// Copies text to clipboard without pasting or restoring
     static func copyToClipboard(_ text: String) {
         let pasteboard = NSPasteboard.general
@@ -24,22 +31,34 @@ class ClipboardUtil {
         let pasteboard = NSPasteboard.general
 
         // Save current pasteboard contents
-        let savedContents = saveCurrentPasteboardContents()
+        let savedContents = saveCurrentPasteboardContents(from: pasteboard)
 
         // Set new text to pasteboard
         pasteboard.declareTypes([.string], owner: nil)
         pasteboard.setString(text, forType: .string)
+        let changeCountAfterCopy = pasteboard.changeCount
 
         // Simulate Cmd+V using layout-aware keycode resolution
         simulatePaste()
 
-        // Add a small delay to ensure paste operation completes
-        Thread.sleep(forTimeInterval: 0.1)
-
-        // Restore original contents
+        // Restore original contents only after the target app had a chance to
+        // process the paste, and only if the pasteboard still holds our text:
+        // a different changeCount means the user (or another app) took over
+        // the clipboard and restoring would clobber their data.
         if let contents = savedContents {
-            restorePasteboardContents(contents)
+            DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
+                restoreIfUnchanged(contents, expectedChangeCount: changeCountAfterCopy, pasteboard: pasteboard)
+            }
         }
+    }
+
+    @discardableResult
+    static func restoreIfUnchanged(_ contents: PasteboardContents,
+                                   expectedChangeCount: Int,
+                                   pasteboard: NSPasteboard = .general) -> Bool {
+        guard pasteboard.changeCount == expectedChangeCount else { return false }
+        restorePasteboardContents(contents, to: pasteboard)
+        return true
     }
     
     private static func simulatePaste() {
@@ -142,8 +161,7 @@ class ClipboardUtil {
         return nil
     }
     
-    private static func saveCurrentPasteboardContents() -> ([NSPasteboard.PasteboardType: Any], [NSPasteboard.PasteboardType])? {
-        let pasteboard = NSPasteboard.general
+    static func saveCurrentPasteboardContents(from pasteboard: NSPasteboard = .general) -> PasteboardContents? {
         let types = pasteboard.types ?? []
         
         guard !types.isEmpty else { return nil }
@@ -163,8 +181,7 @@ class ClipboardUtil {
         return (!savedContents.isEmpty) ? (savedContents, types) : nil
     }
     
-    private static func restorePasteboardContents(_ contents: ([NSPasteboard.PasteboardType: Any], [NSPasteboard.PasteboardType])) {
-        let pasteboard = NSPasteboard.general
+    static func restorePasteboardContents(_ contents: PasteboardContents, to pasteboard: NSPasteboard = .general) {
         let (savedContents, types) = contents
         
         pasteboard.declareTypes(types, owner: nil)

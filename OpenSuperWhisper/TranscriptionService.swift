@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 
 @MainActor
@@ -13,9 +12,13 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var isConverting = false
     @Published private(set) var conversionProgress: Float = 0.0
     
+    private final class TranscriptionTaskBox {
+        let task: Task<String, Error>
+        init(_ task: Task<String, Error>) { self.task = task }
+    }
+    
     private var currentEngine: TranscriptionEngine?
-    private var totalDuration: Float = 0.0
-    private var transcriptionTask: Task<String, Error>? = nil
+    private var transcriptionTask: TranscriptionTaskBox? = nil
     private var isCancelled = false
     
     init() {
@@ -25,7 +28,7 @@ class TranscriptionService: ObservableObject {
     func cancelTranscription() {
         isCancelled = true
         currentEngine?.cancelTranscription()
-        transcriptionTask?.cancel()
+        transcriptionTask?.task.cancel()
         transcriptionTask = nil
         
         isTranscribing = false
@@ -78,15 +81,23 @@ class TranscriptionService: ObservableObject {
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
-        await MainActor.run {
-            self.progress = 0.0
-            self.conversionProgress = 0.0
-            self.isConverting = true
-            self.isTranscribing = true
-            self.transcribedText = ""
-            self.currentSegment = ""
-            self.isCancelled = false
+        // Serialize access to the engine: a whisper context must not process
+        // two transcriptions concurrently (indicator flow and queue flow can
+        // both reach this point due to async busy checks).
+        while let existing = transcriptionTask {
+            _ = try? await existing.task.value
+            if transcriptionTask === existing {
+                transcriptionTask = nil
+            }
         }
+        
+        progress = 0.0
+        conversionProgress = 0.0
+        isConverting = true
+        isTranscribing = true
+        transcribedText = ""
+        currentSegment = ""
+        isCancelled = false
         
         defer {
             Task { @MainActor in
@@ -98,16 +109,6 @@ class TranscriptionService: ObservableObject {
                 }
                 self.transcriptionTask = nil
             }
-        }
-        
-        let durationInSeconds: Float = await (try? Task.detached(priority: .userInitiated) {
-            let asset = AVAsset(url: url)
-            let duration = try await asset.load(.duration)
-            return Float(CMTimeGetSeconds(duration))
-        }.value) ?? 0.0
-        
-        await MainActor.run {
-            self.totalDuration = durationInSeconds
         }
         
         guard let engine = currentEngine else {
@@ -165,16 +166,12 @@ class TranscriptionService: ObservableObject {
             return result
         }
         
-        await MainActor.run {
-            self.transcriptionTask = task
-        }
+        transcriptionTask = TranscriptionTaskBox(task)
         
         do {
             return try await task.value
         } catch is CancellationError {
-            await MainActor.run {
-                self.isCancelled = true
-            }
+            isCancelled = true
             throw TranscriptionError.processingFailed
         }
     }
