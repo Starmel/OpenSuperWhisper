@@ -208,7 +208,7 @@ class IndicatorWindowManager: IndicatorViewDelegate {
             )
             
             panel.isFloatingPanel = true
-            panel.level = .statusBar
+            panel.level = .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
             panel.backgroundColor = .clear
             panel.isOpaque = false
