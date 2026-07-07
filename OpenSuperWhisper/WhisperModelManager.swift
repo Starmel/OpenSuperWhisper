@@ -13,20 +13,41 @@ class WhisperDownloadDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownl
     }
     
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        if let error = Self.validationError(for: downloadTask.response) {
+            completionHandler?(nil, error)
+            return
+        }
         completionHandler?(location, nil)
     }
     
+    static func validationError(for response: URLResponse?) -> Error? {
+        guard let httpResponse = response as? HTTPURLResponse,
+              !(200...299).contains(httpResponse.statusCode) else {
+            return nil
+        }
+        return NSError(
+            domain: "WhisperModelManager",
+            code: httpResponse.statusCode,
+            userInfo: [NSLocalizedDescriptionKey: "Model server returned HTTP \(httpResponse.statusCode). Please try again later."]
+        )
+    }
+    
+    static func progressFraction(totalBytesWritten: Int64, expectedContentLength: Int64) -> Double? {
+        guard expectedContentLength > 0 else { return nil }
+        return min(Double(totalBytesWritten) / Double(expectedContentLength), 1.0)
+    }
+    
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-      
-        if expectedContentLength == 0 {
+        if expectedContentLength <= 0 {
             expectedContentLength = totalBytesExpectedToWrite
         }
-        let progress = Double(totalBytesWritten) / Double(expectedContentLength)
+        guard let progress = Self.progressFraction(totalBytesWritten: totalBytesWritten, expectedContentLength: expectedContentLength) else {
+            return
+        }
         
         DispatchQueue.main.async { [weak self] in
             self?.progressCallback(progress)
         }
-
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didResumeAtOffset fileOffset: Int64, expectedTotalBytes: Int64) {
@@ -127,7 +148,8 @@ class WhisperModelManager {
             let delegate = WhisperDownloadDelegate(progressCallback: progressCallback)
             let configuration = URLSessionConfiguration.default
             configuration.waitsForConnectivity = true
-            configuration.timeoutIntervalForResource = 600 // 10 minutes timeout for large models
+            configuration.timeoutIntervalForRequest = 60
+            configuration.timeoutIntervalForResource = 24 * 60 * 60
             
             let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: .main)
             print("Initiating download...")
@@ -143,6 +165,8 @@ class WhisperModelManager {
             
             // Add completion handling to delegate
             delegate.completionHandler = { [weak self] location, error in
+                session.finishTasksAndInvalidate()
+                
                 // Remove task from active downloads
                 self?.downloadTasksLock.lock()
                 self?.activeDownloadTasks.removeValue(forKey: name)

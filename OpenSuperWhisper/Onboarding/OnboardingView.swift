@@ -34,6 +34,7 @@ class OnboardingViewModel: ObservableObject {
                 AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
             case .rightOption:
                 AppPreferences.shared.modifierOnlyHotkey = ModifierKey.rightOption.rawValue
+                AppPreferences.shared.lastModifierOnlyHotkey = ModifierKey.rightOption.rawValue
             }
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
         }
@@ -114,6 +115,7 @@ class OnboardingViewModel: ObservableObject {
     @MainActor
     func downloadModel(_ model: OnboardingUnifiedModel) async throws {
         guard !isDownloading else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
         
         isDownloading = true
         downloadingModelName = model.name
@@ -219,7 +221,17 @@ class OnboardingViewModel: ObservableObject {
                     throw CancellationError()
                 }
                 
-                let models = try await AsrModels.downloadAndLoad(version: asrVersion)
+                let modelId = model.id
+                let models = try await AsrModels.downloadAndLoad(version: asrVersion) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+                        self.downloadProgress = progress.fractionCompleted
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == modelId }) {
+                            self.unifiedModels[index].downloadProgress = progress.fractionCompleted
+                        }
+                    }
+                }
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
@@ -518,15 +530,17 @@ struct OnboardingUnifiedModelItemView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(model.name)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
-                    if model.isDownloaded {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.blue)
-                            .imageScale(.small)
+
+                    if let pageURL = model.huggingFacePageURL,
+                       let owner = huggingFaceOwner(fromPageURL: pageURL) {
+                        Link(owner, destination: pageURL)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("View on Hugging Face")
                     }
                 }
                 
@@ -544,6 +558,8 @@ struct OnboardingUnifiedModelItemView: View {
                         .scaleEffect(0.7)
                         .padding(.top, 4)
                 } else if model.downloadProgress > 0 && model.downloadProgress < 1 {
+
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(height: 6)

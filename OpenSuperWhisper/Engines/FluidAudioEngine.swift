@@ -93,7 +93,7 @@ class FluidAudioEngine: TranscriptionEngine {
         
         onProgressUpdate?(1.0)
         
-        return processedText.isEmpty ? "No speech detected in the audio" : processedText
+        return processedText
     }
     
     func cancelTranscription() {
@@ -105,11 +105,10 @@ class FluidAudioEngine: TranscriptionEngine {
     }
     
     func getSupportedLanguages() -> [String] {
-        let versionString = AppPreferences.shared.fluidAudioModelVersion
-        if versionString == "v2" {
-            return ["en"]
-        }
-        return ["en", "de", "es", "fr", "it", "pt", "ru", "pl", "nl", "tr", "cs", "ar", "zh", "ja", "hu", "fi", "hr", "sk", "sr", "sl", "uk", "ca", "da", "el", "bg"]
+        LanguageUtil.supportedLanguages(
+            engine: "fluidaudio",
+            fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion
+        )
     }
 }
 

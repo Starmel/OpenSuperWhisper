@@ -41,6 +41,318 @@ final class WhisperEngineMultiChannelTests: XCTestCase {
     }
 }
 
+final class WhisperEngineConversionTests: XCTestCase {
+
+    private var tempFiles: [URL] = []
+
+    override func tearDownWithError() throws {
+        for url in tempFiles {
+            try? FileManager.default.removeItem(at: url)
+        }
+        tempFiles.removeAll()
+    }
+
+    private func makeSineWAV(duration: Double, sampleRate: Double, frequency: Double = 440, settings: [String: Any]? = nil) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osw-conversion-test-\(UUID().uuidString).wav")
+        tempFiles.append(url)
+
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false
+        ) else {
+            throw NSError(domain: "test", code: 1)
+        }
+        let file = try AVAudioFile(
+            forWriting: url, settings: settings ?? format.settings,
+            commonFormat: .pcmFormatFloat32, interleaved: false
+        )
+        let frameCount = AVAudioFrameCount(duration * sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw NSError(domain: "test", code: 2)
+        }
+        buffer.frameLength = frameCount
+        let samples = buffer.floatChannelData![0]
+        for i in 0..<Int(frameCount) {
+            samples[i] = 0.5 * sinf(Float(2.0 * Double.pi * frequency * Double(i) / sampleRate))
+        }
+        try file.write(from: buffer)
+        return url
+    }
+
+    private func longestNearZeroRun(in samples: [Float], threshold: Float = 1e-4) -> Int {
+        var longest = 0
+        var current = 0
+        for sample in samples {
+            if abs(sample) < threshold {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 0
+            }
+        }
+        return longest
+    }
+
+    // Bug: converter tail is never flushed (.endOfStream), so trailing samples are dropped.
+    func testSequentialConversionPreservesFullDuration() async throws {
+        let url = try makeSineWAV(duration: 3.0, sampleRate: 44100)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        // 3 s * 44100 * (16000/44100) = exactly 48000 output samples.
+        // Without flushing the converter (.endOfStream) the resampler tail is lost.
+        let expected = Int(3.0 * 16000)
+        print("[DIAG] sequential count=\(result.count) expected=\(expected) diff=\(result.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Sequential conversion dropped samples: got \(result.count), expected \(expected)"
+        )
+
+        let tail = result.suffix(320)
+        let tailRMS = sqrt(tail.reduce(Float(0)) { $0 + $1 * $1 } / Float(tail.count))
+        print("[DIAG] sequential tailRMS=\(tailRMS)")
+        XCTAssertGreaterThan(tailRMS, 0.1, "Tail of converted audio is silent — end of recording was lost")
+    }
+
+    // Bug: parallel segment stitching leaves zero-filled gaps / misaligned boundaries.
+    func testParallelConversionProducesContinuousAudio() async throws {
+        // > 10 seconds triggers the parallel conversion path
+        let url = try makeSineWAV(duration: 15.0, sampleRate: 48000)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        let expected = Int(15.0 * 16000)
+        print("[DIAG] parallel count=\(result.count) expected=\(expected) diff=\(result.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Parallel conversion produced wrong duration: got \(result.count), expected \(expected)"
+        )
+
+        // At 16 kHz a 440 Hz sine crosses zero every ~18 samples and stays below the
+        // threshold for at most 1 sample per crossing. Any longer run of near-zero
+        // samples is a gap at a worker segment boundary.
+        let interior = Array(result.dropFirst(1600).dropLast(1600))
+        let gap = longestNearZeroRun(in: interior)
+        print("[DIAG] parallel longest near-zero run=\(gap)")
+        XCTAssertLessThan(gap, 3, "Found a silent gap of \(gap) samples inside continuous audio — segment stitching is broken")
+    }
+
+    func testParallelConversionMatchesSequentialResult() async throws {
+        let url = try makeSineWAV(duration: 15.0, sampleRate: 44100)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let parallel = try XCTUnwrap(samples)
+
+        let expected = Int(15.0 * 16000)
+        print("[DIAG] parallel441 count=\(parallel.count) expected=\(expected) diff=\(parallel.count - expected)")
+        XCTAssertLessThanOrEqual(
+            abs(parallel.count - expected), 2,
+            "Parallel conversion length mismatch: got \(parallel.count), expected \(expected)"
+        )
+
+        // Overall energy must match a clean 0.5-amplitude sine (RMS ~0.35).
+        // Gaps or overlapping segments change the energy noticeably.
+        let rms = sqrt(parallel.reduce(Float(0)) { $0 + $1 * $1 } / Float(parallel.count))
+        print("[DIAG] parallel441 rms=\(rms)")
+        XCTAssertEqual(rms, 0.3535, accuracy: 0.01, "RMS of converted audio deviates from source sine")
+    }
+
+    // The recorder now writes 16-bit integer PCM at 16 kHz — the exact format
+    // produced on the hotkey critical path must convert losslessly.
+    func testRecorderFormatInt16Wav16kConverts() async throws {
+        let recorderSettings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 16000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false
+        ]
+        let url = try makeSineWAV(duration: 3.0, sampleRate: 16000, settings: recorderSettings)
+        let engine = WhisperEngine()
+
+        let samples = try await engine.convertAudioToPCM(fileURL: url)
+        let result = try XCTUnwrap(samples)
+
+        let expected = Int(3.0 * 16000)
+        XCTAssertLessThanOrEqual(
+            abs(result.count - expected), 2,
+            "Int16 recorder format conversion length mismatch: got \(result.count), expected \(expected)"
+        )
+
+        let rms = sqrt(result.reduce(Float(0)) { $0 + $1 * $1 } / Float(result.count))
+        XCTAssertEqual(rms, 0.3535, accuracy: 0.01, "RMS deviates — Int16 recording is not decoded correctly")
+    }
+}
+
+final class WhisperStateIsolationTests: XCTestCase {
+
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    // Each transcription runs whisper_full_with_state on a fresh whisper_state,
+    // so noContext = false keeps context between 30s windows of one recording
+    // but a silent/hallucinated recording can never poison the next one.
+    func testFreshStatePerCallKeepsRecordingsIsolated() async throws {
+        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
+        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: modelURL.path)
+                && FileManager.default.fileExists(atPath: audioURL.path),
+            "tiny model / jfk sample not present in repo root"
+        )
+
+        let context = try XCTUnwrap(
+            MyWhisperContext.initFromFileNoState(path: modelURL.path, params: WhisperContextParams())
+        )
+        let engine = WhisperEngine()
+        let converted = try await engine.convertAudioToPCM(fileURL: audioURL)
+        let speech = try XCTUnwrap(converted)
+        let silence = [Float](repeating: 0, count: 16000 * 2)
+
+        func transcribe(_ pcm: [Float]) throws -> String {
+            var params = WhisperFullParams()
+            params.noContext = false
+            params.greedyBestOf = 5
+            params.language = "en"
+            var cParams = params.toC()
+
+            XCTAssertTrue(context.initState(), "Fresh whisper_state must be created per call")
+            defer { context.freeState() }
+
+            guard context.full(samples: pcm, params: &cParams) else {
+                XCTFail("whisper_full_with_state failed")
+                return ""
+            }
+
+            var text = ""
+            for i in 0..<context.fullNSegments {
+                text += context.fullGetSegmentText(iSegment: i) ?? ""
+            }
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let first = try transcribe(speech)
+        _ = try transcribe(silence)
+        let second = try transcribe(speech)
+
+        XCTAssertTrue(first.lowercased().contains("your country"), "Unexpected transcription: \(first)")
+        XCTAssertEqual(
+            first, second,
+            "Transcription changed after a silent recording — decoding state leaks between calls"
+        )
+    }
+
+    // The bundled Silero VAD is always on in production: silence must yield no
+    // speech segments (no hallucinations), while trimmed speech still
+    // transcribes correctly.
+    func testBundledVadDropsSilenceAndKeepsSpeech() async throws {
+        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
+        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: modelURL.path)
+                && FileManager.default.fileExists(atPath: audioURL.path),
+            "tiny model / jfk sample not present in repo root"
+        )
+
+        let vadModelPath = try XCTUnwrap(
+            WhisperEngine.vadModelPath,
+            "Silero VAD model must be bundled with the app"
+        )
+        let vad = try XCTUnwrap(MyWhisperVadContext(modelPath: vadModelPath))
+
+        // Pure silence: no speech segments at all.
+        let silence = [Float](repeating: 0, count: 16000 * 3)
+        let silenceSegments = try XCTUnwrap(vad.speechSegments(in: silence))
+        XCTAssertTrue(silenceSegments.isEmpty, "VAD must not detect speech in pure silence")
+
+        // Speech padded with 5s of silence on both sides: VAD trims the
+        // padding and the trimmed audio still transcribes correctly.
+        let engine = WhisperEngine()
+        let converted = try await engine.convertAudioToPCM(fileURL: audioURL)
+        let speech = try XCTUnwrap(converted)
+        let padding = [Float](repeating: 0, count: 16000 * 5)
+        let padded = padding + speech + padding
+
+        let segments = try XCTUnwrap(vad.speechSegments(in: padded))
+        XCTAssertFalse(segments.isEmpty, "VAD must detect speech in the padded sample")
+
+        let trimmed = WhisperEngine.speechOnlySamples(from: padded, segments: segments)
+        XCTAssertLessThan(
+            trimmed.count, padded.count - 8 * 16000,
+            "VAD trimming must drop most of the 10s of padded silence"
+        )
+
+        let context = try XCTUnwrap(
+            MyWhisperContext.initFromFileNoState(path: modelURL.path, params: WhisperContextParams())
+        )
+        var params = WhisperFullParams()
+        params.noContext = false
+        params.language = "en"
+        var cParams = params.toC()
+
+        XCTAssertTrue(context.initState())
+        defer { context.freeState() }
+        guard context.full(samples: trimmed, params: &cParams) else {
+            XCTFail("whisper_full_with_state failed on VAD-trimmed audio")
+            return
+        }
+
+        var text = ""
+        for i in 0..<context.fullNSegments {
+            text += context.fullGetSegmentText(iSegment: i) ?? ""
+        }
+        XCTAssertTrue(
+            text.lowercased().contains("your country"),
+            "Speech not recognized after VAD trimming: \(text)"
+        )
+    }
+}
+
+final class AudioRecorderTempCleanupTests: XCTestCase {
+
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osw-cleanup-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func createFile(named name: String, modifiedDaysAgo days: Double) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        FileManager.default.createFile(atPath: url.path, contents: Data([0x1]))
+        let date = Date().addingTimeInterval(-days * 24 * 60 * 60)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        return url
+    }
+
+    // Bug: orphaned temp recordings were never cleaned up and accumulated forever.
+    func testRemovesOnlyFilesOlderThanMaxAge() throws {
+        let oldFile = try createFile(named: "old.wav", modifiedDaysAgo: 2)
+        let freshFile = try createFile(named: "fresh.wav", modifiedDaysAgo: 0)
+
+        AudioRecorder.cleanupOldTemporaryFiles(in: directory, olderThan: 24 * 60 * 60)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path), "Stale temp recording must be removed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshFile.path), "Recent temp recording must be kept")
+    }
+
+    func testMissingDirectoryDoesNotCrash() {
+        let missing = directory.appendingPathComponent("does-not-exist")
+        AudioRecorder.cleanupOldTemporaryFiles(in: missing, olderThan: 24 * 60 * 60)
+    }
+}
+
 final class MicrophoneInventoryTests: XCTestCase {
     
     func testPrintConnectedMicrophones() throws {
@@ -1046,33 +1358,337 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
     }
 }
 
+final class FocusUtilsCaretPositionTests: XCTestCase {
+
+    // Primary screen 1440x900 with a larger secondary display to the right,
+    // shifted 100 pt up (typical multi-monitor setup).
+    private let primaryMaxY: CGFloat = 900
+    private let screens = [
+        CGRect(x: 0, y: 0, width: 1440, height: 900),
+        CGRect(x: 1440, y: 100, width: 1920, height: 1080)
+    ]
+
+    // Bug: apps returning an all-zero caret rect pinned the indicator to a screen corner.
+    func testZeroCaretRectIsRejected() {
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: .zero, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+        XCTAssertFalse(FocusUtils.isValidCaretRect(.zero))
+    }
+
+    func testValidCaretRectIsConvertedToCocoa() {
+        let rect = CGRect(x: 100, y: 200, width: 1, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 100, y: 700))
+    }
+
+    // Bug: Terminal.app reports .success with x:0 y:<screen height> w:0 h:0 —
+    // that point maps exactly to the bottom-left corner of the screen.
+    func testZeroSizeCaretRectIsRejected() {
+        let terminalRect = CGRect(x: 0, y: primaryMaxY, width: 0, height: 0)
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: terminalRect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+
+        // Zero size at any position means the app doesn't know the real bounds.
+        XCTAssertFalse(FocusUtils.isValidCaretRect(CGRect(x: 300, y: 300, width: 0, height: 0)))
+    }
+
+    func testZeroWidthCaretWithLineHeightIsAccepted() {
+        // A collapsed caret legitimately has zero width but always a line height.
+        let rect = CGRect(x: 300, y: 300, width: 0, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 300, y: 600))
+    }
+
+    func testCaretPointOutsideAllScreensIsRejected() {
+        // AX y=5000 converts to Cocoa y=-4100, below every screen.
+        let rect = CGRect(x: 100, y: 5000, width: 1, height: 16)
+        XCTAssertNil(FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+
+    func testCaretOnSecondScreenIsAccepted() {
+        // Cocoa target (2000, 500) on the secondary display: AX y = 900 - 500 = 400.
+        let rect = CGRect(x: 2000, y: 400, width: 1, height: 16)
+        let point = FocusUtils.validatedCaretPoint(
+            fromAXRect: rect, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 2000, y: 500))
+    }
+
+    func testConvertAXPointToCocoaFlipsY() {
+        let point = FocusUtils.convertAXPointToCocoa(CGPoint(x: 10, y: 40), primaryScreenMaxY: 900)
+        XCTAssertEqual(point, NSPoint(x: 10, y: 860))
+    }
+
+    // Bug: NSRect.contains excludes the top edge, so a point exactly on the
+    // screen border fell through to the wrong screen.
+    func testPointOnScreenEdgeIsContained() {
+        XCTAssertEqual(FocusUtils.frameIndex(containing: NSPoint(x: 0, y: 900), frames: screens), 0)
+        XCTAssertEqual(FocusUtils.frameIndex(containing: NSPoint(x: 1440, y: 100), frames: screens), 0)
+    }
+
+    func testPointInDeadZoneBetweenScreensIsNotContained() {
+        // Below the secondary display, right of the primary one.
+        XCTAssertNil(FocusUtils.frameIndex(containing: NSPoint(x: 1500, y: 50), frames: screens))
+    }
+
+    // MARK: Focused element anchor (fallback when caret bounds are unavailable)
+
+    func testElementAnchorPointIsTopCenterOfFrame() {
+        // AX frame: input field at x:200 y:100, 400x30 → top center AX (400, 100)
+        // → Cocoa (400, 800).
+        let frame = CGRect(x: 200, y: 100, width: 400, height: 30)
+        let point = FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: frame, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        )
+        XCTAssertEqual(point, NSPoint(x: 400, y: 800))
+    }
+
+    func testDegenerateElementFrameIsRejected() {
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: .zero, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: CGRect(x: 100, y: 100, width: 0, height: 30),
+            primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+
+    func testOffScreenElementFrameIsRejected() {
+        // Top center converts to Cocoa y = 900 - 5000 = -4100, below every screen.
+        let frame = CGRect(x: 100, y: 5000, width: 400, height: 30)
+        XCTAssertNil(FocusUtils.validatedElementAnchorPoint(
+            forAXFrame: frame, primaryScreenMaxY: primaryMaxY, screenFrames: screens
+        ))
+    }
+}
+
+final class IndicatorWindowGeometryTests: XCTestCase {
+
+    // Bug: the panel was 200x60 for a 200x36 card — during the appear
+    // animation the card moves 20 pt down, and everything outside the window
+    // bounds is cut off, so the bottom rounded corners were visibly clipped.
+    func testPanelFitsCardAtWorstAnimationPhase() {
+        let halfWindow = IndicatorWindow.windowSize.height / 2
+        // Animation start: the card is scaled down and pushed fully down.
+        let worstBottomExtent = IndicatorWindow.cardSize.height / 2 * IndicatorWindow.appearInitialScale
+            + IndicatorWindow.appearOffset
+        XCTAssertLessThanOrEqual(worstBottomExtent, halfWindow,
+                                 "Appear animation doesn't fit inside the panel vertically")
+
+        // Spring overshoot scales the card slightly above 1.
+        let springOvershoot: CGFloat = 1.1
+        let worstSideExtent = IndicatorWindow.cardSize.width / 2 * springOvershoot
+        XCTAssertLessThanOrEqual(worstSideExtent, IndicatorWindow.windowSize.width / 2,
+                                 "Card doesn't fit inside the panel horizontally")
+
+        let worstTopExtent = IndicatorWindow.cardSize.height / 2 * springOvershoot
+        XCTAssertLessThanOrEqual(worstTopExtent, halfWindow,
+                                 "Spring overshoot doesn't fit inside the panel at the top")
+    }
+
+    // Bug: the hidden transform translated +y, which in Core Animation
+    // coordinates on macOS is up — the card appeared from above sliding down
+    // instead of rising bottom-up towards its resting position.
+    @MainActor
+    func testHiddenTransformPushesCardDown() {
+        let view = NSView(frame: NSRect(origin: .zero, size: IndicatorWindow.windowSize))
+        let transform = IndicatorWindowManager.hiddenTransform(for: view)
+
+        // The card center must map below its resting position (smaller y in
+        // CA coordinates) and keep the same x.
+        let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        let mappedX = transform.m11 * center.x + transform.m21 * center.y + transform.m41
+        let mappedY = transform.m12 * center.x + transform.m22 * center.y + transform.m42
+        XCTAssertEqual(mappedX, center.x, accuracy: 0.001)
+        XCTAssertEqual(mappedY, center.y - IndicatorWindow.appearOffset, accuracy: 0.001,
+                       "Hidden state must sit below the resting position")
+    }
+
+    // Bug: NSHostingView's default sizingOptions let SwiftUI's ideal size
+    // drive the window frame — the panel shrank to the card size right after
+    // contentView was set and the window bounds clipped the whole animation.
+    @MainActor
+    func testWindowKeepsPanelSizeAfterPresent() async throws {
+        let manager = IndicatorWindowManager.shared
+        let vm = manager.prepare()
+        manager.presentWindow(for: vm, nearPoint: NSPoint(x: 700, y: 500))
+
+        // Give AppKit a runloop turn to apply any pending autosizing.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(manager.window?.frame.size, IndicatorWindow.windowSize,
+                       "The panel must keep its size; SwiftUI content must not resize the window")
+
+        manager.hide()
+        try await Task.sleep(nanoseconds: 700_000_000)
+    }
+}
+
+@MainActor
+final class NoMicrophoneGuardTests: XCTestCase {
+
+    /// Forces `MicrophoneService.shared` to report no active microphone for the
+    /// duration of `body`, restoring the previous state afterwards.
+    private func withNoMicrophone(_ body: () -> Void) {
+        let service = MicrophoneService.shared
+        let savedSelected = service.selectedMicrophone
+        let savedCurrent = service.currentMicrophone
+
+        service.selectedMicrophone = nil
+        service.currentMicrophone = nil
+        defer {
+            service.selectedMicrophone = savedSelected
+            service.currentMicrophone = savedCurrent
+        }
+
+        XCTAssertNil(service.getActiveMicrophone(), "Precondition: no active microphone")
+        body()
+    }
+
+    func testIndicatorViewModel_startRecording_withNoMicrophone_showsNoMicrophoneState() {
+        withNoMicrophone {
+            let viewModel = IndicatorViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .noMicrophone,
+                          "Indicator should show the no-microphone state instead of a fake 'recording' state")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+
+            viewModel.cleanup()
+        }
+    }
+
+    func testContentViewModel_startRecording_withNoMicrophone_doesNotStartRecording() {
+        withNoMicrophone {
+            let viewModel = ContentViewModel()
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .idle,
+                          "In-app recording must not begin when there is no microphone")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+        }
+    }
+}
+
+@MainActor
+final class EscapeCancelConfirmationTests: XCTestCase {
+
+    private let prefsKey = "escCancelWithoutConfirmation"
+    private var savedPrefValue: Any?
+
+    override func setUp() {
+        super.setUp()
+        savedPrefValue = UserDefaults.standard.object(forKey: prefsKey)
+        UserDefaults.standard.removeObject(forKey: prefsKey)
+    }
+
+    override func tearDown() {
+        if let savedPrefValue {
+            UserDefaults.standard.set(savedPrefValue, forKey: prefsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: prefsKey)
+        }
+        super.tearDown()
+    }
+
+    private func makeRecordingViewModel(elapsed: TimeInterval) -> IndicatorViewModel {
+        let viewModel = IndicatorViewModel()
+        viewModel.state = .recording
+        viewModel.recordingStartedAt = Date().addingTimeInterval(-elapsed)
+        return viewModel
+    }
+
+    func testShortRecording_cancelsImmediately() {
+        let viewModel = makeRecordingViewModel(elapsed: 3)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Recordings shorter than the threshold must cancel on the first Esc")
+        XCTAssertFalse(viewModel.isConfirmingCancel)
+
+        viewModel.cleanup()
+    }
+
+    func testLongRecording_firstEscArmsConfirmation_secondEscCancels() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest(),
+                       "First Esc on a long recording must not cancel")
+        XCTAssertTrue(viewModel.isConfirmingCancel,
+                      "First Esc must arm the confirmation state")
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Second Esc within the confirmation window must cancel")
+
+        viewModel.cleanup()
+    }
+
+    func testLongRecording_withToggleEnabled_cancelsImmediately() {
+        UserDefaults.standard.set(true, forKey: prefsKey)
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "With the toggle enabled Esc must cancel without confirmation")
+        XCTAssertFalse(viewModel.isConfirmingCancel)
+
+        viewModel.cleanup()
+    }
+
+    func testDecodingState_cancelsImmediately() {
+        let viewModel = IndicatorViewModel()
+        viewModel.state = .decoding
+        viewModel.recordingStartedAt = Date().addingTimeInterval(-15)
+
+        XCTAssertTrue(viewModel.handleCancelRequest(),
+                      "Esc outside the recording state must cancel immediately")
+
+        viewModel.cleanup()
+    }
+
+    func testConfirmationWindowExpiry_resetsConfirmation() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest())
+        XCTAssertTrue(viewModel.isConfirmingCancel)
+
+        let expectation = expectation(description: "confirmation window expired")
+        DispatchQueue.main.asyncAfter(deadline: .now() + IndicatorViewModel.cancelConfirmationWindow + 0.5) {
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: IndicatorViewModel.cancelConfirmationWindow + 2)
+
+        XCTAssertFalse(viewModel.isConfirmingCancel,
+                       "Confirmation must reset after the window expires")
+        XCTAssertFalse(viewModel.handleCancelRequest(),
+                       "After expiry the next Esc must arm the confirmation again")
+
+        viewModel.cleanup()
+    }
+
+    func testStartDecoding_resetsConfirmation() {
+        let viewModel = makeRecordingViewModel(elapsed: 15)
+
+        XCTAssertFalse(viewModel.handleCancelRequest())
+        XCTAssertTrue(viewModel.isConfirmingCancel)
+
+        viewModel.startDecoding()
+
+        XCTAssertFalse(viewModel.isConfirmingCancel,
+                       "Finishing the recording normally must reset the confirmation state")
+
+        viewModel.cleanup()
+    }
+}
+
 final class TextUtilTests: XCTestCase {
-
-    // MARK: - wordCount
-
-    func testWordCount_simpleText() {
-        XCTAssertEqual(TextUtil.wordCount("hello world"), 2)
-    }
-
-    func testWordCount_emptyString() {
-        XCTAssertEqual(TextUtil.wordCount(""), 0)
-    }
-
-    func testWordCount_multipleSpaces() {
-        XCTAssertEqual(TextUtil.wordCount("hello   world"), 2)
-    }
-
-    func testWordCount_newlines() {
-        XCTAssertEqual(TextUtil.wordCount("hello\nworld"), 2)
-    }
-
-    func testWordCount_singleWord() {
-        XCTAssertEqual(TextUtil.wordCount("hello"), 1)
-    }
-
-    func testWordCount_leadingTrailingWhitespace() {
-        XCTAssertEqual(TextUtil.wordCount("  hi there  "), 2)
-    }
 
     // MARK: - formatDuration
 
@@ -1098,5 +1714,245 @@ final class TextUtilTests: XCTestCase {
 
     func testFormatDuration_exactHours() {
         XCTAssertEqual(TextUtil.formatDuration(3600), "1h 0m 0s")
+    }
+}
+
+final class AudioUtilTests: XCTestCase {
+
+    func testAudioDuration_oneSecondWavFile() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-util-test-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let sampleRate = 16000.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        // AVAudioFile flushes the WAV header only on deinit, so writing is
+        // scoped to make the file readable before the duration check.
+        try {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleRate))!
+            buffer.frameLength = buffer.frameCapacity
+            try file.write(from: buffer)
+        }()
+
+        let duration = await AudioUtil.audioDuration(url: url)
+        XCTAssertEqual(duration, 1.0, accuracy: 0.05)
+    }
+
+    func testAudioDuration_missingFile_returnsZero() async {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-util-missing-\(UUID().uuidString).wav")
+        let duration = await AudioUtil.audioDuration(url: url)
+        XCTAssertEqual(duration, 0)
+    }
+}
+
+final class HebrewIvritSupportTests: XCTestCase {
+
+    // MARK: Task 1 — Hebrew language
+    func testHebrewIsAvailableLanguage() {
+        XCTAssertTrue(LanguageUtil.availableLanguages.contains("he"))
+        XCTAssertEqual(LanguageUtil.languageNames["he"], "Hebrew")
+    }
+
+    // MARK: Task 2 — model struct filename/preferredLanguage
+    func testDownloadableModelDefaultsFilenameToURLBasename() {
+        let model = SettingsDownloadableModel(
+            name: "X", isDownloaded: false,
+            url: URL(string: "https://example.com/path/ggml-foo.bin?download=true")!,
+            size: 1, description: "d")
+        XCTAssertEqual(model.filename, "ggml-foo.bin")
+        XCTAssertNil(model.preferredLanguage)
+    }
+
+    func testDownloadableModelHonorsExplicitFilenameAndLanguage() {
+        let model = SettingsDownloadableModel(
+            name: "X", isDownloaded: false,
+            url: URL(string: "https://example.com/ggml-model.bin?download=true")!,
+            size: 1, description: "d",
+            filename: "ggml-custom.bin", preferredLanguage: "he")
+        XCTAssertEqual(model.filename, "ggml-custom.bin")
+        XCTAssertEqual(model.preferredLanguage, "he")
+    }
+
+    func testExistingStandardModelsKeepURLBasenameFilenames() {
+        for m in SettingsDownloadableModels.availableModels where m.preferredLanguage == nil {
+            XCTAssertEqual(m.filename, m.url.lastPathComponent)
+        }
+    }
+
+    // MARK: Task 3 — ivrit.ai model entry
+    func testIvritModelIsAvailableWithCorrectMetadata() {
+        let ivrit = SettingsDownloadableModels.availableModels.first {
+            $0.filename == "ggml-ivrit-large-v3-turbo.bin"
+        }
+        XCTAssertNotNil(ivrit)
+        XCTAssertEqual(ivrit?.preferredLanguage, "he")
+        XCTAssertEqual(ivrit?.url.host, "huggingface.co")
+        XCTAssertTrue(ivrit?.url.absoluteString.contains("ivrit-ai/whisper-large-v3-turbo-ggml") ?? false)
+    }
+
+    // MARK: Task 4 — preferred-language lookup
+    func testPreferredLanguageLookupForIvritModel() {
+        XCTAssertEqual(
+            SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-ivrit-large-v3-turbo.bin"),
+            "he")
+    }
+
+    func testPreferredLanguageLookupForStandardModelIsNil() {
+        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-large-v3-turbo.bin"))
+    }
+
+    func testPreferredLanguageLookupForUnknownFilenameIsNil() {
+        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "does-not-exist.bin"))
+    }
+
+    // MARK: Task 5 — conditional model visibility
+    private func makeLanguageModel(downloaded: Bool) -> SettingsDownloadableModel {
+        SettingsDownloadableModel(
+            name: "Turbo V3 Hebrew", isDownloaded: downloaded,
+            url: URL(string: "https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ggml/resolve/main/ggml-model.bin?download=true")!,
+            size: 1, description: "d",
+            filename: "ggml-ivrit-large-v3-turbo.bin", preferredLanguage: "he")
+    }
+
+    func testLanguageModelHiddenWhenNotDownloadedAndLanguageNotSelected() {
+        let model = makeLanguageModel(downloaded: false)
+        XCTAssertFalse(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
+    }
+
+    func testLanguageModelVisibleWhenSelectedLanguageMatches() {
+        let model = makeLanguageModel(downloaded: false)
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "he", systemLanguage: "en"))
+    }
+
+    func testLanguageModelVisibleWhenSystemLanguageMatches() {
+        let model = makeLanguageModel(downloaded: false)
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "he"))
+    }
+
+    func testLanguageModelVisibleWhenAlreadyDownloaded() {
+        let model = makeLanguageModel(downloaded: true)
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
+    }
+
+    func testStandardModelAlwaysVisible() {
+        let model = SettingsDownloadableModel(
+            name: "Turbo V3 large", isDownloaded: false,
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
+            size: 1, description: "d")
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
+    }
+
+    // MARK: Task 6 — Hugging Face page URL
+    func testHuggingFacePageURLForIvritModel() {
+        let ivrit = SettingsDownloadableModels.availableModels.first {
+            $0.filename == "ggml-ivrit-large-v3-turbo.bin"
+        }
+        XCTAssertEqual(
+            ivrit?.huggingFacePageURL?.absoluteString,
+            "https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ggml")
+    }
+
+    func testHuggingFacePageURLForStandardModel() {
+        let standard = SettingsDownloadableModels.availableModels.first {
+            $0.filename == "ggml-large-v3-turbo.bin"
+        }
+        XCTAssertEqual(
+            standard?.huggingFacePageURL?.absoluteString,
+            "https://huggingface.co/ggerganov/whisper.cpp")
+    }
+}
+
+final class WhisperModelDownloadTests: XCTestCase {
+
+    private func httpResponse(statusCode: Int) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin")!,
+            statusCode: statusCode,
+            httpVersion: "HTTP/2",
+            headerFields: nil
+        )!
+    }
+
+    func testValidationError_successStatusCodes_returnNil() {
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 200)))
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 206)))
+    }
+
+    func testValidationError_nonHTTPResponse_returnsNil() {
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: nil))
+        let plainResponse = URLResponse(
+            url: URL(string: "https://huggingface.co")!,
+            mimeType: nil, expectedContentLength: 0, textEncodingName: nil
+        )
+        XCTAssertNil(WhisperDownloadDelegate.validationError(for: plainResponse))
+    }
+
+    func testValidationError_errorStatusCodes_returnError() {
+        for statusCode in [403, 404, 429, 500, 503] {
+            let error = WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: statusCode))
+            XCTAssertNotNil(error, "Expected error for HTTP \(statusCode)")
+            XCTAssertEqual((error as NSError?)?.code, statusCode)
+            XCTAssertTrue((error as NSError?)?.localizedDescription.contains("\(statusCode)") ?? false)
+        }
+    }
+
+    func testProgressFraction_knownLength_returnsFraction() {
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 1000),
+            0.5
+        )
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1000, expectedContentLength: 1000),
+            1.0
+        )
+    }
+
+    func testProgressFraction_unknownLength_returnsNil() {
+        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: NSURLSessionTransferSizeUnknown))
+        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 0))
+    }
+
+    func testProgressFraction_overflowPastExpected_clampsToOne() {
+        XCTAssertEqual(
+            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1500, expectedContentLength: 1000),
+            1.0
+        )
+    }
+}
+
+final class MouseButtonTests: XCTestCase {
+
+    func testRawValueRoundTrips() {
+        for button in MouseButton.allCases {
+            XCTAssertEqual(MouseButton(rawValue: button.rawValue), button)
+        }
+    }
+
+    func testUnknownRawValueDefaultsToNil() {
+        XCTAssertNil(MouseButton(rawValue: "not-a-button"))
+    }
+
+    func testButtonNumberMapping() {
+        // macOS numbers buttons from zero: 2 = middle, 3+ = extra (thumb) buttons.
+        XCTAssertEqual(MouseButton.middle.buttonNumber, 2)
+        XCTAssertEqual(MouseButton.button4.buttonNumber, 3)
+        XCTAssertEqual(MouseButton.button5.buttonNumber, 4)
+        XCTAssertEqual(MouseButton.button6.buttonNumber, 5)
+    }
+
+    func testNoneIsNotAValidButtonNumber() {
+        XCTAssertEqual(MouseButton.none.buttonNumber, -1)
+    }
+
+    func testSelectableButtonsExcludeNone() {
+        let selectable = MouseButton.allCases.filter { $0 != .none }
+        XCTAssertFalse(selectable.contains(.none))
+        XCTAssertEqual(selectable.count, 4)
+        for button in selectable {
+            XCTAssertFalse(button.displayName.isEmpty)
+            XCTAssertFalse(button.shortSymbol.isEmpty)
+        }
     }
 }
