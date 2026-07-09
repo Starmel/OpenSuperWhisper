@@ -116,6 +116,9 @@ final class AppPreferences {
 
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
+
+    @UserDefault(key: "doublePressToTrigger", defaultValue: false)
+    var doublePressToTrigger: Bool
     
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool

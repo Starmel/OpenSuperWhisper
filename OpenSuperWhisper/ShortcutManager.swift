@@ -20,6 +20,8 @@ class ShortcutManager {
     private var holdMode = false
     private var useModifierOnlyHotkey = false
     private var useMouseButtonHotkey = false
+    private var lastPressDownTime: CFAbsoluteTime = 0
+    private var pressConsumed = false
 
     private init() {
         print("ShortcutManager init")
@@ -108,8 +110,10 @@ class ShortcutManager {
                 self?.handleKeyUp()
             }
 
+            lastPressDownTime = 0
+            pressConsumed = false
             ModifierKeyMonitor.shared.start(modifierKey: modifierKey)
-            print("ShortcutManager: Using modifier-only hotkey: \(modifierKey.displayName)")
+            print("ShortcutManager: Using modifier-only hotkey: \(modifierKey.displayName) (double-press: \(AppPreferences.shared.doublePressToTrigger))")
         } else {
             useMouseButtonHotkey = false
             useModifierOnlyHotkey = false
@@ -121,10 +125,25 @@ class ShortcutManager {
     private func handleKeyDown() {
         holdWorkItem?.cancel()
         holdMode = false
-        
+
+        // Require a double-tap only when starting a new recording. Once recording is
+        // active, a single press stops it so the user isn't forced to double-tap again.
+        if AppPreferences.shared.doublePressToTrigger && activeVm == nil {
+            let now = CFAbsoluteTimeGetCurrent()
+            let threshold = NSEvent.doubleClickInterval
+            if lastPressDownTime > 0 && now - lastPressDownTime <= threshold {
+                lastPressDownTime = 0
+            } else {
+                lastPressDownTime = now
+                pressConsumed = false
+                return
+            }
+        }
+        pressConsumed = true
+
         let holdToRecordEnabled = AppPreferences.shared.holdToRecord
         let isStartingRecording = activeVm == nil
-        
+
         Task { @MainActor in
             if self.activeVm == nil {
                 // Start recording immediately: resolving the caret position talks to
@@ -144,7 +163,7 @@ class ShortcutManager {
                 self.activeVm = nil
             }
         }
-        
+
         // Arm hold mode only when this press starts a recording. Arming it on the
         // stopping press would trigger a second stop on key-up.
         if holdToRecordEnabled && isStartingRecording {
@@ -155,7 +174,7 @@ class ShortcutManager {
             DispatchQueue.main.asyncAfter(deadline: .now() + holdThreshold, execute: workItem)
         }
     }
-    
+
     /// Resolves the input anchor without letting a slow focused app delay the
     /// indicator: whichever finishes first wins — the AX resolution or the
     /// deadline. On timeout the caller falls back to the mouse position; the
@@ -173,26 +192,29 @@ class ShortcutManager {
             }
         }
     }
-    
+
     private actor AnchorGate {
         private var continuation: CheckedContinuation<NSPoint?, Never>?
-        
+
         init(_ continuation: CheckedContinuation<NSPoint?, Never>) {
             self.continuation = continuation
         }
-        
+
         func resume(_ value: NSPoint?) {
             continuation?.resume(returning: value)
             continuation = nil
         }
     }
-    
+
     private func handleKeyUp() {
         holdWorkItem?.cancel()
         holdWorkItem = nil
-        
+
+        guard pressConsumed else { return }
+        pressConsumed = false
+
         let holdToRecordEnabled = AppPreferences.shared.holdToRecord
-        
+
         Task { @MainActor in
             if holdToRecordEnabled && self.holdMode && self.activeVm != nil {
                 IndicatorWindowManager.shared.stopRecording()

@@ -164,6 +164,13 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.holdToRecord = holdToRecord
         }
     }
+
+    @Published var doublePressToTrigger: Bool {
+        didSet {
+            AppPreferences.shared.doublePressToTrigger = doublePressToTrigger
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+        }
+    }
     
     @Published var escCancelWithoutConfirmation: Bool {
         didSet {
@@ -213,6 +220,7 @@ class SettingsViewModel: ObservableObject {
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
         self.holdToRecord = prefs.holdToRecord
+        self.doublePressToTrigger = prefs.doublePressToTrigger
         self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
         self.startHiddenInMenuBar = prefs.startHiddenInMenuBar
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
@@ -1248,9 +1256,29 @@ struct SettingsView: View {
                                 .background(Color(.textBackgroundColor).opacity(0.5))
                                 .cornerRadius(8)
 
-                                Text("One-tap to toggle recording")
+                                Text(viewModel.doublePressToTrigger
+                                     ? "Double-tap to toggle recording"
+                                     : "One-tap to toggle recording")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Double Tap to Trigger")
+                                            .font(.subheadline)
+                                        Text("Require two quick taps to avoid accidental activation")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $viewModel.doublePressToTrigger)
+                                        .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                        .labelsHidden()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
 
                                 permissionWarning(
                                     message: "⚠️ This mode requires Input Monitoring permission. macOS requires this to detect single modifier key presses globally. Only modifier key events (⌘, ⌥, ⇧, ⌃, Fn) are monitored — no regular keystrokes are captured.",
