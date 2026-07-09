@@ -100,20 +100,20 @@ class ModifierKeyMonitor {
     private var runLoopSource: CFRunLoopSource?
     private var selectedModifierKey: ModifierKey = .none
     private var isModifierPressed = false
-    
+
     var onKeyDown: (() -> Void)?
     var onKeyUp: (() -> Void)?
-    
+
     private init() {}
-    
+
     func start(modifierKey: ModifierKey) {
         guard modifierKey != .none else {
             stop()
             return
         }
-        
+
         stop()
-        
+
         selectedModifierKey = modifierKey
         isModifierPressed = false
         
