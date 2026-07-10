@@ -12,6 +12,7 @@ class MicrophoneService: ObservableObject {
     
     private var deviceChangeObserver: Any?
     private var timer: Timer?
+    private var deviceListListener: AudioObjectPropertyListenerBlock?
     
     struct AudioDevice: Identifiable, Equatable, Codable {
         let id: String
@@ -32,14 +33,16 @@ class MicrophoneService: ObservableObject {
         loadSavedMicrophone()
         refreshAvailableMicrophones()
         setupDeviceMonitoring()
+        setupDeviceListMonitoring()
         updateCurrentMicrophone()
     }
-    
+
     deinit {
         if let observer = deviceChangeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
         timer?.invalidate()
+        removeDeviceListMonitoring()
     }
     
     private func setupDeviceMonitoring() {
@@ -61,7 +64,54 @@ class MicrophoneService: ObservableObject {
             self?.updateCurrentMicrophone()
         }
     }
-    
+
+    // AVCaptureDevice connect/disconnect notifications are not delivered reliably
+    // for Bluetooth devices (e.g. AirPods re-connecting after auto-switching back
+    // from another device), which leaves availableMicrophones stale until relaunch.
+    // CoreAudio's device-list property fires for every HAL device change regardless
+    // of transport, so observe it directly.
+    private func setupDeviceListMonitoring() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.refreshAvailableMicrophones()
+            self?.updateCurrentMicrophone()
+        }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+
+        if status == noErr {
+            deviceListListener = listener
+        }
+    }
+
+    private func removeDeviceListMonitoring() {
+        guard let listener = deviceListListener else { return }
+        deviceListListener = nil
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+    }
+
     func refreshAvailableMicrophones() {
         let deviceTypes: [AVCaptureDevice.DeviceType]
         if #available(macOS 14.0, *) {
@@ -76,7 +126,7 @@ class MicrophoneService: ObservableObject {
             position: .unspecified
         )
         
-        availableMicrophones = discoverySession.devices
+        let devices = discoverySession.devices
             .filter { device in
                 !device.uniqueID.contains("CADefaultDeviceAggregate")
             }
@@ -89,9 +139,17 @@ class MicrophoneService: ObservableObject {
                     isBuiltIn: isBuiltIn
                 )
             }
-        
+
+        // Publish only real changes: kAudioHardwarePropertyDevices can fire several
+        // times per connect, and every publish rebuilds the status bar menu.
+        if devices != availableMicrophones {
+            availableMicrophones = devices
+        }
+
         if availableMicrophones.isEmpty {
-            selectedMicrophone = nil
+            // Keep selectedMicrophone: the saved choice must survive a transient
+            // empty list (e.g. mid Bluetooth reconnect) so it is restored when
+            // the device comes back.
             currentMicrophone = nil
         }
     }
