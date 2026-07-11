@@ -1536,18 +1536,22 @@ struct FluidAudioModelDownloadItemView: View {
     var isSelected: Bool {
         viewModel.fluidAudioModelVersion == model.version
     }
-    
+
+    var isActiveEngine: Bool {
+        viewModel.selectedEngine == "fluidaudio"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.name)
                     .font(.subheadline)
                     .fontWeight(.medium)
-                
+
                 Text(model.description)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                     ProgressView(value: model.downloadProgress)
                         .progressViewStyle(LinearProgressViewStyle())
@@ -1555,9 +1559,9 @@ struct FluidAudioModelDownloadItemView: View {
                         .padding(.top, 4)
                 }
             }
-            
+
             Spacer()
-            
+
             if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
                 Button("Cancel") {
                     viewModel.cancelDownload()
@@ -1567,8 +1571,9 @@ struct FluidAudioModelDownloadItemView: View {
             } else if model.isDownloaded {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(isActiveEngine ? .green : .secondary)
                         .imageScale(.large)
+                        .help(isActiveEngine ? "Active model" : "Selected, but Parakeet engine is not active")
                 } else {
                     Button(action: {
                         viewModel.fluidAudioModelVersion = model.version
@@ -1767,7 +1772,11 @@ struct ModelDownloadItemView: View {
         }
         return false
     }
-    
+
+    var isActiveEngine: Bool {
+        viewModel.selectedEngine == "whisper"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -1808,8 +1817,9 @@ struct ModelDownloadItemView: View {
             } else if model.isDownloaded {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(isActiveEngine ? .green : .secondary)
                         .imageScale(.large)
+                        .help(isActiveEngine ? "Active model" : "Selected, but Whisper engine is not active")
                 } else {
                     Button(action: {
                         let modelPath = WhisperModelManager.shared.modelsDirectory.appendingPathComponent(model.filename).path
