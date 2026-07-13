@@ -83,6 +83,12 @@ final class AppPreferences {
     
     @UserDefault(key: "useBeamSearch", defaultValue: false)
     var useBeamSearch: Bool
+
+    /// When enabled (Whisper engine only), the indicator shows a live sliding-window
+    /// preview while recording. The final inserted text still comes from the
+    /// post-recording batch transcription, so this only affects what is displayed.
+    @UserDefault(key: "liveStreamingPreview", defaultValue: false)
+    var liveStreamingPreview: Bool
     
     @UserDefault(key: "beamSize", defaultValue: 5)
     var beamSize: Int

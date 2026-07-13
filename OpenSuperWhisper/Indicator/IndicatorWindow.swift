@@ -26,7 +26,19 @@ class IndicatorViewModel: ObservableObject {
     @Published var isBlinking = false
     @Published var isConfirmingCancel = false
     @Published var recorder: AudioRecorder = .shared
-    
+
+    /// Live preview shown while recording. `liveCommitted` is stable text,
+    /// `livePending` is the still-changing tail. Empty unless the live streaming
+    /// preview is enabled and producing output.
+    @Published var liveCommitted = ""
+    @Published var livePending = ""
+
+    var hasLivePreview: Bool {
+        !liveCommitted.isEmpty || !livePending.isEmpty
+    }
+
+    private var streamingEngine: StreamingWhisperEngine?
+
     var recordingStartedAt: Date?
     
     var delegate: IndicatorViewDelegate?
@@ -107,8 +119,36 @@ class IndicatorViewModel: ObservableObject {
         state = .recording
         startBlinking()
         recordingStartedAt = Date()
-        
+
         recorder.startRecording()
+        startLivePreview()
+    }
+
+    /// Starts the optional live preview alongside recording. Whisper engine only;
+    /// any failure is logged and ignored so the recording itself is never affected.
+    private func startLivePreview() {
+        guard AppPreferences.shared.liveStreamingPreview,
+              AppPreferences.shared.selectedEngine == "whisper" else { return }
+
+        liveCommitted = ""
+        livePending = ""
+
+        let engine = StreamingWhisperEngine()
+        engine.onUpdate = { [weak self] committed, pending in
+            guard let self = self, self.state == .recording else { return }
+            self.liveCommitted = committed
+            self.livePending = pending
+        }
+        if engine.start() {
+            streamingEngine = engine
+        }
+    }
+
+    private func stopLivePreview() {
+        streamingEngine?.stop()
+        streamingEngine = nil
+        liveCommitted = ""
+        livePending = ""
     }
     
     func handleCancelRequest() -> Bool {
@@ -141,9 +181,10 @@ class IndicatorViewModel: ObservableObject {
         // A second stop request (double hotkey press, hold-mode key-up) must not
         // restart decoding or hide the window while transcription is in flight.
         guard state == .recording || state == .connecting else { return }
-        
+
         resetCancelConfirmation()
         stopBlinking()
+        stopLivePreview()
         
         if isTranscriptionBusy {
             // The engine is busy with another transcription: keep the user's audio
@@ -263,6 +304,7 @@ class IndicatorViewModel: ObservableObject {
 
     func cleanup() {
         stopBlinking()
+        stopLivePreview()
         resetCancelConfirmation()
         recordingStartedAt = nil
         hideTimer?.invalidate()
@@ -273,6 +315,7 @@ class IndicatorViewModel: ObservableObject {
     func cancelRecording() {
         hideTimer?.invalidate()
         hideTimer = nil
+        stopLivePreview()
         recorder.cancelRecording()
     }
 }
@@ -296,6 +339,29 @@ struct RecordingIndicator: View {
             .shadow(color: .red.opacity(0.5), radius: 4)
             .opacity(isBlinking ? 0.3 : 1.0)
             .animation(.easeInOut(duration: 0.4), value: isBlinking)
+    }
+}
+
+struct LiveTextView: View {
+    let committed: String
+    let pending: String
+
+    private var text: Text {
+        let committedText = Text(committed)
+            .foregroundColor(.primary)
+        guard !pending.isEmpty else { return committedText }
+        let separator = committed.isEmpty ? "" : " "
+        return committedText + Text(separator + pending).foregroundColor(.secondary)
+    }
+
+    var body: some View {
+        text
+            .font(.system(size: 11))
+            .lineLimit(2)
+            // Keep the newest words visible: the tail is what the user just said.
+            .truncationMode(.head)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -326,6 +392,9 @@ struct IndicatorWindow: View {
     /// so the appear offset (moves the card down) and the spring overshoot
     /// need margins, otherwise the card edges are visibly clipped mid-animation.
     static let cardSize = CGSize(width: 200, height: 36)
+    /// Taller card used when the live preview is visible. Kept small enough that
+    /// the card still fits inside the fixed panel (windowSize) without clipping.
+    static let expandedCardHeight: CGFloat = 76
     static let windowSize = CGSize(width: 256, height: 96)
     static let appearOffset: CGFloat = 20
     static let appearInitialScale: CGFloat = 0.5
@@ -357,19 +426,25 @@ struct IndicatorWindow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
             case .recording:
-                HStack(spacing: 8) {
-                    RecordingIndicator(isBlinking: viewModel.isBlinking)
-                        .frame(width: 24)
-                    
-                    if viewModel.isConfirmingCancel {
-                        Text("Press Esc to cancel")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.orange)
-                            .transition(.opacity)
-                    } else {
-                        Text("Recording...")
-                            .font(.system(size: 13, weight: .semibold))
-                            .transition(.opacity)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        RecordingIndicator(isBlinking: viewModel.isBlinking)
+                            .frame(width: 24)
+
+                        if viewModel.isConfirmingCancel {
+                            Text("Press Esc to cancel")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.orange)
+                                .transition(.opacity)
+                        } else {
+                            Text("Recording...")
+                                .font(.system(size: 13, weight: .semibold))
+                                .transition(.opacity)
+                        }
+                    }
+
+                    if viewModel.hasLivePreview && !viewModel.isConfirmingCancel {
+                        LiveTextView(committed: viewModel.liveCommitted, pending: viewModel.livePending)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -415,7 +490,9 @@ struct IndicatorWindow: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(height: Self.cardSize.height)
+        // Grows to fit the two-line live preview while staying inside the panel,
+        // so the card is not clipped and needs no window repositioning.
+        .frame(height: viewModel.hasLivePreview && viewModel.state == .recording ? Self.expandedCardHeight : Self.cardSize.height)
         .background {
             rect
                 .fill(backgroundColor)

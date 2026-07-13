@@ -93,6 +93,12 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.showTimestamps = showTimestamps
         }
     }
+
+    @Published var liveStreamingPreview: Bool {
+        didSet {
+            AppPreferences.shared.liveStreamingPreview = liveStreamingPreview
+        }
+    }
     
     @Published var temperature: Double {
         didSet {
@@ -209,6 +215,7 @@ class SettingsViewModel: ObservableObject {
         self.selectedLanguage = prefs.whisperLanguage
         self.suppressBlankAudio = prefs.suppressBlankAudio
         self.showTimestamps = prefs.showTimestamps
+        self.liveStreamingPreview = prefs.liveStreamingPreview
         self.temperature = prefs.temperature
         self.noSpeechThreshold = prefs.noSpeechThreshold
         self.initialPrompt = prefs.initialPrompt
@@ -944,6 +951,22 @@ struct SettingsView: View {
                             Toggle("", isOn: $viewModel.addSpaceAfterSentence)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
+                        }
+
+                        if viewModel.selectedEngine == "whisper" {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Live Preview While Recording")
+                                        .font(.subheadline)
+                                    Text("Shows partial text in the indicator as you speak. The inserted text still comes from the final transcription.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $viewModel.liveStreamingPreview)
+                                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                    .labelsHidden()
+                            }
                         }
                     }
                 }
