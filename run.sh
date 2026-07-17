@@ -33,6 +33,18 @@ cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign - ./build/libomp.dylib
 
+# Build the media-remote helper dylib. It is loaded by /usr/bin/perl (an Apple
+# platform binary entitled to use MediaRemote) to pause/resume whatever is
+# playing while recording; the app itself cannot use MediaRemote. Ad-hoc signed,
+# which is what the unsigned dev build needs.
+echo "Building media-remote helper..."
+swiftc -emit-library -O -target arm64-apple-macos14.0 -o ./build/libOSWMediaHelper.dylib MediaRemoteHelper/OSWMediaRemote.swift
+if [[ $? -ne 0 ]]; then
+    echo "media-remote helper build failed!"
+    exit 1
+fi
+codesign --force --sign - ./build/libOSWMediaHelper.dylib
+
 # Build the app
 echo "Building OpenSuperWhisper..."
 BUILD_OUTPUT=$(xcodebuild -scheme OpenSuperWhisper -configuration Debug -jobs 8 -derivedDataPath build -quiet -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation -UseModernBuildSystem=YES -clonedSourcePackagesDirPath SourcePackages -skipUnavailableActions CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO OTHER_CODE_SIGN_FLAGS="--entitlements OpenSuperWhisper/OpenSuperWhisper.entitlements" build 2>&1)

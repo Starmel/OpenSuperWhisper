@@ -178,6 +178,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var pauseMediaWhileRecording: Bool {
+        didSet {
+            AppPreferences.shared.pauseMediaWhileRecording = pauseMediaWhileRecording
+        }
+    }
+
     @Published var startHiddenInMenuBar: Bool {
         didSet {
             AppPreferences.shared.startHiddenInMenuBar = startHiddenInMenuBar
@@ -222,6 +228,7 @@ class SettingsViewModel: ObservableObject {
         self.holdToRecord = prefs.holdToRecord
         self.doublePressToTrigger = prefs.doublePressToTrigger
         self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
+        self.pauseMediaWhileRecording = prefs.pauseMediaWhileRecording
         self.startHiddenInMenuBar = prefs.startHiddenInMenuBar
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
@@ -1375,7 +1382,21 @@ struct SettingsView: View {
                                 .labelsHidden()
                                 .help("Play a notification sound when recording begins")
                         }
-                        
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pause media while recording")
+                                    .font(.subheadline)
+                                Text("Pause music/video when recording starts and resume it when you finish")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.pauseMediaWhileRecording)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Cancel without confirmation")

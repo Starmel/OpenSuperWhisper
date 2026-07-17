@@ -151,7 +151,11 @@ class AudioRecorder: NSObject, ObservableObject {
                 print("Cannot start recording - no audio input available")
                 return
             }
-            
+
+            // Pause any playing music/video before our own start cue plays, so
+            // the notification sound is not mistaken for external playback.
+            MediaPlaybackController.shared.pauseIfPlaying()
+
             if playSound {
                 self.playNotificationSound()
             }
@@ -215,6 +219,10 @@ class AudioRecorder: NSObject, ObservableObject {
     func stopRecording() async -> URL? {
         await withCheckedContinuation { continuation in
             workQueue.async {
+                // Resume music the moment the mic is released, not after the
+                // (possibly multi-second) transcription decode finishes.
+                MediaPlaybackController.shared.resumeIfPaused()
+
                 guard let recorder = self.audioRecorder, let url = self.currentRecordingURL else {
                     continuation.resume(returning: self.performStop(discard: false))
                     return
@@ -250,6 +258,7 @@ class AudioRecorder: NSObject, ObservableObject {
     
     func cancelRecording() {
         workQueue.sync {
+            MediaPlaybackController.shared.resumeIfPaused()
             _ = performStop(discard: true)
         }
     }
