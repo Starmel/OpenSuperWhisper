@@ -29,7 +29,7 @@ struct OpenSuperWhisperApp: App {
                     ContentView()
                 }
             }
-            .frame(width: 450)
+            .frame(minWidth: 450)
             .frame(minHeight: 400, maxHeight: 900)
             .environmentObject(appState)
         }
