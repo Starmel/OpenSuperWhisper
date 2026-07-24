@@ -1344,7 +1344,36 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.controlBackgroundColor).opacity(0.3))
                 .cornerRadius(12)
-                
+
+                // Paste Last Transcription
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Paste Last Transcription")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Shortcut")
+                                .font(.subheadline)
+                            Spacer()
+                            KeyboardShortcuts.Recorder("", name: .pasteLastTranscription)
+                                .frame(width: 150)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(.textBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+
+                        Text("Pastes your most recent transcription at the cursor. Useful when the cursor wasn't where you wanted it when the recording finished.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+
                 // Recording Behavior
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Recording Behavior")
