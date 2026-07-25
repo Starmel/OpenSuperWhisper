@@ -86,6 +86,13 @@ class AppState: ObservableObject {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+    /// How many recent transcriptions the status bar menu lists.
+    static let recentTranscriptionMenuCount = 5
+
+    /// Delay before pasting a transcription chosen from the status bar menu, to
+    /// let the menu dismiss and focus return to the user's previous app.
+    static let menuPasteFocusDelay: TimeInterval = 0.2
+
     private var statusItem: NSStatusItem?
     private var mainWindow: NSWindow?
     private var languageSubmenu: NSMenu?
@@ -93,6 +100,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var microphoneObserver: AnyCancellable?
     private var recordingRetentionTimer: Timer?
     private var hideMainWindowAtLaunch = false
+    /// Cached transcription text for the menu's "Recent" section, newest first.
+    private var recentTranscriptions: [String] = []
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !OpenSuperWhisperApp.isRunningTests else { return }
@@ -131,6 +140,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         OpenSuperWhisperApp.startTranscriptionQueue()
         observeMicrophoneChanges()
+
+        // Keeps the menu's "Recent" section current. Rebuilding on this
+        // notification rather than while the menu is opening avoids mutating a
+        // menu that AppKit is already displaying.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(recordingsDidUpdate),
+            name: RecordingStore.recordingsDidUpdateNotification,
+            object: nil
+        )
         
         IndicatorWindowManager.shared.warmUp()
         
@@ -138,6 +157,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         Task { @MainActor in
             await RecordingStore.shared.backfillMissingDurations()
+        }
+
+        // Populate the menu's "Recent" section from existing history, so it is
+        // present at launch rather than only after the next recording.
+        Task { @MainActor in
+            refreshRecentTranscriptions()
         }
     }
 
@@ -307,13 +332,74 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         microphoneMenu.submenu = submenu
         menu.addItem(microphoneMenu)
-        
+
+        addRecentTranscriptionsSection(to: menu)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
-        
+
         statusItem?.menu = menu
     }
+
+    /// Adds the "Recent" section listing the last few transcriptions, each of
+    /// which pastes at the cursor when chosen. Omitted entirely when there is
+    /// no history, so the menu does not carry an empty header.
+    private func addRecentTranscriptionsSection(to menu: NSMenu) {
+        let recent = recentTranscriptions
+        guard !recent.isEmpty else { return }
+
+        menu.addItem(NSMenuItem.separator())
+
+        let header = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+
+        for transcription in recent {
+            let item = NSMenuItem(
+                title: TranscriptionMenuFormatter.menuTitle(for: transcription),
+                action: #selector(pasteRecentTranscription(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            // Carry the full text, not the truncated title, so the paste is complete.
+            item.representedObject = transcription
+            // The untruncated transcription on hover, for anything ambiguous.
+            item.toolTip = transcription
+            menu.addItem(item)
+        }
+    }
+
+    /// Refreshes the cached transcriptions, then rebuilds the menu.
+    ///
+    /// The fetch has to happen here rather than inside menu construction:
+    /// `RecordingStore` is `@MainActor`, while `updateStatusBarMenu` can be
+    /// reached from a `MicrophoneService` publisher that is not main-isolated.
+    /// Caching plain strings keeps menu building synchronous and isolation-free.
+    @MainActor
+    private func refreshRecentTranscriptions() {
+        recentTranscriptions = RecordingStore.shared
+            .getRecentPasteableRecordings(limit: Self.recentTranscriptionMenuCount)
+            .map(\.transcription)
+        updateStatusBarMenu()
+    }
+
+    @objc private func pasteRecentTranscription(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+
+        // Opening a status bar menu makes this app active. Pasting immediately
+        // would target OpenSuperWhisper rather than whatever the user was in, so
+        // give the menu time to dismiss and focus time to return first.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.menuPasteFocusDelay) {
+            TranscriptionInserter.insert(text, forcePaste: true)
+        }
+    }
     
+    @objc private func recordingsDidUpdate() {
+        Task { @MainActor in
+            refreshRecentTranscriptions()
+        }
+    }
+
     @objc private func selectMicrophone(_ sender: NSMenuItem) {
         guard let device = sender.representedObject as? MicrophoneService.AudioDevice else { return }
         microphoneService.selectMicrophone(device)
