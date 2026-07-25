@@ -397,11 +397,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         adoptMainWindow(window)
     }
 
+    /// Applies the main window's resize limits.
+    ///
+    /// Width is deliberately unbounded: it was previously pinned to the same
+    /// 450pt as the minimum, which made AppKit refuse horizontal resizing
+    /// regardless of what the SwiftUI content declared. The height range is
+    /// pre-existing intentional behavior and is unchanged.
+    static func applyMainWindowSizeLimits(to window: NSWindow) {
+        window.minSize = NSSize(width: 450, height: 400)
+        window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: 900)
+    }
+
     private func adoptMainWindow(_ window: NSWindow) {
         mainWindow = window
         window.delegate = self
-        window.minSize = NSSize(width: 450, height: 400)
-        window.maxSize = NSSize(width: 450, height: 900)
+        Self.applyMainWindowSizeLimits(to: window)
 
         if hideMainWindowAtLaunch {
             hideMainWindowAtLaunch = false
@@ -445,6 +455,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
 extension AppDelegate: NSWindowDelegate {
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        return NSSize(width: 450, height: frameSize.height)
+        // This previously rewrote width to a fixed 450, which made horizontal
+        // resizing impossible: AppKit consults the delegate on every resize, so
+        // the returned size wins over the window's own minSize/maxSize. Honor
+        // the drag and let those limits do their job instead.
+        return frameSize
     }
 }
