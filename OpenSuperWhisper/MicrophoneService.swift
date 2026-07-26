@@ -78,7 +78,11 @@ class MicrophoneService: ObservableObject {
     }
     
     func refreshAvailableMicrophones() {
-        availableMicrophones = Self.coreAudioInputDevices()
+        guard let devices = Self.coreAudioInputDevices() else {
+            return
+        }
+
+        availableMicrophones = devices
         
         if availableMicrophones.isEmpty {
             selectedMicrophone = nil
@@ -86,7 +90,7 @@ class MicrophoneService: ObservableObject {
         }
     }
 
-    private static func coreAudioInputDevices() -> [AudioDevice] {
+    private static func coreAudioInputDevices() -> [AudioDevice]? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -102,7 +106,7 @@ class MicrophoneService: ObservableObject {
             nil,
             &dataSize
         ) == noErr else {
-            return []
+            return nil
         }
 
         let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
@@ -117,7 +121,7 @@ class MicrophoneService: ObservableObject {
             &dataSize,
             &deviceIDs
         ) == noErr else {
-            return []
+            return nil
         }
 
         let returnedCount = min(Int(dataSize) / MemoryLayout<AudioDeviceID>.size, count)
@@ -230,11 +234,8 @@ class MicrophoneService: ObservableObject {
             return
         }
         
-        if isDeviceAvailable(selected) {
-            currentMicrophone = selected
-        } else {
-            currentMicrophone = getDefaultMicrophone()
-        }
+        currentMicrophone = availableMicrophones.first(where: { $0.id == selected.id })
+            ?? getDefaultMicrophone()
     }
     
     func isDeviceAvailable(_ device: AudioDevice) -> Bool {
