@@ -34,14 +34,14 @@ final class OpenSuperWhisperUITests: XCTestCase {
             )
         }
         app.launchArguments = [
-            "-hasCompletedOnboarding", "NO",
-            "-startHiddenInMenuBar", "NO",
+            "-hasCompletedOnboarding", "0",
+            "-startHiddenInMenuBar", "0",
         ]
         app.launch()
 
         XCTAssertTrue(
             app.windows.firstMatch.waitForExistence(timeout: 5),
-            "The main window must appear instead of blocking during application initialization"
+            "The application window must appear instead of blocking during application initialization"
         )
     }
 

@@ -193,7 +193,7 @@ class MicrophoneService: ObservableObject {
             return nil
         }
 
-        return value?.takeUnretainedValue() as String?
+        return value?.takeRetainedValue() as String?
     }
 
     private static func uint32Property(
@@ -289,26 +289,7 @@ class MicrophoneService: ObservableObject {
     
     private func getTransportType(for device: AudioDevice) -> UInt32 {
         guard let deviceID = getCoreAudioDeviceID(for: device) else { return 0 }
-        
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyTransportType,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        
-        var transportType: UInt32 = 0
-        var propertySize = UInt32(MemoryLayout<UInt32>.size)
-        
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(deviceID),
-            &propertyAddress,
-            0,
-            nil,
-            &propertySize,
-            &transportType
-        )
-        
-        return status == noErr ? transportType : 0
+        return Self.uint32Property(kAudioDevicePropertyTransportType, for: deviceID) ?? 0
     }
     
     func isActiveMicrophoneContinuity() -> Bool {
