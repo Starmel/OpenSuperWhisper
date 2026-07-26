@@ -26,6 +26,11 @@ final class OpenSuperWhisperUITests: XCTestCase {
     func testLaunchShowsMainWindow() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        defer {
+            app.terminate()
+            _ = app.wait(for: .notRunning, timeout: 2)
+        }
+
         if app.state != .notRunning {
             app.terminate()
             XCTAssertTrue(
@@ -34,7 +39,7 @@ final class OpenSuperWhisperUITests: XCTestCase {
             )
         }
         app.launchArguments = [
-            "-hasCompletedOnboarding", "0",
+            "-hasCompletedOnboarding", "1",
             "-startHiddenInMenuBar", "0",
         ]
         app.launch()
