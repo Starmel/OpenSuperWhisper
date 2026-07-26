@@ -128,14 +128,14 @@ class MicrophoneService: ObservableObject {
                     kAudioDevicePropertyDeviceUID,
                     for: deviceID
                   ),
-                  !uid.contains("CADefaultDeviceAggregate"),
-                  let name = stringProperty(
-                    kAudioObjectPropertyName,
-                    for: deviceID
-                  ) else {
+                  !uid.contains("CADefaultDeviceAggregate") else {
                 return nil
             }
 
+            let name = stringProperty(
+                kAudioObjectPropertyName,
+                for: deviceID
+            ) ?? uid
             let manufacturer = stringProperty(
                 kAudioObjectPropertyManufacturer,
                 for: deviceID
