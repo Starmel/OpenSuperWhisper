@@ -602,6 +602,23 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
         XCTAssertTrue(MicrophoneService.shared.isContinuityMicrophone(device))
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device) || MicrophoneService.shared.isContinuityMicrophone(device))
     }
+
+    func testRequiresConnection_ContinuityTransportWithoutManufacturer() {
+        for transportType in [
+            kAudioDeviceTransportTypeContinuityCaptureWired,
+            kAudioDeviceTransportTypeContinuityCaptureWireless,
+        ] {
+            let device = MicrophoneService.AudioDevice(
+                id: "continuity-device-\(transportType)",
+                name: "External microphone",
+                manufacturer: nil,
+                isBuiltIn: false,
+                transportType: transportType
+            )
+
+            XCTAssertTrue(MicrophoneService.shared.isContinuityMicrophone(device))
+        }
+    }
     
     func testRequiresConnection_Bluetooth() {
         let device = MicrophoneService.AudioDevice(

@@ -301,6 +301,12 @@ class MicrophoneService: ObservableObject {
     }
     
     func isContinuityMicrophone(_ device: AudioDevice) -> Bool {
+        let transportType = device.transportType ?? getTransportType(for: device)
+        if transportType == kAudioDeviceTransportTypeContinuityCaptureWired ||
+            transportType == kAudioDeviceTransportTypeContinuityCaptureWireless {
+            return true
+        }
+
         let name = device.name.lowercased()
         let id = device.id.lowercased()
         let manufacturer = (device.manufacturer ?? "").lowercased()
