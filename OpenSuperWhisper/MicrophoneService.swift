@@ -362,7 +362,8 @@ class MicrophoneService: ObservableObject {
             }
         }
         
-        return status == noErr ? audioDeviceID : nil
+        guard status == noErr, audioDeviceID != kAudioObjectUnknown else { return nil }
+        return audioDeviceID
     }
     
     func setAsSystemDefaultInput(_ device: AudioDevice) -> Bool {
