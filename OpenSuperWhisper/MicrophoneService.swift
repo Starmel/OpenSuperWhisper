@@ -120,7 +120,9 @@ class MicrophoneService: ObservableObject {
             return []
         }
 
-        return deviceIDs.compactMap { deviceID in
+        let returnedCount = min(Int(dataSize) / MemoryLayout<AudioDeviceID>.size, count)
+
+        return deviceIDs.prefix(returnedCount).compactMap { deviceID in
             guard hasInputStreams(deviceID),
                   let uid = stringProperty(
                     kAudioDevicePropertyDeviceUID,
