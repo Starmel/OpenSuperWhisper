@@ -18,6 +18,21 @@ class MicrophoneService: ObservableObject {
         let name: String
         let manufacturer: String?
         let isBuiltIn: Bool
+        let transportType: UInt32?
+
+        init(
+            id: String,
+            name: String,
+            manufacturer: String?,
+            isBuiltIn: Bool,
+            transportType: UInt32? = nil
+        ) {
+            self.id = id
+            self.name = name
+            self.manufacturer = manufacturer
+            self.isBuiltIn = isBuiltIn
+            self.transportType = transportType
+        }
         
         static func == (lhs: AudioDevice, rhs: AudioDevice) -> Bool {
             return lhs.id == rhs.id
@@ -41,7 +56,7 @@ class MicrophoneService: ObservableObject {
         }
         timer?.invalidate()
     }
-    
+
     private func setupDeviceMonitoring() {
         deviceChangeObserver = NotificationCenter.default.addObserver(
             forName: .AVCaptureDeviceWasConnected,
@@ -63,77 +78,148 @@ class MicrophoneService: ObservableObject {
     }
     
     func refreshAvailableMicrophones() {
-        let deviceTypes: [AVCaptureDevice.DeviceType]
-        if #available(macOS 14.0, *) {
-            deviceTypes = [.microphone, .external]
-        } else {
-            deviceTypes = [.microphone, .external, .builtInMicrophone]
-        }
-        
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: deviceTypes,
-            mediaType: .audio,
-            position: .unspecified
-        )
-        
-        availableMicrophones = discoverySession.devices
-            .filter { device in
-                !device.uniqueID.contains("CADefaultDeviceAggregate")
-            }
-            .map { device in
-                let isBuiltIn = isBuiltInDevice(device)
-                return AudioDevice(
-                    id: device.uniqueID,
-                    name: device.localizedName,
-                    manufacturer: device.manufacturer,
-                    isBuiltIn: isBuiltIn
-                )
-            }
+        availableMicrophones = Self.coreAudioInputDevices()
         
         if availableMicrophones.isEmpty {
             selectedMicrophone = nil
             currentMicrophone = nil
         }
     }
-    
-    private func isBuiltInDevice(_ device: AVCaptureDevice) -> Bool {
-        #if os(macOS)
-        if #available(macOS 14.0, *) {
-            if device.deviceType == .microphone {
-                let uniqueID = device.uniqueID.lowercased()
-                if uniqueID.contains("builtin") || uniqueID.contains("internal") {
-                    return true
-                }
-            }
-        } else {
-            if device.deviceType == .builtInMicrophone {
-                return true
-            }
+
+    private static func coreAudioInputDevices() -> [AudioDevice] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        let systemObject = AudioObjectID(kAudioObjectSystemObject)
+
+        guard AudioObjectGetPropertyDataSize(
+            systemObject,
+            &address,
+            0,
+            nil,
+            &dataSize
+        ) == noErr else {
+            return []
         }
-        
-        let manufacturer = device.manufacturer
-        let mfr = manufacturer.lowercased()
-        if mfr.contains("apple") {
-            let uniqueID = device.uniqueID.lowercased()
-            let name = device.localizedName.lowercased()
-            
-            let isContinuity = name.contains("iphone") || name.contains("continuity") || name.contains("handoff") ||
-                               uniqueID.contains("iphone") || uniqueID.contains("continuity") || uniqueID.contains("handoff")
-            
-            if uniqueID.contains("builtin") || 
-               uniqueID.contains("internal") ||
-               (!uniqueID.contains("usb") &&
-               !uniqueID.contains("bluetooth") &&
-               !uniqueID.contains("airpods") &&
-               !isContinuity) {
-                return true
-            }
+
+        let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        guard count > 0 else { return [] }
+
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(
+            systemObject,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &deviceIDs
+        ) == noErr else {
+            return []
         }
-        
-        return false
-        #else
-        return device.deviceType == .builtInMicrophone
-        #endif
+
+        return deviceIDs.compactMap { deviceID in
+            guard hasInputStreams(deviceID),
+                  let uid = stringProperty(
+                    kAudioDevicePropertyDeviceUID,
+                    for: deviceID
+                  ),
+                  !uid.contains("CADefaultDeviceAggregate"),
+                  let name = stringProperty(
+                    kAudioObjectPropertyName,
+                    for: deviceID
+                  ) else {
+                return nil
+            }
+
+            let manufacturer = stringProperty(
+                kAudioObjectPropertyManufacturer,
+                for: deviceID
+            )
+            let transportType = uint32Property(
+                kAudioDevicePropertyTransportType,
+                for: deviceID
+            )
+
+            return AudioDevice(
+                id: uid,
+                name: name,
+                manufacturer: manufacturer,
+                isBuiltIn: transportType == kAudioDeviceTransportTypeBuiltIn,
+                transportType: transportType
+            )
+        }
+    }
+
+    private static func hasInputStreams(_ deviceID: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+
+        return AudioObjectGetPropertyDataSize(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &dataSize
+        ) == noErr && dataSize >= MemoryLayout<AudioStreamID>.size
+    }
+
+    private static func stringProperty(
+        _ selector: AudioObjectPropertySelector,
+        for deviceID: AudioDeviceID
+    ) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: Unmanaged<CFString>?
+        var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+
+        guard AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        ) == noErr else {
+            return nil
+        }
+
+        return value?.takeUnretainedValue() as String?
+    }
+
+    private static func uint32Property(
+        _ selector: AudioObjectPropertySelector,
+        for deviceID: AudioDeviceID
+    ) -> UInt32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+
+        guard AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        ) == noErr else {
+            return nil
+        }
+
+        return value
     }
     
     private func updateCurrentMicrophone() {
@@ -187,33 +273,21 @@ class MicrophoneService: ObservableObject {
     }
     
     func isBluetoothMicrophone(_ device: AudioDevice) -> Bool {
-        if let avDevice = AVCaptureDevice(uniqueID: device.id) {
-            let transportType = avDevice.transportType
-            if transportType == 1651275109 {
-                return true
-            }
-        }
-        
         let name = device.name.lowercased()
         let id = device.id.lowercased()
         let hasBluetoothInName = name.contains("bluetooth")
         let hasBluetoothInID = id.contains("bluetooth")
-        let macAddressPattern = "^[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}"
-        let hasMACAddress = id.range(of: macAddressPattern, options: .regularExpression) != nil
         
         if hasBluetoothInName || hasBluetoothInID {
             return true
         }
         
-        if hasMACAddress {
-            let transportType = getTransportType(for: device)
-            return transportType == 1651275109
-        }
-        
-        return false
+        let transportType = device.transportType ?? getTransportType(for: device)
+        return transportType == kAudioDeviceTransportTypeBluetooth ||
+               transportType == kAudioDeviceTransportTypeBluetoothLE
     }
     
-    private func getTransportType(for device: AudioDevice) -> Int32 {
+    private func getTransportType(for device: AudioDevice) -> UInt32 {
         guard let deviceID = getCoreAudioDeviceID(for: device) else { return 0 }
         
         var propertyAddress = AudioObjectPropertyAddress(
@@ -234,7 +308,7 @@ class MicrophoneService: ObservableObject {
             &transportType
         )
         
-        return status == noErr ? Int32(transportType) : 0
+        return status == noErr ? transportType : 0
     }
     
     func isActiveMicrophoneContinuity() -> Bool {
@@ -251,11 +325,6 @@ class MicrophoneService: ObservableObject {
         let hasIPhoneName = name.contains("iphone") || id.contains("iphone")
         let hasHandoffName = name.contains("handoff") || id.contains("handoff")
         return isApple && (hasContinuityName || hasIPhoneName || hasHandoffName)
-    }
-    
-    func getAVCaptureDevice() -> AVCaptureDevice? {
-        guard let active = getActiveMicrophone() else { return nil }
-        return AVCaptureDevice(uniqueID: active.id)
     }
     
     private func saveMicrophone(_ device: AudioDevice) {
@@ -282,31 +351,33 @@ class MicrophoneService: ObservableObject {
     func getCoreAudioDeviceID(for device: AudioDevice) -> AudioDeviceID? {
         var deviceID = device.id as CFString
         var audioDeviceID = AudioDeviceID()
-        var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
-        
+
         var translationAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDeviceForUID,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         
-        var translation = AudioValueTranslation(
-            mInputData: &deviceID,
-            mInputDataSize: UInt32(MemoryLayout<CFString>.size),
-            mOutputData: &audioDeviceID,
-            mOutputDataSize: UInt32(MemoryLayout<AudioDeviceID>.size)
-        )
-        
-        propertySize = UInt32(MemoryLayout<AudioValueTranslation>.size)
-        
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &translationAddress,
-            0,
-            nil,
-            &propertySize,
-            &translation
-        )
+        let status = withUnsafeMutablePointer(to: &deviceID) { deviceIDPointer in
+            withUnsafeMutablePointer(to: &audioDeviceID) { audioDeviceIDPointer in
+                var translation = AudioValueTranslation(
+                    mInputData: UnsafeMutableRawPointer(deviceIDPointer),
+                    mInputDataSize: UInt32(MemoryLayout<CFString>.size),
+                    mOutputData: UnsafeMutableRawPointer(audioDeviceIDPointer),
+                    mOutputDataSize: UInt32(MemoryLayout<AudioDeviceID>.size)
+                )
+                var propertySize = UInt32(MemoryLayout<AudioValueTranslation>.size)
+
+                return AudioObjectGetPropertyData(
+                    AudioObjectID(kAudioObjectSystemObject),
+                    &translationAddress,
+                    0,
+                    nil,
+                    &propertySize,
+                    &translation
+                )
+            }
+        }
         
         return status == noErr ? audioDeviceID : nil
     }
@@ -483,4 +554,3 @@ class MicrophoneService: ObservableObject {
 extension Notification.Name {
     static let microphoneDidChange = Notification.Name("microphoneDidChange")
 }
-

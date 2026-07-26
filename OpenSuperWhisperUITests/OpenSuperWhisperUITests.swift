@@ -23,12 +23,26 @@ final class OpenSuperWhisperUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
+    func testLaunchShowsMainWindow() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        if app.state != .notRunning {
+            app.terminate()
+            XCTAssertTrue(
+                app.wait(for: .notRunning, timeout: 2),
+                "An existing application instance must terminate before the launch regression runs"
+            )
+        }
+        app.launchArguments = [
+            "-hasCompletedOnboarding", "NO",
+            "-startHiddenInMenuBar", "NO",
+        ]
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        XCTAssertTrue(
+            app.windows.firstMatch.waitForExistence(timeout: 5),
+            "The main window must appear instead of blocking during application initialization"
+        )
     }
 
     @MainActor

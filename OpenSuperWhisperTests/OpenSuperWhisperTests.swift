@@ -9,6 +9,7 @@ import XCTest
 import Carbon
 import ApplicationServices
 import AVFoundation
+import CoreAudio
 @testable import OpenSuperWhisper
 
 final class OpenSuperWhisperTests: XCTestCase {
@@ -369,32 +370,6 @@ final class MicrophoneInventoryTests: XCTestCase {
             print("  isContinuity: \(service.isContinuityMicrophone(device))")
             print("  isBluetooth: \(service.isBluetoothMicrophone(device))")
         }
-        
-        let deviceTypes: [AVCaptureDevice.DeviceType]
-        if #available(macOS 14.0, *) {
-            deviceTypes = [.microphone, .external]
-        } else {
-            deviceTypes = [.microphone, .external, .builtInMicrophone]
-        }
-        
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: deviceTypes,
-            mediaType: .audio,
-            position: .unspecified
-        )
-        
-        print("AVCaptureDevice count: \(discoverySession.devices.count)")
-        for device in discoverySession.devices {
-            print("AVCaptureDevice:")
-            print("  localizedName: \(device.localizedName)")
-            print("  uniqueID: \(device.uniqueID)")
-            print("  manufacturer: \(device.manufacturer)")
-            print("  deviceType: \(device.deviceType.rawValue)")
-            if #available(macOS 13.0, *) {
-                print("  isConnected: \(device.isConnected)")
-            }
-            print("  transportType: \(device.transportType)")
-        }
     }
 }
 
@@ -582,14 +557,26 @@ final class MicrophoneServiceBluetoothTests: XCTestCase {
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
     
-    func testBluetoothDetection_MACAddress() {
+    func testBluetoothDetection_BluetoothTransport() {
         let device = MicrophoneService.AudioDevice(
             id: "00-22-BB-71-21-0A:input",
             name: "Amiron wireless",
             manufacturer: "Apple",
-            isBuiltIn: false
+            isBuiltIn: false,
+            transportType: kAudioDeviceTransportTypeBluetooth
         )
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
+    }
+
+    func testBluetoothDetection_MACAddressWithoutBluetoothTransport() {
+        let device = MicrophoneService.AudioDevice(
+            id: "00-22-BB-71-21-0A:input",
+            name: "External microphone",
+            manufacturer: "Example",
+            isBuiltIn: false,
+            transportType: kAudioDeviceTransportTypeUSB
+        )
+        XCTAssertFalse(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
     
     func testBluetoothDetection_NotBluetooth() {
@@ -621,7 +608,8 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
             id: "00-22-BB-71-21-0A:input",
             name: "Amiron wireless",
             manufacturer: "Apple",
-            isBuiltIn: false
+            isBuiltIn: false,
+            transportType: kAudioDeviceTransportTypeBluetooth
         )
         XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
     }
