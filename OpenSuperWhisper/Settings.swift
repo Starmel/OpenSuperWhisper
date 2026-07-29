@@ -625,7 +625,7 @@ struct Settings {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.config/opensuperwhisper/prompt.md"
     }()
-    
+
     var selectedLanguage: String
     var suppressBlankAudio: Bool
     var showTimestamps: Bool
@@ -656,7 +656,7 @@ struct Settings {
         self.beamSize = prefs.beamSize
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
     }
-    
+
     /// Reads the transcription prompt from `~/.config/opensuperwhisper/prompt.md`.
     /// Returns `nil` if the file does not exist or cannot be read.
     private static func fileBasedPrompt() -> String? {
