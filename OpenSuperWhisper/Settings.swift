@@ -619,6 +619,13 @@ func huggingFaceOwner(fromPageURL url: URL) -> String? {
 struct Settings {
     static let asianLanguages: Set<String> = ["zh", "ja", "ko"]
     
+    /// Path to the optional file-based transcription prompt.
+    /// When this file exists, its contents override the UI prompt setting.
+    static let promptFilePath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.config/opensuperwhisper/prompt.md"
+    }()
+    
     var selectedLanguage: String
     var suppressBlankAudio: Bool
     var showTimestamps: Bool
@@ -644,10 +651,23 @@ struct Settings {
         self.showTimestamps = prefs.showTimestamps
         self.temperature = prefs.temperature
         self.noSpeechThreshold = prefs.noSpeechThreshold
-        self.initialPrompt = prefs.initialPrompt
+        self.initialPrompt = Self.fileBasedPrompt() ?? prefs.initialPrompt
         self.useBeamSearch = prefs.useBeamSearch
         self.beamSize = prefs.beamSize
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
+    }
+    
+    /// Reads the transcription prompt from `~/.config/opensuperwhisper/prompt.md`.
+    /// Returns `nil` if the file does not exist or cannot be read.
+    private static func fileBasedPrompt() -> String? {
+        guard FileManager.default.isReadableFile(atPath: promptFilePath) else {
+            return nil
+        }
+        guard let contents = try? String(contentsOfFile: promptFilePath, encoding: .utf8) else {
+            return nil
+        }
+        let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

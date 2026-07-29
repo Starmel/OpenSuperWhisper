@@ -27,6 +27,26 @@ brew install opensuperwhisper
 
 Or from [GitHub releases page](https://github.com/Starmel/OpenSuperWhisper/releases).
 
+## Configuration
+
+### File-based transcription prompt
+
+Power users can set the Whisper transcription prompt via a file instead of the
+Settings UI. Create `~/.config/opensuperwhisper/prompt.md` with your desired
+prompt text:
+
+```shell
+mkdir -p ~/.config/opensuperwhisper
+echo "Use proper punctuation. Technical terms: Kubernetes, gRPC, PostgreSQL." \
+  > ~/.config/opensuperwhisper/prompt.md
+```
+
+- The file is read fresh on every transcription — edits take effect immediately
+  without restarting the app.
+- When the file exists and is non-empty, it overrides the prompt entered in
+  Settings.
+- Delete or empty the file to revert to the Settings UI prompt.
+
 ## Requirements
 
 - macOS (Apple Silicon/ARM64)
