@@ -3,7 +3,7 @@ class LanguageUtil {
 
     static let availableLanguages = [
         "auto", "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar",
-        "he", "sv", "it", "id", "hi", "fi",
+        "he", "sv", "it", "id", "hi", "fi", "uk",
     ]
 
     static let parakeetV2Languages = ["en"]
