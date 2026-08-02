@@ -72,6 +72,8 @@ final class LanguageSupportTests: XCTestCase {
         XCTAssertEqual(languages, LanguageUtil.availableLanguages)
         XCTAssertTrue(languages.contains("auto"))
         XCTAssertTrue(languages.contains("zh"))
+        XCTAssertTrue(languages.contains("vi"))
+        XCTAssertEqual(LanguageUtil.languageNames["vi"], "Vietnamese")
     }
 
     func testSupportedLanguages_parakeetV2_isEnglishOnly() {
