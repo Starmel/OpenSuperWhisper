@@ -158,8 +158,11 @@ class TranscriptionQueue: ObservableObject {
         startProcessingQueue()
     }
 
-    nonisolated static func shouldDiscardEmptyDictation(text: String, sourceURL: URL) -> Bool {
-        text.isEmpty && sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
+    /// Only applies to audio the app recorded itself. Imported files are always kept:
+    /// their history entry is the only place their transcription is ever shown.
+    nonisolated static func shouldDiscardDictation(text: String, sourceURL: URL, saveHistory: Bool) -> Bool {
+        guard sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path) else { return false }
+        return text.isEmpty || !saveHistory
     }
 
     private func processQueue() async {
@@ -239,7 +242,11 @@ class TranscriptionQueue: ObservableObject {
                     return
                 }
 
-                if Self.shouldDiscardEmptyDictation(text: text, sourceURL: sourceURL) {
+                if Self.shouldDiscardDictation(
+                    text: text,
+                    sourceURL: sourceURL,
+                    saveHistory: AppPreferences.shared.saveTranscriptionHistory
+                ) {
                     await Task.detached(priority: .utility) {
                         try? FileManager.default.removeItem(at: sourceURL)
                     }.value

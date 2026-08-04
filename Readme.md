@@ -16,6 +16,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 - 📁 Drag & drop audio files for transcription with queue processing
 - 🎤 Microphone selection — switch between built-in, external, Bluetooth and iPhone (Apple Continuity) mics from the menu bar
 - 🌍 Support for multiple languages with auto-detection
+- 🕵️ Optional history-free mode — turn off [transcript history](docs/transcript_history.md) and dictations are transcribed and inserted without ever being saved to disk
 - 🇯🇵🇨🇳🇰🇷 Asian language autocorrect ([autocorrect](https://github.com/huacnlee/autocorrect))
 
 ## Installation

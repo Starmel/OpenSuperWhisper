@@ -136,6 +136,9 @@ final class AppPreferences {
     @UserDefault(key: "startHiddenInMenuBar", defaultValue: false)
     var startHiddenInMenuBar: Bool
 
+    @UserDefault(key: "saveTranscriptionHistory", defaultValue: true)
+    var saveTranscriptionHistory: Bool
+
     @UserDefault(key: "autoDeleteRecordingsEnabled", defaultValue: false)
     var autoDeleteRecordingsEnabled: Bool
 

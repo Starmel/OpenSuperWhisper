@@ -195,6 +195,7 @@ class ContentViewModel: ObservableObject {
                         try? FileManager.default.removeItem(at: tempURL)
                         print("No speech detected, dictation discarded")
                     } else {
+                        let saveHistory = AppPreferences.shared.saveTranscriptionHistory
                         let timestamp = Date()
                         let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
                         let recordingId = UUID()
@@ -209,19 +210,26 @@ class ContentViewModel: ObservableObject {
                             sourceFileURL: nil
                         )
 
-                        try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+                        if saveHistory {
+                            try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+                            print("Transcription result: \(text)")
+                        } else {
+                            // Session-only: the list is this button's only output, since
+                            // it has nothing to paste into.
+                            try? FileManager.default.removeItem(at: tempURL)
+                        }
 
                         await MainActor.run {
-                            self.recordingStore.addRecording(newRecording)
-                            
+                            if saveHistory {
+                                self.recordingStore.addRecording(newRecording)
+                            }
+
                             if !self.currentSearchQuery.isEmpty {
                                 self.shouldClearSearch = true
                                 self.currentSearchQuery = ""
                             }
                             self.recordings.insert(newRecording, at: 0)
                         }
-
-                        print("Transcription result: \(text)")
                     }
                 } catch {
                     print("Error transcribing audio: \(error)")
