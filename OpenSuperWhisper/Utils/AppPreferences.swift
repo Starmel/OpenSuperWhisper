@@ -123,6 +123,9 @@ final class AppPreferences {
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
 
+    @UserDefault(key: "addEnterAfterTranscription", defaultValue: false)
+    var addEnterAfterTranscription: Bool
+
     // Clipboard settings
     @UserDefault(key: "autoCopyToClipboard", defaultValue: false)
     var autoCopyToClipboard: Bool
