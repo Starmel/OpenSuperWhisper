@@ -227,6 +227,15 @@ class IndicatorViewModel: ObservableObject {
                 // Paste but restore original clipboard (legacy behavior)
                 ClipboardUtil.insertText(finalText)
             }
+            if prefs.addEnterAfterTranscription {
+                // Some target apps process Cmd+V asynchronously, and the
+                // nonactivating indicator panel's hide spring is still settling
+                // here. Wait for both before sending Return so the foreground
+                // app, not the panel, receives it.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    ClipboardUtil.sendReturnKey()
+                }
+            }
         } else if prefs.autoCopyToClipboard {
             // Only copy to clipboard, don't paste
             ClipboardUtil.copyToClipboard(finalText)

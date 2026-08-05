@@ -190,6 +190,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var addEnterAfterTranscription: Bool {
+        didSet {
+            AppPreferences.shared.addEnterAfterTranscription = addEnterAfterTranscription
+        }
+    }
+
     @Published var autoCopyToClipboard: Bool {
         didSet {
             AppPreferences.shared.autoCopyToClipboard = autoCopyToClipboard
@@ -224,6 +230,7 @@ class SettingsViewModel: ObservableObject {
         self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
         self.startHiddenInMenuBar = prefs.startHiddenInMenuBar
         self.addSpaceAfterSentence = prefs.addSpaceAfterSentence
+        self.addEnterAfterTranscription = prefs.addEnterAfterTranscription
         self.autoCopyToClipboard = prefs.autoCopyToClipboard
         self.autoPasteTranscription = prefs.autoPasteTranscription
 
@@ -942,6 +949,20 @@ struct SettingsView: View {
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.addSpaceAfterSentence)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Add Enter After Transcription")
+                                    .font(.subheadline)
+                                Text("Presses Return after pasting, to submit the text")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.addEnterAfterTranscription)
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                         }

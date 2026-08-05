@@ -60,6 +60,20 @@ class ClipboardUtil {
         restorePasteboardContents(contents, to: pasteboard)
         return true
     }
+
+    /// Posts a Return key press. Sent as a real key event, not pasted text, so
+    /// the target app treats it as a submit rather than a newline character.
+    static func sendReturnKey() {
+        guard let source = CGEventSource(stateID: .combinedSessionState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false) else { return }
+        // Explicitly clear flags so Return stays Return even when the recording
+        // hotkey used a modifier key.
+        keyDown.flags = []
+        keyUp.flags = []
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
     
     private static func simulatePaste() {
         sendCmdV()
