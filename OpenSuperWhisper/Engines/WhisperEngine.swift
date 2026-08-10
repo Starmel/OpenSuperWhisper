@@ -61,11 +61,14 @@ class WhisperEngine: TranscriptionEngine {
     }
     
     func initialize() async throws {
+        try loadModel()
+        unloadModel()
+    }
+    private func loadModel() throws {
         let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
         guard let modelPath = modelPath else {
             throw TranscriptionError.contextInitializationFailed
         }
-        
         let params = WhisperContextParams()
         // Load the model without a decoding state: a fresh whisper_state is
         // created per transcription, so recordings can share the model weights
@@ -76,8 +79,14 @@ class WhisperEngine: TranscriptionEngine {
             throw TranscriptionError.contextInitializationFailed
         }
     }
+    private func unloadModel(){
+        context = nil
+    }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        try loadModel()
+        defer { unloadModel() }
+
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
