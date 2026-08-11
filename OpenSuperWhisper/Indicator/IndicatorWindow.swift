@@ -215,33 +215,13 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func insertText(_ text: String) {
-        guard !text.isEmpty else { return }
-        let finalText = Self.applyPostProcessing(text)
-        let prefs = AppPreferences.shared
-
-        if prefs.autoPasteTranscription {
-            if prefs.autoCopyToClipboard {
-                // Paste and keep in clipboard
-                ClipboardUtil.insertTextAndKeepInClipboard(finalText)
-            } else {
-                // Paste but restore original clipboard (legacy behavior)
-                ClipboardUtil.insertText(finalText)
-            }
-        } else if prefs.autoCopyToClipboard {
-            // Only copy to clipboard, don't paste
-            ClipboardUtil.copyToClipboard(finalText)
-        }
-        // If both are false, do nothing
-
+        TranscriptionInserter.insert(text)
     }
-    
+
+    /// Retained as the canonical symbol for existing tests; the implementation
+    /// now lives in `TranscriptionInserter`.
     static func applyPostProcessing(_ text: String) -> String {
-        guard AppPreferences.shared.addSpaceAfterSentence,
-              let lastChar = text.last,
-              lastChar.isPunctuation else {
-            return text
-        }
-        return text + " "
+        TranscriptionInserter.applyPostProcessing(text)
     }
     
     private func startBlinking() {
