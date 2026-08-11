@@ -119,7 +119,10 @@ final class AppPreferences {
 
     @UserDefault(key: "doublePressToTrigger", defaultValue: false)
     var doublePressToTrigger: Bool
-    
+
+    @UserDefault(key: "pauseMediaWhileRecording", defaultValue: false)
+    var pauseMediaWhileRecording: Bool
+
     @UserDefault(key: "addSpaceAfterSentence", defaultValue: true)
     var addSpaceAfterSentence: Bool
 

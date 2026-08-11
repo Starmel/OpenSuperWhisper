@@ -34,6 +34,7 @@
 		CEAC00032D82F00200000000 /* libautocorrect_swift.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; };
 		CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00072D82F40000000000 /* libomp.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		CEAC01002DA0000000000002 /* libOSWMediaHelper.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC01002DA0000000000001 /* libOSWMediaHelper.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -118,6 +119,7 @@
 			files = (
 				CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */,
 				CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */,
+				CEAC01002DA0000000000002 /* libOSWMediaHelper.dylib in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -169,6 +171,7 @@
 		CE84DF792D5578BE00C54EA6 /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libautocorrect_swift.dylib; path = build/libautocorrect_swift.dylib; sourceTree = "<group>"; };
 		CEAC00072D82F40000000000 /* libomp.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libomp.dylib; path = build/libomp.dylib; sourceTree = "<group>"; };
+		CEAC01002DA0000000000001 /* libOSWMediaHelper.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libOSWMediaHelper.dylib; path = build/libOSWMediaHelper.dylib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -401,6 +404,7 @@
 			children = (
 				CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */,
 				CEAC00072D82F40000000000 /* libomp.dylib */,
+				CEAC01002DA0000000000001 /* libOSWMediaHelper.dylib */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";

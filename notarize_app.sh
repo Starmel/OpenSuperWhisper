@@ -31,6 +31,10 @@ cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
 install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
 codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libomp.dylib
 
+echo "Building media-remote helper..."
+swiftc -emit-library -O -target arm64-apple-macos14.0 -o ./build/libOSWMediaHelper.dylib MediaRemoteHelper/OSWMediaRemote.swift
+codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libOSWMediaHelper.dylib
+
 xcodebuild \
   -scheme "OpenSuperWhisper" \
   -configuration Release \
