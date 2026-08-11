@@ -249,3 +249,38 @@ final class StartHiddenPreferenceTests: XCTestCase {
         XCTAssertFalse(AppPreferences.shared.startHiddenInMenuBar)
     }
 }
+
+final class TranscriptHistoryPreferenceTests: XCTestCase {
+
+    private let key = "saveTranscriptionHistory"
+    private var originalValue: Any?
+
+    override func setUp() {
+        super.setUp()
+        originalValue = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    override func tearDown() {
+        if let originalValue {
+            UserDefaults.standard.set(originalValue, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        super.tearDown()
+    }
+
+    func testSaveTranscriptionHistory_defaultsToTrue() {
+        XCTAssertTrue(AppPreferences.shared.saveTranscriptionHistory,
+                      "Existing installs must keep saving history until the user opts out")
+    }
+
+    func testSaveTranscriptionHistory_persistsChanges() {
+        AppPreferences.shared.saveTranscriptionHistory = false
+        XCTAssertFalse(AppPreferences.shared.saveTranscriptionHistory)
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: key))
+
+        AppPreferences.shared.saveTranscriptionHistory = true
+        XCTAssertTrue(AppPreferences.shared.saveTranscriptionHistory)
+    }
+}

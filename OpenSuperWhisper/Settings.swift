@@ -1622,6 +1622,7 @@ struct FluidAudioModelDownloadItemView: View {
 }
 
 struct RecordingStorageSettingsView: View {
+    @State private var saveHistory = AppPreferences.shared.saveTranscriptionHistory
     @State private var autoDeleteEnabled = AppPreferences.shared.autoDeleteRecordingsEnabled
     @State private var retentionDays = AppPreferences.shared.autoDeleteRecordingsAfterDays
     @State private var diskUsage: Int64 = 0
@@ -1639,6 +1640,30 @@ struct RecordingStorageSettingsView: View {
                 .foregroundColor(.primary)
 
             VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save transcription history")
+                            .font(.subheadline)
+                        Text("When off, dictations are still inserted into the focused app but nothing is written to disk. Files you drag in are always saved.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { saveHistory },
+                        set: { newValue in
+                            saveHistory = newValue
+                            AppPreferences.shared.saveTranscriptionHistory = newValue
+                        }
+                    ))
+                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                    .labelsHidden()
+                    .help("Keep transcripts and their audio in the history list")
+                }
+
+                Divider()
+
                 HStack {
                     Text("Recordings on disk:")
                         .font(.subheadline)

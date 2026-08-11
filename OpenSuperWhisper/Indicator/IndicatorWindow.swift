@@ -172,6 +172,9 @@ class IndicatorViewModel: ObservableObject {
                     if text.isEmpty {
                         try? FileManager.default.removeItem(at: tempURL)
                         print("No speech detected, dictation discarded")
+                    } else if !AppPreferences.shared.saveTranscriptionHistory {
+                        try? FileManager.default.removeItem(at: tempURL)
+                        insertText(text)
                     } else {
                         let timestamp = Date()
                         let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
