@@ -205,7 +205,7 @@ class WhisperEngine: TranscriptionEngine {
             }
             
             guard let segmentText = context.fullGetSegmentText(iSegment: i) else { continue }
-            
+
             if settings.showTimestamps {
                 let t0 = context.fullGetSegmentT0(iSegment: i)
                 let t1 = context.fullGetSegmentT1(iSegment: i)
@@ -213,12 +213,24 @@ class WhisperEngine: TranscriptionEngine {
             }
             text += segmentText + "\n"
         }
-        
-        let cleanedText = text
+
+        var cleanedText = text
             .replacingOccurrences(of: "[MUSIC]", with: "")
             .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
+        if !settings.showTimestamps {
+            // whisper.cpp can also glue sentences together *within* a single segment
+            // (e.g. "...day.Next sentence"), so insert a space after sentence-ending
+            // punctuation when it's immediately followed by a letter.
+            cleanedText = cleanedText.replacingOccurrences(
+                of: "([.!?])(\\p{L})",
+                with: "$1 $2",
+                options: .regularExpression
+            )
+        }
+
+        cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+
         var processedText = cleanedText
         if settings.shouldApplyAsianAutocorrect && !cleanedText.isEmpty {
             processedText = AutocorrectWrapper.format(cleanedText)
