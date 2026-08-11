@@ -9,6 +9,8 @@ import SwiftUI
 extension KeyboardShortcuts.Name {
     static let toggleRecord = Self("toggleRecord", default: .init(.backtick, modifiers: .option))
     static let escape = Self("escape", default: .init(.escape))
+    static let pasteLastTranscription = Self("pasteLastTranscription",
+                                             default: .init(.v, modifiers: [.command, .control]))
 }
 
 class ShortcutManager {
@@ -70,8 +72,29 @@ class ShortcutManager {
             }
         }
         KeyboardShortcuts.disable(.escape)
+
+        // Key-up rather than key-down, matching .escape above, so the
+        // synthesized Cmd+V cannot race the user's own modifier keys still
+        // being physically held down.
+        KeyboardShortcuts.onKeyUp(for: .pasteLastTranscription) {
+            Task { @MainActor in
+                Self.pasteLastTranscription()
+            }
+        }
     }
     
+    /// Pastes the most recent transcription at the current cursor position.
+    /// Always pastes, even when automatic pasting is disabled — an explicit
+    /// keypress is an explicit request.
+    @MainActor
+    static func pasteLastTranscription() {
+        guard let recording = RecordingStore.shared.getLastPasteableRecording() else {
+            print("Paste last transcription: no transcription available")
+            return
+        }
+        TranscriptionInserter.insert(recording.transcription, forcePaste: true)
+    }
+
     private func setupRecordingTrigger() {
         let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         let mouseButton = MouseButton(rawValue: AppPreferences.shared.mouseButtonHotkey) ?? .none

@@ -177,6 +177,60 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    /// Which transcription the paste-last-transcription hotkey should use:
+    /// the newest completed recording that actually has text.
+    ///
+    /// Pure and separately testable; `getLastPasteableRecording()` applies it
+    /// to rows read from the database. Keeping the rule here rather than in
+    /// SQL means there is exactly one definition of "pasteable".
+    ///
+    /// `nonisolated` so plain `XCTestCase` classes can call it, matching
+    /// `retentionCutoffDate` and `isDeletableRecordingURL` below.
+    nonisolated static func lastPasteable(from recordings: [Recording]) -> Recording? {
+        recentPasteable(from: recordings, limit: 1).first
+    }
+
+    /// The most recent pasteable transcriptions, newest first, for the status
+    /// bar menu. Single source of truth for what "pasteable" means — the
+    /// single-item rule above delegates here rather than repeating the filters.
+    nonisolated static func recentPasteable(from recordings: [Recording], limit: Int) -> [Recording] {
+        guard limit > 0 else { return [] }
+
+        return recordings
+            .filter { $0.status == .completed }
+            .filter { !$0.transcription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.timestamp > $1.timestamp }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// The newest completed, non-empty transcription, or nil when there is none.
+    func getLastPasteableRecording() -> Recording? {
+        getRecentPasteableRecordings(limit: 1).first
+    }
+
+    /// The most recent pasteable transcriptions, newest first.
+    func getRecentPasteableRecordings(limit: Int) -> [Recording] {
+        guard limit > 0 else { return [] }
+
+        do {
+            let candidates = try dbQueue.read { db in
+                // Narrow in SQL, then apply the full rule in Swift. Over-fetching
+                // gives blank-but-completed rows room to be filtered out without
+                // risking a full-table read.
+                try Recording
+                    .filter(Recording.Columns.status == RecordingStatus.completed.rawValue)
+                    .order(Recording.Columns.timestamp.desc)
+                    .limit(max(limit * 4, 20))
+                    .fetchAll(db)
+            }
+            return Self.recentPasteable(from: candidates, limit: limit)
+        } catch {
+            print("Failed to fetch recent pasteable recordings: \(error)")
+            return []
+        }
+    }
+
     static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
 
     func addRecording(_ recording: Recording) {
