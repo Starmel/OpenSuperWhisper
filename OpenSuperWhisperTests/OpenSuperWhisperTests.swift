@@ -1468,6 +1468,46 @@ final class FocusUtilsCaretPositionTests: XCTestCase {
             forAXFrame: frame, primaryScreenMaxY: primaryMaxY, screenFrames: screens
         ))
     }
+
+    // MARK: Indicator placement heuristic
+
+    func testIndicatorUsesResolvedAnchorWhenItIsNearCursor() {
+        let cursor = NSPoint(x: 100, y: 100)
+        let anchor = NSPoint(x: 220, y: 100)
+
+        let point = FocusUtils.chooseIndicatorPoint(
+            resolvedInputAnchor: anchor,
+            cursorPosition: cursor,
+            maxDistanceFromCursor: 200
+        )
+
+        XCTAssertEqual(point, anchor)
+    }
+
+    func testIndicatorFallsBackToCursorWhenResolvedAnchorIsTooFarAway() {
+        let cursor = NSPoint(x: 100, y: 100)
+        let anchor = NSPoint(x: 301, y: 100)
+
+        let point = FocusUtils.chooseIndicatorPoint(
+            resolvedInputAnchor: anchor,
+            cursorPosition: cursor,
+            maxDistanceFromCursor: 200
+        )
+
+        XCTAssertEqual(point, cursor)
+    }
+
+    func testIndicatorFallsBackToCursorWhenAnchorIsUnavailable() {
+        let cursor = NSPoint(x: 100, y: 100)
+
+        let point = FocusUtils.chooseIndicatorPoint(
+            resolvedInputAnchor: nil,
+            cursorPosition: cursor,
+            maxDistanceFromCursor: 200
+        )
+
+        XCTAssertEqual(point, cursor)
+    }
 }
 
 final class IndicatorWindowGeometryTests: XCTestCase {

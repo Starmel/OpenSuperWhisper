@@ -136,7 +136,10 @@ class ShortcutManager {
                 
                 let cursorPosition = FocusUtils.getCurrentCursorPosition()
                 let anchorPoint = await Self.resolveAnchorPoint(timeoutNanoseconds: 150_000_000)
-                let indicatorPoint = anchorPoint ?? cursorPosition
+                let indicatorPoint = FocusUtils.chooseIndicatorPoint(
+                    resolvedInputAnchor: anchorPoint,
+                    cursorPosition: cursorPosition
+                )
                 
                 IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: indicatorPoint)
             } else if !self.holdMode {

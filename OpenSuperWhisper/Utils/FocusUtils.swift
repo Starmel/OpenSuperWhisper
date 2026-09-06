@@ -14,9 +14,34 @@ import KeyboardShortcuts
 import SwiftUI
 
 class FocusUtils {
+    private static let maximumIndicatorAnchorDistanceFromCursor: CGFloat = 200
     
     static func getCurrentCursorPosition() -> NSPoint {
         return NSEvent.mouseLocation
+    }
+
+    static func chooseIndicatorPoint(resolvedInputAnchor: NSPoint?, cursorPosition: NSPoint, maxDistanceFromCursor: CGFloat = maximumIndicatorAnchorDistanceFromCursor) -> NSPoint {
+        guard let resolvedInputAnchor else {
+            print("Indicator placement heuristic: no input anchor; cursor=\(formatPoint(cursorPosition)); using cursor")
+            return cursorPosition
+        }
+
+        let distanceFromCursor = hypot(resolvedInputAnchor.x - cursorPosition.x, resolvedInputAnchor.y - cursorPosition.y)
+        guard distanceFromCursor <= maxDistanceFromCursor else {
+            print("Indicator placement heuristic: inputAnchor=\(formatPoint(resolvedInputAnchor)); cursor=\(formatPoint(cursorPosition)); distance=\(formatDistance(distanceFromCursor)); max=\(formatDistance(maxDistanceFromCursor)); using cursor")
+            return cursorPosition
+        }
+
+        print("Indicator placement heuristic: inputAnchor=\(formatPoint(resolvedInputAnchor)); cursor=\(formatPoint(cursorPosition)); distance=\(formatDistance(distanceFromCursor)); max=\(formatDistance(maxDistanceFromCursor)); using input anchor")
+        return resolvedInputAnchor
+    }
+
+    private static func formatPoint(_ point: NSPoint) -> String {
+        "(\(Int(point.x.rounded())), \(Int(point.y.rounded())))"
+    }
+
+    private static func formatDistance(_ distance: CGFloat) -> String {
+        "\(Int(distance.rounded())) pt"
     }
     
     /// Every AX call is a synchronous IPC round-trip with a 6-second default
