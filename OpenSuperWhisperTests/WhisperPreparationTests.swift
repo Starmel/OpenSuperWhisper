@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import XCTest
 @testable import OpenSuperWhisper
 
@@ -83,6 +84,20 @@ final class WhisperPreparationTests: XCTestCase {
         settings.temperature = 0
         let audio = root.appendingPathComponent("jfk.wav")
         let cold = try await engine.transcribeAudio(url: audio, settings: settings)
+        XCTAssertFalse(engine.hasPreparedState)
+        let silenceURL = FileManager.default.temporaryDirectory.appendingPathComponent("vad-silence-\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: silenceURL) }
+        do {
+            let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1))
+            let file = try AVAudioFile(forWriting: silenceURL, settings: format.settings)
+            let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48000))
+            buffer.frameLength = 48000
+            buffer.floatChannelData![0].initialize(repeating: 0, count: 48000)
+            try file.write(from: buffer)
+        }
+        try engine.prepareForRecording()
+        let silence = try await engine.transcribeAudio(url: silenceURL, settings: settings)
+        XCTAssertEqual(silence, "")
         XCTAssertFalse(engine.hasPreparedState)
         let start = ContinuousClock.now
         try engine.prepareForRecording()

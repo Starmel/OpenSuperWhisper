@@ -96,6 +96,12 @@ class WhisperEngine: TranscriptionEngine {
         guard context != nil else {
             throw TranscriptionError.contextInitializationFailed
         }
+
+        guard let path = Self.vadModelPath,
+              let vad = MyWhisperVadContext(modelPath: path) else {
+            throw TranscriptionError.contextInitializationFailed
+        }
+        vadContext = vad
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
@@ -337,14 +343,10 @@ class WhisperEngine: TranscriptionEngine {
     // MARK: - VAD
     
     private func detectSpeech(in samples: [Float]) throws -> [WhisperVadSegment] {
-        if vadContext == nil {
-            guard let path = Self.vadModelPath,
-                  let vad = MyWhisperVadContext(modelPath: path) else {
-                throw TranscriptionError.contextInitializationFailed
-            }
-            vadContext = vad
+        guard let vadContext else {
+            throw TranscriptionError.contextInitializationFailed
         }
-        guard let segments = vadContext?.speechSegments(in: samples) else {
+        guard let segments = vadContext.speechSegments(in: samples) else {
             throw TranscriptionError.processingFailed
         }
         return segments
