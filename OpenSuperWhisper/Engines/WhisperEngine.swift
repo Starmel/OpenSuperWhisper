@@ -42,6 +42,10 @@ private final class AbortFlag: @unchecked Sendable {
 }
 
 class WhisperEngine: TranscriptionEngine {
+    private enum AudioInput {
+        case file(URL)
+        case pcm([Float])
+    }
     struct DecodedSegment: Equatable {
         let text: String
         let endTimeCentiseconds: Int64
@@ -114,15 +118,23 @@ class WhisperEngine: TranscriptionEngine {
         url: URL,
         settings: Settings
     ) async throws -> DetailedTranscription {
+        try await transcribe(input: .file(url), settings: settings)
+    }
+
+    func transcribeSamples(_ samples: [Float], settings: Settings) async throws -> String {
+        try await transcribe(input: .pcm(samples), settings: settings).text
+    }
+
+    private func transcribe(input: AudioInput, settings: Settings) async throws -> DetailedTranscription {
         try await withTaskCancellationHandler {
-            try await performTranscription(url: url, settings: settings)
+            try await performTranscription(input: input, settings: settings)
         } onCancel: { [abortFlag] in
             abortFlag.isSet = true
         }
     }
 
     private func performTranscription(
-        url: URL,
+        input: AudioInput,
         settings: Settings
     ) async throws -> DetailedTranscription {
         try Task.checkCancellation()
@@ -146,14 +158,20 @@ class WhisperEngine: TranscriptionEngine {
         // Notify conversion start (0-10% is conversion phase)
         onProgressUpdate?(0.05)
         
-        guard let converted = try await convertAudioToPCM(
-            fileURL: url,
-            cancellationCheck: { [abortFlag] in abortFlag.isSet }
-        ) else {
-            if abortFlag.isSet || Task.isCancelled {
-                throw CancellationError()
+        let converted: [Float]
+        switch input {
+        case .pcm(let samples):
+            guard !samples.isEmpty else { throw TranscriptionError.audioConversionFailed }
+            converted = samples
+        case .file(let url):
+            guard let samples = try await convertAudioToPCM(
+                fileURL: url,
+                cancellationCheck: { [abortFlag] in abortFlag.isSet }
+            ) else {
+                if abortFlag.isSet || Task.isCancelled { throw CancellationError() }
+                throw TranscriptionError.audioConversionFailed
             }
-            throw TranscriptionError.audioConversionFailed
+            converted = samples
         }
         
         // Conversion done, now processing

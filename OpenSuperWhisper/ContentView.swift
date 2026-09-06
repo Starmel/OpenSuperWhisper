@@ -185,11 +185,12 @@ class ContentViewModel: ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             
-            if let tempURL = await self.recorder.stopRecording() {
+            if let audio = await self.recorder.stopRecording() {
+                let tempURL = audio.url
                 do {
                     print("start decoding...")
-                    let duration = await AudioUtil.audioDuration(url: tempURL)
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
+                    let duration = audio.duration
+                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings(), pcmSamples: audio.samples)
 
                     if text.isEmpty {
                         try? FileManager.default.removeItem(at: tempURL)

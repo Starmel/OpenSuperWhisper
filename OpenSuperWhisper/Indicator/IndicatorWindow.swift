@@ -41,12 +41,12 @@ class IndicatorViewModel: ObservableObject {
     private let recordingStore: RecordingStore
     private let transcriptionService: TranscriptionService
     private let transcriptionQueue: TranscriptionQueue
-    private let stopRecordingOperation: () async -> URL?
+    private let stopRecordingOperation: () async -> RecordedAudio?
     private let cancelAudioRecordingOperation: () -> Void
     
     init(
         transcriptionService: TranscriptionService = .shared,
-        stopRecording: @escaping () async -> URL? = {
+        stopRecording: @escaping () async -> RecordedAudio? = {
             await AudioRecorder.shared.stopRecording()
         },
         cancelAudioRecording: @escaping () -> Void = {
@@ -166,8 +166,8 @@ class IndicatorViewModel: ObservableObject {
             // and put it into the queue instead of deleting it.
             Task { [weak self] in
                 guard let self = self else { return }
-                if let tempURL = await self.stopRecordingOperation() {
-                    await self.transcriptionQueue.addFileToQueue(url: tempURL)
+                if let audio = await self.stopRecordingOperation() {
+                    await self.transcriptionQueue.addFileToQueue(url: audio.url)
                 }
             }
             showBusyMessage()
@@ -181,11 +181,12 @@ class IndicatorViewModel: ObservableObject {
         decodingTask = Task { [weak self] in
             guard let self = self else { return }
 
-            guard let tempURL = await self.stopRecordingOperation() else {
+            guard let audio = await self.stopRecordingOperation() else {
                 print("!!! Not found record url !!!")
                 self.finishDecoding(sessionID: sessionID)
                 return
             }
+            let tempURL = audio.url
 
             do {
                 try Task.checkCancellation()
@@ -194,7 +195,7 @@ class IndicatorViewModel: ObservableObject {
                 }
 
                 print("start decoding...")
-                let duration = await AudioUtil.audioDuration(url: tempURL)
+                let duration = audio.duration
                 try Task.checkCancellation()
                 guard self.decodingSessionID == sessionID else {
                     throw CancellationError()
@@ -203,7 +204,8 @@ class IndicatorViewModel: ObservableObject {
                 let text = try await transcriptionService.transcribeAudio(
                     url: tempURL,
                     settings: Settings(),
-                    operationID: sessionID
+                    operationID: sessionID,
+                    pcmSamples: audio.samples
                 )
                 try Task.checkCancellation()
                 guard self.decodingSessionID == sessionID else {

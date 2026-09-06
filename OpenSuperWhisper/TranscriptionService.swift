@@ -125,18 +125,20 @@ class TranscriptionService: ObservableObject {
         }
     }
     
-    func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+    func transcribeAudio(url: URL, settings: Settings, pcmSamples: [Float]? = nil) async throws -> String {
         try await transcribeAudio(
             url: url,
             settings: settings,
-            operationID: UUID()
+            operationID: UUID(),
+            pcmSamples: pcmSamples
         )
     }
 
     func transcribeAudio(
         url: URL,
         settings: Settings,
-        operationID: UUID
+        operationID: UUID,
+        pcmSamples: [Float]? = nil
     ) async throws -> String {
         try Task.checkCancellation()
 
@@ -209,7 +211,11 @@ class TranscriptionService: ObservableObject {
             
             let result: String
             do {
-                result = try await engine.transcribeAudio(url: url, settings: settings)
+                if let pcmSamples, let whisper = engine as? WhisperEngine {
+                    result = try await whisper.transcribeSamples(pcmSamples, settings: settings)
+                } else {
+                    result = try await engine.transcribeAudio(url: url, settings: settings)
+                }
             } catch {
                 // Native engines may surface their own generic error after an
                 // abort callback. Preserve cancellation as cancellation for the

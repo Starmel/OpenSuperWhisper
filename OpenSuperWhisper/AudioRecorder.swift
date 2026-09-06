@@ -21,7 +21,7 @@ class AudioRecorder: NSObject, ObservableObject {
     // so a stop arriving right after a start can never overtake it.
     private let workQueue = DispatchQueue(label: "com.opensuperwhisper.audiorecorder")
     
-    private var audioRecorder: AVAudioRecorder?
+    private var recordingSession: PCMRecordingSession?
     private var audioPlayer: AVAudioPlayer?
     private var notificationSound: NSSound?
     private let temporaryDirectory: URL
@@ -163,13 +163,12 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     private func performStart(activeMic: MicrophoneService.AudioDevice?, monitorConnection: Bool) {
-        if audioRecorder != nil {
+        if recordingSession != nil {
             print("stop recording while recording")
             _ = performStop(discard: true)
         }
         
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let fileURL = temporaryDirectory.appendingPathComponent("\(timestamp).wav")
+        let fileURL = temporaryDirectory.appendingPathComponent("\(UUID().uuidString).wav")
         currentRecordingURL = fileURL
         
         print("start record file to \(fileURL)")
@@ -183,21 +182,10 @@ class AudioRecorder: NSObject, ObservableObject {
         }
         #endif
         
-        // 16-bit integer PCM: half the disk/IO of Float32 with no quality loss
-        // for speech recognition (whisper consumes 16 kHz mono anyway).
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatLinearPCM),
-            AVSampleRateKey: 16000.0,
-            AVNumberOfChannelsKey: channelCount,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false
-        ]
-        
         do {
-            audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
-            audioRecorder?.delegate = self
-            audioRecorder?.isMeteringEnabled = monitorConnection
-            audioRecorder?.record()
+            let session = try PCMRecordingSession(url: fileURL)
+            recordingSession = session
+            try session.start()
             Task { @MainActor in
                 TranscriptionService.shared.prepareForRecording()
             }
@@ -209,16 +197,17 @@ class AudioRecorder: NSObject, ObservableObject {
             print("Recording started successfully")
         } catch {
             print("Failed to start recording: \(error)")
+            recordingSession = nil
             currentRecordingURL = nil
             restoreSystemDefaultInputIfNeeded()
             updateRecordingState(isRecording: false, isConnecting: false)
         }
     }
     
-    func stopRecording() async -> URL? {
+    func stopRecording() async -> RecordedAudio? {
         await withCheckedContinuation { continuation in
             workQueue.async {
-                guard let recorder = self.audioRecorder, let url = self.currentRecordingURL else {
+                guard let recorder = self.recordingSession, let url = self.currentRecordingURL else {
                     continuation.resume(returning: self.performStop(discard: false))
                     return
                 }
@@ -226,25 +215,29 @@ class AudioRecorder: NSObject, ObservableObject {
                 // Detach the session immediately (UI state, connection monitoring),
                 // then keep capturing a short tail before actually stopping, so the
                 // end of the last word released together with the hotkey survives.
-                self.audioRecorder = nil
+                self.recordingSession = nil
                 self.currentRecordingURL = nil
                 self.stopConnectionMonitoring()
                 self.updateRecordingState(isRecording: false, isConnecting: false)
                 
                 self.workQueue.asyncAfter(deadline: .now() + Self.stopTailDuration) {
-                    let recordedDuration = recorder.currentTime
-                    recorder.stop()
+                    let recording: RecordedAudio?
+                    do { recording = try recorder.finish() }
+                    catch {
+                        print("Failed to finish recording: \(error)")
+                        recording = nil
+                    }
                     // A new recording may have started during the tail window;
                     // it will restore the system input itself when it stops.
-                    if self.audioRecorder == nil {
+                    if self.recordingSession == nil {
                         self.restoreSystemDefaultInputIfNeeded()
                     }
                     
-                    if recordedDuration < Self.minimumRecordingDuration {
+                    if let recording, recording.duration >= Self.minimumRecordingDuration {
+                        continuation.resume(returning: recording)
+                    } else {
                         try? FileManager.default.removeItem(at: url)
                         continuation.resume(returning: nil)
-                    } else {
-                        continuation.resume(returning: url)
                     }
                 }
             }
@@ -257,10 +250,19 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
-    private func performStop(discard: Bool) -> URL? {
-        let recordedDuration = audioRecorder?.currentTime ?? 0
-        audioRecorder?.stop()
-        audioRecorder = nil
+    private func performStop(discard: Bool) -> RecordedAudio? {
+        let recording: RecordedAudio?
+        if discard {
+            recordingSession?.cancel()
+            recording = nil
+        } else {
+            do { recording = try recordingSession?.finish() }
+            catch {
+                print("Failed to finish recording: \(error)")
+                recording = nil
+            }
+        }
+        recordingSession = nil
         stopConnectionMonitoring()
         restoreSystemDefaultInputIfNeeded()
         updateRecordingState(isRecording: false, isConnecting: false)
@@ -268,11 +270,11 @@ class AudioRecorder: NSObject, ObservableObject {
         guard let url = currentRecordingURL else { return nil }
         currentRecordingURL = nil
         
-        if discard || recordedDuration < Self.minimumRecordingDuration {
+        guard let recording, recording.duration >= Self.minimumRecordingDuration else {
             try? FileManager.default.removeItem(at: url)
             return nil
         }
-        return url
+        return recording
     }
     
     #if os(macOS)
@@ -357,7 +359,7 @@ class AudioRecorder: NSObject, ObservableObject {
         var growthCount = 0
         
         timer.setEventHandler { [weak self] in
-            guard let self = self, let _ = self.audioRecorder, let url = self.currentRecordingURL else { return }
+            guard let self = self, let _ = self.recordingSession, let url = self.currentRecordingURL else { return }
             
             let currentFileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
             let totalGrowth = currentFileSize - initialFileSize
@@ -378,16 +380,6 @@ class AudioRecorder: NSObject, ObservableObject {
     private func stopConnectionMonitoring() {
         connectionCheckTimer?.cancel()
         connectionCheckTimer = nil
-    }
-}
-
-extension AudioRecorder: AVAudioRecorderDelegate {
-    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        guard !flag else { return }
-        workQueue.async {
-            guard recorder === self.audioRecorder else { return }
-            self.currentRecordingURL = nil
-        }
     }
 }
 

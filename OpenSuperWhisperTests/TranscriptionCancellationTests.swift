@@ -101,7 +101,7 @@ final class TranscriptionCancellationTests: XCTestCase {
 
         let viewModel = IndicatorViewModel(
             transcriptionService: service,
-            stopRecording: { tempURL },
+            stopRecording: { RecordedAudio(url: tempURL, samples: []) },
             cancelAudioRecording: {}
         )
         viewModel.state = .recording
