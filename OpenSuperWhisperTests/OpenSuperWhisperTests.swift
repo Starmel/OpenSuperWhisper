@@ -9,6 +9,7 @@ import XCTest
 import Carbon
 import ApplicationServices
 import AVFoundation
+import CoreAudio
 @testable import OpenSuperWhisper
 
 final class OpenSuperWhisperTests: XCTestCase {
@@ -589,9 +590,46 @@ final class MicrophoneServiceBluetoothTests: XCTestCase {
             manufacturer: "Apple",
             isBuiltIn: false
         )
-        XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
+        XCTAssertTrue(MicrophoneService.isBluetoothMicrophone(
+            device,
+            avTransportType: nil,
+            coreAudioTransportType: { Int32(kAudioDeviceTransportTypeBluetooth) }
+        ))
     }
     
+    func testMACAddressRequiresBluetoothTransport() {
+        let device = MicrophoneService.AudioDevice(
+            id: "00-22-BB-71-21-0A:input",
+            name: "External microphone",
+            manufacturer: nil,
+            isBuiltIn: false
+        )
+        for transport in [Int32(0), Int32(kAudioDeviceTransportTypeUSB)] {
+            XCTAssertFalse(MicrophoneService.isBluetoothMicrophone(
+                device,
+                avTransportType: nil,
+                coreAudioTransportType: { transport }
+            ))
+        }
+    }
+
+    func testBluetoothTransportDoesNotRequireRecognizableName() {
+        let device = MicrophoneService.AudioDevice(
+            id: "opaque-device-id",
+            name: "External microphone",
+            manufacturer: nil,
+            isBuiltIn: false
+        )
+        XCTAssertTrue(MicrophoneService.isBluetoothMicrophone(
+            device,
+            avTransportType: Int32(kAudioDeviceTransportTypeBluetooth),
+            coreAudioTransportType: {
+                XCTFail("AVFoundation already identified the transport")
+                return 0
+            }
+        ))
+    }
+
     func testBluetoothDetection_NotBluetooth() {
         let device = MicrophoneService.AudioDevice(
             id: "builtin",
@@ -623,7 +661,11 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
             manufacturer: "Apple",
             isBuiltIn: false
         )
-        XCTAssertTrue(MicrophoneService.shared.isBluetoothMicrophone(device))
+        XCTAssertTrue(MicrophoneService.isBluetoothMicrophone(
+            device,
+            avTransportType: nil,
+            coreAudioTransportType: { Int32(kAudioDeviceTransportTypeBluetooth) }
+        ))
     }
     
     func testRequiresConnection_BuiltIn() {

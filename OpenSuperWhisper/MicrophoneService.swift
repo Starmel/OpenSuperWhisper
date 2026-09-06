@@ -187,13 +187,22 @@ class MicrophoneService: ObservableObject {
     }
     
     func isBluetoothMicrophone(_ device: AudioDevice) -> Bool {
-        if let avDevice = AVCaptureDevice(uniqueID: device.id) {
-            let transportType = avDevice.transportType
-            if transportType == 1651275109 {
-                return true
-            }
+        Self.isBluetoothMicrophone(
+            device,
+            avTransportType: AVCaptureDevice(uniqueID: device.id)?.transportType,
+            coreAudioTransportType: { self.getTransportType(for: device) }
+        )
+    }
+
+    static func isBluetoothMicrophone(
+        _ device: AudioDevice,
+        avTransportType: Int32?,
+        coreAudioTransportType: () -> Int32
+    ) -> Bool {
+        if avTransportType == Int32(kAudioDeviceTransportTypeBluetooth) {
+            return true
         }
-        
+
         let name = device.name.lowercased()
         let id = device.id.lowercased()
         let hasBluetoothInName = name.contains("bluetooth")
@@ -206,8 +215,7 @@ class MicrophoneService: ObservableObject {
         }
         
         if hasMACAddress {
-            let transportType = getTransportType(for: device)
-            return transportType == 1651275109
+            return coreAudioTransportType() == Int32(kAudioDeviceTransportTypeBluetooth)
         }
         
         return false
