@@ -98,6 +98,11 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    init(databaseQueue: DatabaseQueue) throws {
+        dbQueue = databaseQueue
+        try setupDatabase()
+    }
+
     private nonisolated func setupDatabase() throws {
         var migrator = DatabaseMigrator()
         

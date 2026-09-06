@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import XCTest
 @testable import OpenSuperWhisper
 
@@ -161,6 +162,41 @@ final class TranscriptionCancellationTests: XCTestCase {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTAssertTrue(service.transcribedText.isEmpty)
+    }
+
+    func testCancellingQueueWaiterDoesNotCancelDictation() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let store = try RecordingStore(databaseQueue: DatabaseQueue())
+        let queue = TranscriptionQueue(transcriptionService: service, recordingStore: store)
+        let started = expectation(description: "dictation started")
+        engine.notifyOnNextStart { started.fulfill() }
+        let dictation = Task { try await service.transcribeAudio(url: audioURL, settings: Settings()) }
+        await fulfillment(of: [started], timeout: 2)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data([1]).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let id = UUID()
+        let recording = Recording(id: id, timestamp: Date(), fileName: Recording.fileName(for: id),
+                                  transcription: "", duration: 1, status: .pending, progress: 0,
+                                  sourceFileURL: source.path)
+        try await store.addRecordingSync(recording)
+        queue.startProcessingQueue()
+        for _ in 0..<100 where queue.currentRecordingId != id {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(queue.currentRecordingId, id)
+        queue.cancelRecording(id)
+        await store.deleteRecordingSync(recording)
+        XCTAssertEqual(engine.cancelCount, 0)
+        XCTAssertTrue(engine.complete(url: audioURL, with: .success("dictation survives")))
+        let result = try await dictation.value
+        XCTAssertEqual(result, "dictation survives")
+        for _ in 0..<100 where queue.isProcessing {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertFalse(queue.isProcessing)
+        XCTAssertEqual(engine.startCount, 1)
     }
 
     func testScopedCancellationDoesNotCancelDifferentOperation() async throws {

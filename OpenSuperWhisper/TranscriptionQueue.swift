@@ -11,22 +11,24 @@ class TranscriptionQueue: ObservableObject {
     private let transcriptionService: TranscriptionService
     private let recordingStore: RecordingStore
     private var processingTask: Task<Void, Never>?
+    private var currentOperationID: UUID?
     private var currentTranscriptionTask: Task<Void, Never>?
     private var cancelledRecordingIds: Set<UUID> = []
     private var progressCancellable: AnyCancellable?
 
-    private init() {
-        self.transcriptionService = TranscriptionService.shared
-        self.recordingStore = RecordingStore.shared
+    init(transcriptionService: TranscriptionService = .shared, recordingStore: RecordingStore = .shared) {
+        self.transcriptionService = transcriptionService
+        self.recordingStore = recordingStore
         setupProgressObserver()
     }
     
     private func setupProgressObserver() {
         progressCancellable = transcriptionService.$progress
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] newProgress in
                 guard let self = self,
                       let recordingId = self.currentRecordingId,
+                      let operationID = self.currentOperationID,
+                      self.transcriptionService.activeOperationID == operationID,
                       newProgress > 0,
                       newProgress < 1.0 else { return }
                 
@@ -41,8 +43,8 @@ class TranscriptionQueue: ObservableObject {
     func cancelRecording(_ recordingId: UUID) {
         cancelledRecordingIds.insert(recordingId)
 
-        if currentRecordingId == recordingId {
-            transcriptionService.cancelTranscription()
+        if currentRecordingId == recordingId, let operationID = currentOperationID {
+            transcriptionService.cancelTranscription(operationID: operationID)
             currentTranscriptionTask?.cancel()
         }
     }
@@ -165,8 +167,10 @@ class TranscriptionQueue: ObservableObject {
     private func processQueue() async {
         while let recording = recordingStore.getNextPendingRecording() {
             currentRecordingId = recording.id
+            currentOperationID = UUID()
             await processRecording(recording)
             currentRecordingId = nil
+            currentOperationID = nil
         }
     }
 
@@ -222,6 +226,7 @@ class TranscriptionQueue: ObservableObject {
             )
         }
 
+        guard let operationID = currentOperationID else { return }
         currentTranscriptionTask = Task {
             do {
                 if isRecordingCancelled(recording.id) {
@@ -233,7 +238,7 @@ class TranscriptionQueue: ObservableObject {
                 }
 
                 let settings = Settings()
-                let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings)
+                let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings, operationID: operationID)
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
                     return

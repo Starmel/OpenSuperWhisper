@@ -26,6 +26,7 @@ class TranscriptionService: ObservableObject {
     
     private var currentEngine: TranscriptionEngine?
     private var transcriptionTask: TranscriptionTaskBox? = nil
+    var activeOperationID: UUID? { transcriptionTask?.id }
     private var cancellationRequestedFor: UUID?
 
     private struct RecordingPreparation {
