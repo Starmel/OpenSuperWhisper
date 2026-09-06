@@ -59,7 +59,7 @@ class ContentViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] isConnecting in
                 guard let self = self else { return }
-                if isConnecting && self.state != .decoding {
+                if isConnecting && self.recorder.isConnecting && RecordingSessionController.shared.isCapturing && self.state != .decoding {
                     self.state = .connecting
                     self.stopBlinking()
                     self.stopDurationTimer()
@@ -72,11 +72,11 @@ class ContentViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] isRecording in
                 guard let self = self else { return }
-                if isRecording && self.state != .decoding {
+                if isRecording && self.recorder.isRecording && RecordingSessionController.shared.isCapturing && self.state != .decoding {
                     self.state = .recording
                     self.startBlinking()
                     self.startDurationTimerIfNeeded()
-                } else if !isRecording && self.state == .recording {
+                } else if !isRecording && !self.recorder.isRecording && self.state == .recording {
                     self.state = .idle
                     self.stopBlinking()
                     self.stopDurationTimer()

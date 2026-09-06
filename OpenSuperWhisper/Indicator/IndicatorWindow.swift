@@ -73,8 +73,10 @@ class IndicatorViewModel: ObservableObject {
         recorder.$isConnecting
             .receive(on: RunLoop.main)
             .sink { [weak self] isConnecting in
-                guard let self = self else { return }
-                if isConnecting {
+                guard let self, let id = self.recordingSessionID,
+                      RecordingSessionController.shared.currentID == id,
+                      RecordingSessionController.shared.isCapturing else { return }
+                if isConnecting && self.recorder.isConnecting {
                     self.state = .connecting
                     self.stopBlinking()
                 }
@@ -84,8 +86,10 @@ class IndicatorViewModel: ObservableObject {
         recorder.$isRecording
             .receive(on: RunLoop.main)
             .sink { [weak self] isRecording in
-                guard let self = self else { return }
-                if isRecording {
+                guard let self, let id = self.recordingSessionID,
+                      RecordingSessionController.shared.currentID == id,
+                      RecordingSessionController.shared.isCapturing else { return }
+                if isRecording && self.recorder.isRecording {
                     self.state = .recording
                     self.startBlinking()
                 }
