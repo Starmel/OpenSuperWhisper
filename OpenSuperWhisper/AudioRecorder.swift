@@ -186,7 +186,13 @@ class AudioRecorder: NSObject, ObservableObject {
         #endif
         
         do {
-            let session = try PCMRecordingSession(url: fileURL)
+            let session = try PCMRecordingSession(url: fileURL) { [weak self] error in
+                self?.workQueue.async {
+                    guard let self, self.currentRecordingURL == fileURL else { return }
+                    _ = self.performStop(discard: false)
+                    self.failStart(sessionID: sessionID, message: error.localizedDescription)
+                }
+            }
             recordingSession = session
             try session.start()
             Task { @MainActor in
@@ -235,8 +241,10 @@ class AudioRecorder: NSObject, ObservableObject {
                     let recording: RecordedAudio?
                     do { recording = try recorder.finish() }
                     catch {
-                        print("Failed to finish recording: \(error)")
-                        recording = nil
+                        self.preserveCaptureFailure(error)
+                        self.restoreSystemDefaultInputIfNeeded()
+                        continuation.resume(returning: nil)
+                        return
                     }
                     // A new recording may have started during the tail window;
                     // it will restore the system input itself when it stops.
@@ -263,13 +271,15 @@ class AudioRecorder: NSObject, ObservableObject {
     
     private func performStop(discard: Bool) -> RecordedAudio? {
         let recording: RecordedAudio?
+        var failed = false
         if discard {
             recordingSession?.cancel()
             recording = nil
         } else {
             do { recording = try recordingSession?.finish() }
             catch {
-                print("Failed to finish recording: \(error)")
+                preserveCaptureFailure(error)
+                failed = true
                 recording = nil
             }
         }
@@ -281,6 +291,7 @@ class AudioRecorder: NSObject, ObservableObject {
         guard let url = currentRecordingURL else { return nil }
         currentRecordingURL = nil
         
+        guard !failed else { return nil }
         guard let recording, recording.duration >= Self.minimumRecordingDuration else {
             try? FileManager.default.removeItem(at: url)
             return nil
@@ -288,6 +299,16 @@ class AudioRecorder: NSObject, ObservableObject {
         return recording
     }
     
+    private func preserveCaptureFailure(_ error: Error) {
+        Task { @MainActor in
+            if let failure = error as? RecordingCaptureError {
+                await RecordingStore.shared.preserveFailedDictation(failure.audio, error: failure.underlying)
+            } else {
+                AppErrorCenter.shared.report("Recording failed", error: error)
+            }
+        }
+    }
+
     #if os(macOS)
     private func switchSystemDefaultInput(to device: MicrophoneService.AudioDevice) {
         guard let targetID = MicrophoneService.shared.getCoreAudioDeviceID(for: device) else { return }

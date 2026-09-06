@@ -199,6 +199,34 @@ final class TranscriptionCancellationTests: XCTestCase {
         XCTAssertEqual(engine.startCount, 1)
     }
 
+    func testDecodingErrorPreservesFailedRecording() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let store = try RecordingStore(databaseQueue: DatabaseQueue())
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
+        try Data([1, 2]).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url); AppErrorCenter.shared.issue = nil }
+        let vm = IndicatorViewModel(transcriptionService: service, recordingStore: store,
+                                    stopRecording: { RecordedAudio(url: url, samples: []) }, cancelAudioRecording: {})
+        vm.state = .recording
+        let started = expectation(description: "decode started")
+        engine.notifyOnNextStart { started.fulfill() }
+        vm.startDecoding()
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(engine.complete(url: url, with: .failure(TranscriptionError.processingFailed)))
+        var rows: [Recording] = []
+        for _ in 0..<100 {
+            rows = try await store.fetchRecordings(limit: 10, offset: 0)
+            if !rows.isEmpty { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let row = try XCTUnwrap(rows.first)
+        defer { try? FileManager.default.removeItem(at: row.url); vm.cleanup() }
+        XCTAssertEqual(row.status, .failed)
+        XCTAssertEqual(try Data(contentsOf: row.url), Data([1, 2]))
+        XCTAssertTrue(service.transcribedText.isEmpty)
+    }
+
     func testScopedCancellationDoesNotCancelDifferentOperation() async throws {
         let engine = ControlledTranscriptionEngine()
         let service = TranscriptionService(engine: engine)

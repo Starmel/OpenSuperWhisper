@@ -186,6 +186,32 @@ class RecordingStore: ObservableObject {
 
     static let recordingsDidUpdateNotification = Notification.Name("RecordingStore.recordingsDidUpdate")
 
+    func saveFailedDictation(_ audio: RecordedAudio, error: Error) async throws -> Recording {
+        let id = UUID()
+        let alreadySaved = audio.url.deletingLastPathComponent().standardizedFileURL == Recording.recordingsDirectory.standardizedFileURL
+        let name = alreadySaved ? audio.url.lastPathComponent : Recording.fileName(for: id)
+        let destination = Recording.recordingsDirectory.appendingPathComponent(name)
+        if !alreadySaved {
+            try AudioRecorder.shared.moveTemporaryRecording(from: audio.url, to: destination)
+        }
+        let row = Recording(id: id, timestamp: Date(), fileName: name,
+                            transcription: error.localizedDescription, duration: audio.duration,
+                            status: .failed, progress: 0, sourceFileURL: destination.path)
+        do { try await addRecordingSync(row) }
+        catch { throw PreservedAudioError(url: destination, underlying: error) }
+        return row
+    }
+
+    func preserveFailedDictation(_ audio: RecordedAudio, error: Error) async {
+        do {
+            let row = try await saveFailedDictation(audio, error: error)
+            AppErrorCenter.shared.report("Recording failed", message: "\(error.localizedDescription)\nAudio saved: \(row.url.path)")
+        } catch {
+            AppErrorCenter.shared.report("Recording could not be added to history",
+                message: "\(error.localizedDescription)\nOriginal audio location: \(audio.url.path)")
+        }
+    }
+
     func addRecording(_ recording: Recording) {
         Task {
             do {
@@ -478,4 +504,10 @@ class RecordingStore: ObservableObject {
                 .fetchAll(db)
         }
     }
+}
+
+struct PreservedAudioError: LocalizedError {
+    let url: URL
+    let underlying: Error
+    var errorDescription: String? { "\(underlying.localizedDescription)\nAudio preserved at: \(url.path)" }
 }

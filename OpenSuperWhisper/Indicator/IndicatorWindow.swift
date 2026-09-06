@@ -47,6 +47,7 @@ class IndicatorViewModel: ObservableObject {
     
     init(
         transcriptionService: TranscriptionService = .shared,
+        recordingStore: RecordingStore = .shared,
         stopRecording: @escaping () async -> RecordedAudio? = {
             await AudioRecorder.shared.stopRecording()
         },
@@ -54,7 +55,7 @@ class IndicatorViewModel: ObservableObject {
             AudioRecorder.shared.cancelRecording()
         }
     ) {
-        self.recordingStore = RecordingStore.shared
+        self.recordingStore = recordingStore
         self.transcriptionService = transcriptionService
         self.transcriptionQueue = TranscriptionQueue.shared
         self.stopRecordingOperation = stopRecording
@@ -65,7 +66,7 @@ class IndicatorViewModel: ObservableObject {
             .sink { [weak self] failure in
                 guard let self, self.recordingSessionID == failure.sessionID else { return }
                 self.resetAfterRecordingFailure()
-                AppErrorCenter.shared.report("Recording could not start", message: failure.message)
+                AppErrorCenter.shared.report("Recording failed", message: failure.message)
             }
             .store(in: &cancellables)
 
@@ -221,6 +222,7 @@ class IndicatorViewModel: ObservableObject {
                 return
             }
             let tempURL = audio.url
+            var savedRecording: Recording?
 
             do {
                 try Task.checkCancellation()
@@ -265,21 +267,30 @@ class IndicatorViewModel: ObservableObject {
                     )
 
                     try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
-                    try await self.recordingStore.addRecordingSync(newRecording)
+                    savedRecording = newRecording
+                    do { try await self.recordingStore.addRecordingSync(newRecording) }
+                    catch { throw PreservedAudioError(url: newRecording.url, underlying: error) }
 
+                    try Task.checkCancellation()
+                    guard self.decodingSessionID == sessionID else { throw CancellationError() }
                     insertText(text)
                     print("Transcription result: \(text)")
                 }
             } catch is CancellationError {
-                try? FileManager.default.removeItem(at: tempURL)
+                if let savedRecording {
+                    do { try await recordingStore.deleteRecordingSync(savedRecording, cancelTranscription: false) }
+                    catch { AppErrorCenter.shared.report("Cancelled recording could not be removed", error: error) }
+                } else {
+                    try? FileManager.default.removeItem(at: tempURL)
+                }
                 print("Transcription cancelled")
             } catch {
                 if Task.isCancelled || self.decodingSessionID != sessionID {
                     try? FileManager.default.removeItem(at: tempURL)
                     print("Transcription cancelled")
                 } else {
-                    print("Error transcribing audio: \(error)")
-                    try? FileManager.default.removeItem(at: tempURL)
+                    let source = (error as? PreservedAudioError)?.url ?? audio.url
+                    await self.recordingStore.preserveFailedDictation(RecordedAudio(url: source, samples: audio.samples), error: error)
                 }
             }
 

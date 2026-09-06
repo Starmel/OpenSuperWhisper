@@ -51,7 +51,7 @@ class ContentViewModel: ObservableObject {
             .sink { [weak self] failure in
                 guard let self, self.recordingSessionID == failure.sessionID else { return }
                 self.resetAfterRecordingFailure()
-                AppErrorCenter.shared.report("Recording could not start", message: failure.message)
+                AppErrorCenter.shared.report("Recording failed", message: failure.message)
             }
             .store(in: &cancellables)
 
@@ -234,7 +234,8 @@ class ContentViewModel: ObservableObject {
 
                         try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
 
-                        try await self.recordingStore.addRecordingSync(newRecording)
+                        do { try await self.recordingStore.addRecordingSync(newRecording) }
+                        catch { throw PreservedAudioError(url: newRecording.url, underlying: error) }
                         await MainActor.run {
                             
                             if !self.currentSearchQuery.isEmpty {
@@ -247,8 +248,8 @@ class ContentViewModel: ObservableObject {
                         print("Transcription result: \(text)")
                     }
                 } catch {
-                    print("Error transcribing audio: \(error)")
-                    try? FileManager.default.removeItem(at: tempURL)
+                    let source = (error as? PreservedAudioError)?.url ?? audio.url
+                    await self.recordingStore.preserveFailedDictation(RecordedAudio(url: source, samples: audio.samples), error: error)
                 }
 
                 await MainActor.run {

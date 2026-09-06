@@ -8,6 +8,11 @@ struct RecordedAudio {
     var duration: TimeInterval { Double(samples.count) / 16000 }
 }
 
+struct RecordingCaptureError: Error {
+    let audio: RecordedAudio
+    let underlying: Error
+}
+
 final class PCMRecordingWriter {
     private let url: URL
     private var file: AVAudioFile?
@@ -56,6 +61,11 @@ final class PCMRecordingWriter {
             status.pointee = .endOfStream
             return nil
         }
+        file = nil
+        return RecordedAudio(url: url, samples: mixedSamples())
+    }
+
+    func closeAfterFailure() -> RecordedAudio {
         file = nil
         return RecordedAudio(url: url, samples: mixedSamples())
     }
@@ -118,15 +128,17 @@ final class PCMRecordingSession {
     private let queue = DispatchQueue(label: "com.opensuperwhisper.pcm", qos: .userInitiated)
     private let writer: PCMRecordingWriter
     private var failure: Error?
+    private let onFailure: (Error) -> Void
 
-    init(url: URL) throws {
+    init(url: URL, onFailure: @escaping (Error) -> Void = { _ in }) throws {
+        self.onFailure = onFailure
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         writer = try PCMRecordingWriter(url: url, inputFormat: format)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
-                self.queue.async { self.failure = TranscriptionError.audioConversionFailed }
+                self.queue.async { self.recordFailure(TranscriptionError.audioConversionFailed) }
                 return
             }
             copy.frameLength = buffer.frameLength
@@ -138,10 +150,16 @@ final class PCMRecordingSession {
             self.queue.async {
                 guard self.failure == nil else { return }
                 do { try self.writer.append(copy) }
-                catch { self.failure = error }
+                catch { self.recordFailure(error) }
             }
         }
         engine.prepare()
+    }
+
+    private func recordFailure(_ error: Error) {
+        guard failure == nil else { return }
+        failure = error
+        onFailure(error)
     }
 
     func start() throws { try engine.start() }
@@ -156,8 +174,12 @@ final class PCMRecordingSession {
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         return try queue.sync {
-            if let failure { throw failure }
-            return try writer.finish()
+            do {
+                if let failure { throw failure }
+                return try writer.finish()
+            } catch {
+                throw RecordingCaptureError(audio: writer.closeAfterFailure(), underlying: error)
+            }
         }
     }
 }
