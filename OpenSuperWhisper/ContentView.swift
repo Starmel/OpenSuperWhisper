@@ -46,6 +46,15 @@ class ContentViewModel: ObservableObject {
             }
             return await RecordingStore.shared.searchRecordingsAsync(query: query, limit: limit, offset: offset)
         }
+        recorder.$startFailure
+            .compactMap { $0 }
+            .sink { [weak self] failure in
+                guard let self, self.recordingSessionID == failure.sessionID else { return }
+                self.resetAfterRecordingFailure()
+                AppErrorCenter.shared.report("Recording could not start", message: failure.message)
+            }
+            .store(in: &cancellables)
+
         recorder.$isConnecting
             .receive(on: RunLoop.main)
             .sink { [weak self] isConnecting in
@@ -152,6 +161,15 @@ class ContentViewModel: ObservableObject {
         recorder.isRecording
     }
     
+    func resetAfterRecordingFailure() {
+        RecordingSessionController.shared.finish(recordingSessionID)
+        recordingSessionID = nil
+        state = .idle
+        stopBlinking()
+        stopDurationTimer()
+        recordingDuration = 0
+    }
+
     func startRecording() {
         guard microphoneService.getActiveMicrophone() != nil else { return }
         guard let id = RecordingSessionController.shared.begin(stop: { self.decodeRecording() }) else { return }
@@ -170,7 +188,7 @@ class ContentViewModel: ObservableObject {
             startDurationTimerIfNeeded()
         }
         
-        recorder.startRecording()
+        recorder.startRecording(sessionID: id)
     }
 
     func startDecoding() {
@@ -292,6 +310,7 @@ class ContentViewModel: ObservableObject {
 }
 
 struct ContentView: View {
+    @ObservedObject private var errors = AppErrorCenter.shared
     @StateObject private var viewModel = ContentViewModel()
     @StateObject private var permissionsManager = PermissionsManager()
     @Environment(\.colorScheme) private var colorScheme
@@ -647,6 +666,18 @@ struct ContentView: View {
                 }
                 .ignoresSafeArea()
             }
+        }
+        .alert(item: $errors.issue) { issue in
+            Alert(title: Text(issue.title), message: Text(issue.message), dismissButton: .default(Text("OK")))
+        }
+        .onReceive(errors.$issue.compactMap { $0 }) { _ in
+            (NSApplication.shared.delegate as? AppDelegate)?.showMainWindow()
+        }
+        .onReceive(viewModel.$loadingError.compactMap { $0 }) { message in
+            errors.report("Recordings could not be loaded", message: message)
+        }
+        .onReceive(viewModel.transcriptionService.$loadingError.compactMap { $0 }) { message in
+            errors.report("Model could not be loaded", message: message)
         }
         .fileDropHandler()
         .sheet(isPresented: $isSettingsPresented) {

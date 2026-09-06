@@ -60,6 +60,15 @@ class IndicatorViewModel: ObservableObject {
         self.stopRecordingOperation = stopRecording
         self.cancelAudioRecordingOperation = cancelAudioRecording
         
+        recorder.$startFailure
+            .compactMap { $0 }
+            .sink { [weak self] failure in
+                guard let self, self.recordingSessionID == failure.sessionID else { return }
+                self.resetAfterRecordingFailure()
+                AppErrorCenter.shared.report("Recording could not start", message: failure.message)
+            }
+            .store(in: &cancellables)
+
         recorder.$isConnecting
             .receive(on: RunLoop.main)
             .sink { [weak self] isConnecting in
@@ -103,6 +112,16 @@ class IndicatorViewModel: ObservableObject {
         }
     }
 
+    func resetAfterRecordingFailure() {
+        RecordingSessionController.shared.finish(recordingSessionID)
+        recordingSessionID = nil
+        state = .idle
+        stopBlinking()
+        recordingStartedAt = nil
+        resetCancelConfirmation()
+        _ = delegate?.didFinishDecoding(from: self)
+    }
+
     func startRecording() {
         if isTranscriptionBusy {
             showBusyMessage()
@@ -127,7 +146,7 @@ class IndicatorViewModel: ObservableObject {
         startBlinking()
         recordingStartedAt = Date()
         
-        recorder.startRecording()
+        recorder.startRecording(sessionID: id)
     }
     
     func handleCancelRequest() -> Bool {

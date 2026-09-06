@@ -5,6 +5,7 @@ import AppKit
 import CoreAudio
 
 class AudioRecorder: NSObject, ObservableObject {
+    @Published private(set) var startFailure: RecordingStartFailure?
     @Published var isRecording = false
     @Published var isPlaying = false
     @Published var currentlyPlayingURL: URL?
@@ -140,7 +141,7 @@ class AudioRecorder: NSObject, ObservableObject {
         notificationSound = sound
     }
     
-    func startRecording() {
+    func startRecording(sessionID: UUID = UUID()) {
         // Everything below costs CoreAudio HAL round-trips (device queries,
         // AudioQueue start for the notification sound) — 20-35 ms that used to
         // block the main thread right when the indicator appear animation
@@ -149,21 +150,25 @@ class AudioRecorder: NSObject, ObservableObject {
         workQueue.async {
             guard self.recordingSession == nil else { return }
             guard let activeMic = MicrophoneService.shared.getActiveMicrophone() else {
-                print("Cannot start recording - no audio input available")
+                self.failStart(sessionID: sessionID, message: "No audio input is available.")
                 return
             }
             
+            guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+                self.failStart(sessionID: sessionID, message: "Microphone access is not granted. Enable it in System Settings.")
+                return
+            }
             if playSound {
                 self.playNotificationSound()
             }
             
             let requiresConnection = MicrophoneService.shared.isActiveMicrophoneRequiresConnection()
             self.updateRecordingState(isRecording: false, isConnecting: requiresConnection)
-            self.performStart(activeMic: activeMic, monitorConnection: requiresConnection)
+            self.performStart(activeMic: activeMic, monitorConnection: requiresConnection, sessionID: sessionID)
         }
     }
     
-    private func performStart(activeMic: MicrophoneService.AudioDevice?, monitorConnection: Bool) {
+    private func performStart(activeMic: MicrophoneService.AudioDevice?, monitorConnection: Bool, sessionID: UUID) {
         guard recordingSession == nil else { return }
         
         let fileURL = temporaryDirectory.appendingPathComponent("\(UUID().uuidString).wav")
@@ -198,10 +203,18 @@ class AudioRecorder: NSObject, ObservableObject {
             recordingSession = nil
             currentRecordingURL = nil
             restoreSystemDefaultInputIfNeeded()
-            updateRecordingState(isRecording: false, isConnecting: false)
+            failStart(sessionID: sessionID, message: error.localizedDescription)
         }
     }
-    
+
+    private func failStart(sessionID: UUID, message: String) {
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.isConnecting = false
+            self.startFailure = RecordingStartFailure(sessionID: sessionID, message: message)
+        }
+    }
+
     func stopRecording() async -> RecordedAudio? {
         await withCheckedContinuation { continuation in
             workQueue.async {
