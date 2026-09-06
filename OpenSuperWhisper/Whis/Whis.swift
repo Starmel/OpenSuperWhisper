@@ -30,7 +30,8 @@ public class MyWhisperVadContext {
     private var vctx: OpaquePointer?
     
     public init?(modelPath: String) {
-        let params = whisper_vad_default_context_params()
+        var params = whisper_vad_default_context_params()
+        params.n_threads = 1
         vctx = modelPath.withCString { whisper_vad_init_from_file_with_params($0, params) }
         guard vctx != nil else { return nil }
     }
