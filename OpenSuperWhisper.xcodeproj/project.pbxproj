@@ -1034,7 +1034,7 @@
 			repositoryURL = "https://github.com/groue/GRDB.swift.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 7.5.0;
+				minimumVersion = 7.11.1;
 			};
 		};
 		CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
@@ -1042,7 +1042,7 @@
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.3.0;
+				minimumVersion = 3.0.1;
 			};
 		};
 		CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
@@ -1050,7 +1050,7 @@
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.15.4;
+				minimumVersion = 0.15.6;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

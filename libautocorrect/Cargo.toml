@@ -1,0 +1,11 @@
+[package]
+edition = "2021"
+name = "autocorrect-swift"
+version = "2.16.3"
+
+[dependencies]
+autocorrect = { path = "../asian-autocorrect/autocorrect" }
+libc = "0.2"
+
+[lib]
+crate-type = ["cdylib"]

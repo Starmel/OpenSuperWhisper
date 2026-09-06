@@ -127,3 +127,4 @@ dev_config.json
 /issues/
 agent/.venv/
 agent/logs/
+/libautocorrect/target/
