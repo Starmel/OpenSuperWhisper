@@ -169,8 +169,13 @@ class WhisperModelManager {
                 
                 // Remove task from active downloads
                 self?.downloadTasksLock.lock()
-                self?.activeDownloadTasks.removeValue(forKey: name)
+                let isCurrent = self?.activeDownloadTasks[name] === downloadTask
+                if isCurrent { self?.activeDownloadTasks.removeValue(forKey: name) }
                 self?.downloadTasksLock.unlock()
+                guard isCurrent else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
                 
                 // Check if cancelled
                 if let error = error as? URLError, error.code == .cancelled {

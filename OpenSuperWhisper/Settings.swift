@@ -6,6 +6,7 @@ import KeyboardShortcuts
 import SwiftUI
 import FluidAudio
 
+@MainActor
 class SettingsViewModel: ObservableObject {
     @Published var selectedEngine: String {
         didSet {
@@ -74,6 +75,7 @@ class SettingsViewModel: ObservableObject {
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
     private var downloadTask: Task<Void, Error>?
+    private var downloadID: UUID?
     
     @Published var selectedLanguage: String {
         didSet {
@@ -195,7 +197,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    init() {
+    private let downloadWhisper: (URL, String, @escaping (Double) -> Void) async throws -> Void
+
+    init(downloadWhisper: @escaping (URL, String, @escaping (Double) -> Void) async throws -> Void = {
+        try await WhisperModelManager.shared.downloadModel(url: $0, name: $1, progressCallback: $2)
+    }) {
+        self.downloadWhisper = downloadWhisper
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
         self.fluidAudioModelVersion = prefs.fluidAudioModelVersion
@@ -280,27 +287,30 @@ class SettingsViewModel: ObservableObject {
         downloadingModelName = model.name
         downloadProgress = 0.0
         
+        let id = UUID()
+        downloadID = id
         downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
             do {
                 let filename = model.filename
                 
-                try await WhisperModelManager.shared.downloadModel(url: model.url, name: filename) { [weak self] progress in
+                try await downloadWhisper(model.url, filename) { [weak self] progress in
                     Task { @MainActor [weak self] in
-                        guard let self = self, !Task.isCancelled else { return }
+                        guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
                         
                         self.downloadProgress = progress
                         if let index = self.downloadableModels.firstIndex(where: { $0.name == model.name }) {
                             self.downloadableModels[index].downloadProgress = progress
-                            if progress >= 1.0 {
-                                self.downloadableModels[index].isDownloaded = true
-                            }
                         }
                     }
                 }
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -312,6 +322,7 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     if let index = downloadableModels.firstIndex(where: { $0.name == model.name }) {
                         downloadableModels[index].isDownloaded = true
                         downloadableModels[index].downloadProgress = 0.0
@@ -329,6 +340,7 @@ class SettingsViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -337,7 +349,9 @@ class SettingsViewModel: ObservableObject {
                     }
                 }
             } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -353,6 +367,7 @@ class SettingsViewModel: ObservableObject {
     }
     
     func cancelDownload() {
+        downloadID = nil
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if selectedEngine == "whisper", let model = downloadableModels.first(where: { $0.name == modelName }) {
@@ -387,12 +402,18 @@ class SettingsViewModel: ObservableObject {
         
         var wasCancelled = false
         
+        let id = UUID()
+        downloadID = id
         downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
             do {
                 let version: AsrModelVersion = model.version == "v2" ? .v2 : .v3
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -407,7 +428,7 @@ class SettingsViewModel: ObservableObject {
                 let models = try await AsrModels.downloadAndLoad(version: version) { [weak self] progress in
                     print("[ParakeetProgress] fraction=\(progress.fractionCompleted) phase=\(progress.phase)")
                     Task { @MainActor [weak self] in
-                        guard let self = self, !Task.isCancelled else { return }
+                        guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
                         self.downloadProgress = progress.fractionCompleted
                         if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == modelId }) {
@@ -418,6 +439,7 @@ class SettingsViewModel: ObservableObject {
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -432,6 +454,7 @@ class SettingsViewModel: ObservableObject {
                 try await manager.loadModels(models)
                 
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     if let index = downloadableFluidAudioModels.firstIndex(where: { $0.id == model.id }) {
                         downloadableFluidAudioModels[index].isDownloaded = true
                         downloadableFluidAudioModels[index].downloadProgress = 1.0
@@ -448,6 +471,7 @@ class SettingsViewModel: ObservableObject {
             } catch is CancellationError {
                 wasCancelled = true
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -457,10 +481,12 @@ class SettingsViewModel: ObservableObject {
                 }
                 // Don't re-throw CancellationError - it's a manual cancellation
             } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
                 // Check if we were cancelled before the error occurred
                 if Task.isCancelled {
                     wasCancelled = true
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
@@ -470,6 +496,7 @@ class SettingsViewModel: ObservableObject {
                     }
                 } else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
@@ -489,6 +516,7 @@ class SettingsViewModel: ObservableObject {
             // Already handled in catch block above, just consume the error
             wasCancelled = true
         } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
             // If we were cancelled, don't throw
             if !wasCancelled {
                 throw error

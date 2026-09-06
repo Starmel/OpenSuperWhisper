@@ -14,6 +14,7 @@ enum OnboardingShortcutOption: String, CaseIterable {
     case rightOption
 }
 
+@MainActor
 class OnboardingViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
@@ -48,6 +49,7 @@ class OnboardingViewModel: ObservableObject {
 
     private let modelManager = WhisperModelManager.shared
     private var downloadTask: Task<Void, Error>?
+    private var downloadID: UUID?
 
     init() {
         let systemLanguage = LanguageUtil.getSystemLanguage()
@@ -135,27 +137,30 @@ class OnboardingViewModel: ObservableObject {
     
     @MainActor
     private func downloadWhisperModel(model: OnboardingUnifiedModel, url: URL) async throws {
+        let id = UUID()
+        downloadID = id
         downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
             do {
                 let filename = url.lastPathComponent
                 
                 try await modelManager.downloadModel(url: url, name: filename) { [weak self] progress in
                     Task { @MainActor [weak self] in
-                        guard let self = self, !Task.isCancelled else { return }
+                        guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
                         
                         self.downloadProgress = progress
                         if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
                             self.unifiedModels[index].downloadProgress = progress
-                            if progress >= 1.0 {
-                                self.unifiedModels[index].isDownloaded = true
-                            }
                         }
                     }
                 }
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -167,6 +172,7 @@ class OnboardingViewModel: ObservableObject {
                 }
                 
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
                         unifiedModels[index].isDownloaded = true
                         unifiedModels[index].downloadProgress = 0.0
@@ -178,6 +184,7 @@ class OnboardingViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -186,7 +193,9 @@ class OnboardingViewModel: ObservableObject {
                     }
                 }
             } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -205,12 +214,18 @@ class OnboardingViewModel: ObservableObject {
     private func downloadParakeetModel(model: OnboardingUnifiedModel, version: String) async throws {
         var wasCancelled = false
         
+        let id = UUID()
+        downloadID = id
         downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
             do {
                 let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -224,7 +239,7 @@ class OnboardingViewModel: ObservableObject {
                 let modelId = model.id
                 let models = try await AsrModels.downloadAndLoad(version: asrVersion) { [weak self] progress in
                     Task { @MainActor [weak self] in
-                        guard let self = self, !Task.isCancelled else { return }
+                        guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
                         self.downloadProgress = progress.fractionCompleted
                         if let index = self.unifiedModels.firstIndex(where: { $0.id == modelId }) {
@@ -235,6 +250,7 @@ class OnboardingViewModel: ObservableObject {
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         self.isDownloading = false
                         self.downloadingModelName = nil
                         self.downloadProgress = 0.0
@@ -249,6 +265,7 @@ class OnboardingViewModel: ObservableObject {
                 try await manager.loadModels(models)
                 
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
                         unifiedModels[index].isDownloaded = true
                         unifiedModels[index].downloadProgress = 1.0
@@ -261,6 +278,7 @@ class OnboardingViewModel: ObservableObject {
             } catch is CancellationError {
                 wasCancelled = true
                 await MainActor.run {
+                    guard self.downloadID == id else { return }
                     isDownloading = false
                     downloadingModelName = nil
                     downloadProgress = 0.0
@@ -269,9 +287,11 @@ class OnboardingViewModel: ObservableObject {
                     }
                 }
             } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
                 if Task.isCancelled {
                     wasCancelled = true
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
@@ -281,6 +301,7 @@ class OnboardingViewModel: ObservableObject {
                     }
                 } else {
                     await MainActor.run {
+                        guard self.downloadID == id else { return }
                         isDownloading = false
                         downloadingModelName = nil
                         downloadProgress = 0.0
@@ -298,6 +319,7 @@ class OnboardingViewModel: ObservableObject {
         } catch is CancellationError {
             wasCancelled = true
         } catch {
+                guard self.downloadID == id, !Task.isCancelled else { return }
             if !wasCancelled {
                 throw error
             }
@@ -305,6 +327,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func cancelDownload() {
+        downloadID = nil
         downloadTask?.cancel()
         if let modelName = downloadingModelName {
             if let model = unifiedModels.first(where: { $0.name == modelName }) {
