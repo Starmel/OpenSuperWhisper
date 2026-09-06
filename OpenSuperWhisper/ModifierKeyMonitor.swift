@@ -83,6 +83,23 @@ enum ModifierKey: String, CaseIterable, Identifiable, Codable {
         }
     }
     
+    var physicalEventFlag: CGEventFlags {
+        let mask: Int32
+        switch self {
+        case .leftCommand: mask = NX_DEVICELCMDKEYMASK
+        case .rightCommand: mask = NX_DEVICERCMDKEYMASK
+        case .leftOption: mask = NX_DEVICELALTKEYMASK
+        case .rightOption: mask = NX_DEVICERALTKEYMASK
+        case .leftShift: mask = NX_DEVICELSHIFTKEYMASK
+        case .rightShift: mask = NX_DEVICERSHIFTKEYMASK
+        case .leftControl: mask = NX_DEVICELCTLKEYMASK
+        case .rightControl: mask = NX_DEVICERCTLKEYMASK
+        case .fn: return .maskSecondaryFn
+        case .none: return []
+        }
+        return CGEventFlags(rawValue: UInt64(mask))
+    }
+
     var isCommandOrOption: Bool {
         switch self {
         case .leftCommand, .rightCommand, .leftOption, .rightOption:
@@ -104,7 +121,7 @@ class ModifierKeyMonitor {
     var onKeyDown: (() -> Void)?
     var onKeyUp: (() -> Void)?
     
-    private init() {}
+    init(modifierKey: ModifierKey = .none) { selectedModifierKey = modifierKey }
     
     func start(modifierKey: ModifierKey) {
         guard modifierKey != .none else {
@@ -175,13 +192,13 @@ class ModifierKeyMonitor {
         }
     }
     
-    private func handleFlagsChanged(event: CGEvent) {
+    func handleFlagsChanged(event: CGEvent) {
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         
         guard keyCode == selectedModifierKey.keyCode else { return }
         
-        let cgFlag = selectedModifierKey.cgEventFlag
+        let cgFlag = selectedModifierKey.physicalEventFlag
         let isPressed = flags.contains(cgFlag)
         
         if isPressed && !isModifierPressed {
