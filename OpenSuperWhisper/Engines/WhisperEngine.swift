@@ -42,6 +42,16 @@ private final class AbortFlag {
 }
 
 class WhisperEngine: TranscriptionEngine {
+    struct DecodedSegment: Equatable {
+        let text: String
+        let endTimeCentiseconds: Int64
+    }
+
+    struct DetailedTranscription {
+        let text: String
+        let segments: [DecodedSegment]
+    }
+
     var engineName: String { "Whisper" }
     
     /// Silero VAD model shipped in the app bundle; always used to drop
@@ -78,6 +88,10 @@ class WhisperEngine: TranscriptionEngine {
     }
     
     func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        try await transcribeAudioDetailed(url: url, settings: settings).text
+    }
+
+    func transcribeAudioDetailed(url: URL, settings: Settings) async throws -> DetailedTranscription {
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
@@ -110,7 +124,7 @@ class WhisperEngine: TranscriptionEngine {
         // only through whisper_full, which would share decoding state.)
         let speechSegments = try detectSpeech(in: converted)
         if speechSegments.isEmpty {
-            return ""
+            return DetailedTranscription(text: "", segments: [])
         }
         // Timestamps of the trimmed audio would not match the original file,
         // so trimming is applied only when timestamps are not requested.
@@ -120,29 +134,15 @@ class WhisperEngine: TranscriptionEngine {
         
         let nThreads = max(2, min(ProcessInfo.processInfo.activeProcessorCount, 8))
         
-        var params = WhisperFullParams()
-        params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
-        params.nThreads = Int32(nThreads)
-        // Match whisper.cpp defaults: on temperature fallback the decoder samples
-        // best_of candidates and keeps the most probable one; with 1 the fallback
-        // degenerates to a single random sample on hard audio.
-        params.greedyBestOf = 5
-        // Each transcription runs on a fresh whisper_state (see below), so text
-        // context flows between 30s windows within one recording (better
-        // coherence, upstream default) but can never leak into the next one.
-        params.noContext = false
-        params.noTimestamps = !settings.showTimestamps
-        params.suppressBlank = settings.suppressBlankAudio
-        let isAutoDetect = settings.selectedLanguage == "auto"
-        params.language = isAutoDetect ? nil : settings.selectedLanguage
-        params.detectLanguage = false // means that it only detects the language and does not process the transcription
-        params.temperature = Float(settings.temperature)
-        params.noSpeechThold = Float(settings.noSpeechThreshold)
-        params.initialPrompt = settings.initialPrompt.isEmpty ? nil : settings.initialPrompt
-        // With noContext = false the initial prompt conditions only the first
-        // 30s window; carrying it keeps the user's vocabulary effective for the
-        // whole recording.
-        params.carryInitialPrompt = params.initialPrompt != nil
+        let initialPromptTokenCount = settings.initialPrompt.isEmpty
+            ? 0
+            : context.tokenCount(text: settings.initialPrompt)
+        var params = Self.makeFullParams(
+            settings: settings,
+            nThreads: nThreads,
+            modelTextContext: context.nTextCtx,
+            initialPromptTokenCount: initialPromptTokenCount
+        )
         
         typealias GGMLAbortCallback = @convention(c) (UnsafeMutableRawPointer?) -> Bool
         let abortCallback: GGMLAbortCallback = { userData in
@@ -196,8 +196,11 @@ class WhisperEngine: TranscriptionEngine {
         
         try Task.checkCancellation()
         
-        var text = ""
+        var segmentTexts: [String] = []
+        var decodedSegments: [DecodedSegment] = []
         let nSegments = context.fullNSegments
+        segmentTexts.reserveCapacity(nSegments)
+        decodedSegments.reserveCapacity(nSegments)
         
         for i in 0..<nSegments {
             if i % 5 == 0 {
@@ -205,16 +208,29 @@ class WhisperEngine: TranscriptionEngine {
             }
             
             guard let segmentText = context.fullGetSegmentText(iSegment: i) else { continue }
+            let segmentEnd = context.fullGetSegmentT1(iSegment: i)
+            decodedSegments.append(
+                DecodedSegment(
+                    text: segmentText,
+                    endTimeCentiseconds: segmentEnd
+                )
+            )
             
             if settings.showTimestamps {
                 let t0 = context.fullGetSegmentT0(iSegment: i)
-                let t1 = context.fullGetSegmentT1(iSegment: i)
-                text += String(format: "[%.1f->%.1f] ", Float(t0) / 100.0, Float(t1) / 100.0)
+                segmentTexts.append(
+                    String(format: "[%.1f->%.1f] ", Float(t0) / 100.0, Float(segmentEnd) / 100.0)
+                        + segmentText
+                )
+            } else {
+                segmentTexts.append(segmentText)
             }
-            text += segmentText + "\n"
         }
         
-        let cleanedText = text
+        let cleanedText = Self.assembleSegmentTexts(
+            segmentTexts,
+            showTimestamps: settings.showTimestamps
+        )
             .replacingOccurrences(of: "[MUSIC]", with: "")
             .replacingOccurrences(of: "[BLANK_AUDIO]", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -224,7 +240,57 @@ class WhisperEngine: TranscriptionEngine {
             processedText = AutocorrectWrapper.format(cleanedText)
         }
         
-        return processedText
+        return DetailedTranscription(
+            text: processedText,
+            segments: decodedSegments
+        )
+    }
+
+    /// Whisper segments are decoder boundaries, not paragraph boundaries.
+    /// Their text already contains the token-level whitespace needed between
+    /// adjacent segments, so adding a newline (or an inferred space) changes
+    /// the dictated text. Timestamp mode remains line-oriented for readability.
+    static func assembleSegmentTexts(_ segments: [String], showTimestamps: Bool) -> String {
+        segments.joined(separator: showTimestamps ? "\n" : "")
+    }
+
+    static func makeFullParams(
+        settings: Settings,
+        nThreads: Int,
+        modelTextContext: Int,
+        initialPromptTokenCount: Int
+    ) -> WhisperFullParams {
+        var params = WhisperFullParams()
+        params.strategy = settings.useBeamSearch ? .beamSearch : .greedy
+        params.nThreads = Int32(nThreads)
+        // Match whisper.cpp defaults: on temperature fallback the decoder samples
+        // best_of candidates and keeps the most probable one; with 1 the fallback
+        // degenerates to a single random sample on hard audio.
+        params.greedyBestOf = 5
+
+        // A fresh state isolates recordings, while prompt_past must remain enabled
+        // between the decoder's 30-second windows inside this recording.
+        params.noContext = false
+        let rollingContextCapacity = max(1, modelTextContext / 2)
+        params.nMaxTextCtx = Int32(clamping: rollingContextCapacity)
+        params.noTimestamps = !settings.showTimestamps
+        params.suppressBlank = settings.suppressBlankAudio
+        let isAutoDetect = settings.selectedLanguage == "auto"
+        params.language = isAutoDetect ? nil : settings.selectedLanguage
+        params.detectLanguage = false
+        params.temperature = Float(settings.temperature)
+        params.noSpeechThold = Float(settings.noSpeechThreshold)
+        params.initialPrompt = settings.initialPrompt.isEmpty
+            ? nil
+            : settings.initialPrompt
+
+        // A very long static prompt can otherwise consume the entire prompt
+        // budget on every window and evict prompt_past. Carry it only while at
+        // least half of the rolling budget remains available for prior speech.
+        let maxCarriedPromptTokens = max(1, (rollingContextCapacity - 1) / 2)
+        params.carryInitialPrompt = params.initialPrompt != nil
+            && initialPromptTokenCount <= maxCarriedPromptTokens
+        return params
     }
     
     func cancelTranscription() {
