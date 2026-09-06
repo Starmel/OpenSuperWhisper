@@ -36,6 +36,7 @@ class IndicatorViewModel: ObservableObject {
     private var confirmCancelTimer: Timer?
     private var decodingTask: Task<Void, Never>?
     private var decodingSessionID: UUID?
+    private var recordingSessionID: UUID?
     private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
@@ -120,6 +121,8 @@ class IndicatorViewModel: ObservableObject {
         // animation. The recorder resolves the real state on its own queue and
         // publishes isConnecting/isRecording, which the sinks above translate
         // into .connecting/.recording.
+        guard let id = RecordingSessionController.shared.begin(stop: { self.decodeRecording() }) else { return }
+        recordingSessionID = id
         state = .recording
         startBlinking()
         recordingStartedAt = Date()
@@ -154,6 +157,14 @@ class IndicatorViewModel: ObservableObject {
     }
     
     func startDecoding() {
+        if RecordingSessionController.shared.hasSession {
+            RecordingSessionController.shared.requestStop()
+        } else {
+            decodeRecording()
+        }
+    }
+
+    private func decodeRecording() {
         // A second stop request (double hotkey press, hold-mode key-up) must not
         // restart decoding or hide the window while transcription is in flight.
         guard state == .recording || state == .connecting else { return }
@@ -166,6 +177,10 @@ class IndicatorViewModel: ObservableObject {
             // and put it into the queue instead of deleting it.
             Task { [weak self] in
                 guard let self = self else { return }
+                defer {
+                    RecordingSessionController.shared.finish(self.recordingSessionID)
+                    self.recordingSessionID = nil
+                }
                 if let audio = await self.stopRecordingOperation() {
                     await self.transcriptionQueue.addFileToQueue(url: audio.url)
                 }
@@ -257,6 +272,8 @@ class IndicatorViewModel: ObservableObject {
         guard decodingSessionID == sessionID else { return }
         decodingSessionID = nil
         decodingTask = nil
+        RecordingSessionController.shared.finish(recordingSessionID)
+        recordingSessionID = nil
         _ = delegate?.didFinishDecoding(from: self)
     }
     
@@ -335,7 +352,11 @@ class IndicatorViewModel: ObservableObject {
             }
         }
 
-        cancelAudioRecordingOperation()
+        if state != .decoding {
+            cancelAudioRecordingOperation()
+        }
+        RecordingSessionController.shared.finish(recordingSessionID)
+        recordingSessionID = nil
     }
 }
 

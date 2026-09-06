@@ -144,42 +144,28 @@ class ShortcutManager {
         holdWorkItem?.cancel()
         holdMode = false
         
-        let holdToRecordEnabled = AppPreferences.shared.holdToRecord
-        let isStartingRecording = activeVm == nil
-        
-        Task { @MainActor in
-            if self.activeVm == nil {
-                // Start recording immediately: resolving the caret position talks to
-                // the focused app via AX IPC and can hang for seconds if that app
-                // is busy — the first words must not be lost because of it.
-                let vm = IndicatorWindowManager.shared.prepare()
-                vm.startRecording()
-                self.activeVm = vm
-                
-                let cursorPosition = FocusUtils.getCurrentCursorPosition()
-                let anchorPoint = await Self.resolveAnchorPoint(timeoutNanoseconds: 150_000_000)
-                let indicatorPoint = FocusUtils.chooseIndicatorPoint(
-                    resolvedInputAnchor: anchorPoint,
-                    cursorPosition: cursorPosition
-                )
-                
-                IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: indicatorPoint)
-            } else if !self.holdMode {
-                IndicatorWindowManager.shared.stopRecording()
-            }
+        let session = RecordingSessionController.shared
+        if session.hasSession {
+            session.requestStop()
+            return
         }
-        
-        // Arm hold mode only when this press starts a recording. Arming it on the
-        // stopping press would trigger a second stop on key-up.
-        if holdToRecordEnabled && isStartingRecording {
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.holdMode = true
-            }
+        guard activeVm == nil else { return }
+        let vm = IndicatorWindowManager.shared.prepare()
+        activeVm = vm
+        vm.startRecording()
+        let cursorPosition = FocusUtils.getCurrentCursorPosition()
+        Task { @MainActor in
+            let anchorPoint = await Self.resolveAnchorPoint(timeoutNanoseconds: 150_000_000)
+            let point = FocusUtils.chooseIndicatorPoint(resolvedInputAnchor: anchorPoint, cursorPosition: cursorPosition)
+            IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: point)
+        }
+        if AppPreferences.shared.holdToRecord && session.isCapturing {
+            let workItem = DispatchWorkItem { [weak self] in self?.holdMode = true }
             holdWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + holdThreshold, execute: workItem)
         }
     }
-    
+
     /// Resolves the input anchor without letting a slow focused app delay the
     /// indicator: whichever finishes first wins — the AX resolution or the
     /// deadline. On timeout the caller falls back to the mouse position; the

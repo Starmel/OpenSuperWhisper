@@ -147,6 +147,7 @@ class AudioRecorder: NSObject, ObservableObject {
         // starts, so the whole start sequence runs on the work queue.
         let playSound = AppPreferences.shared.playSoundOnRecordStart
         workQueue.async {
+            guard self.recordingSession == nil else { return }
             guard let activeMic = MicrophoneService.shared.getActiveMicrophone() else {
                 print("Cannot start recording - no audio input available")
                 return
@@ -163,10 +164,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     private func performStart(activeMic: MicrophoneService.AudioDevice?, monitorConnection: Bool) {
-        if recordingSession != nil {
-            print("stop recording while recording")
-            _ = performStop(discard: true)
-        }
+        guard recordingSession == nil else { return }
         
         let fileURL = temporaryDirectory.appendingPathComponent("\(UUID().uuidString).wav")
         currentRecordingURL = fileURL

@@ -34,6 +34,7 @@ class ContentViewModel: ObservableObject {
     private let pageSize = 100
     private var currentSearchQuery = ""
     private var blinkTimer: Timer?
+    private var recordingSessionID: UUID?
     private var recordingStartTime: Date?
     private var durationTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -153,6 +154,8 @@ class ContentViewModel: ObservableObject {
     
     func startRecording() {
         guard microphoneService.getActiveMicrophone() != nil else { return }
+        guard let id = RecordingSessionController.shared.begin(stop: { self.decodeRecording() }) else { return }
+        recordingSessionID = id
 
         if microphoneService.isActiveMicrophoneRequiresConnection() {
             state = .connecting
@@ -171,6 +174,12 @@ class ContentViewModel: ObservableObject {
     }
 
     func startDecoding() {
+        if RecordingSessionController.shared.hasSession {
+            RecordingSessionController.shared.requestStop()
+        }
+    }
+
+    private func decodeRecording() {
         state = .decoding
         stopBlinking()
         stopDurationTimer()
@@ -179,7 +188,11 @@ class ContentViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self = self else { return }
-            
+            let sessionID = self.recordingSessionID
+            defer {
+                RecordingSessionController.shared.finish(sessionID)
+                self.recordingSessionID = nil
+            }
             if let audio = await self.recorder.stopRecording() {
                 let tempURL = audio.url
                 do {
