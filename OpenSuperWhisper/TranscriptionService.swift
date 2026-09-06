@@ -27,6 +27,24 @@ class TranscriptionService: ObservableObject {
     private var currentEngine: TranscriptionEngine?
     private var transcriptionTask: TranscriptionTaskBox? = nil
     private var cancellationRequestedFor: UUID?
+
+    private struct RecordingPreparation {
+        let engine: WhisperEngine
+        let task: Task<Void, Error>
+    }
+
+    private var recordingPreparation: RecordingPreparation?
+
+    func prepareForRecording() {
+        guard !isLoading, transcriptionTask == nil, recordingPreparation == nil,
+              let engine = currentEngine as? WhisperEngine else { return }
+        recordingPreparation = RecordingPreparation(
+            engine: engine,
+            task: Task.detached(priority: .userInitiated) {
+                try engine.prepareForRecording()
+            }
+        )
+    }
     
     init() {
         loadEngine()
@@ -150,6 +168,9 @@ class TranscriptionService: ObservableObject {
             throw TranscriptionError.contextInitializationFailed
         }
 
+        let preparation = recordingPreparation
+        recordingPreparation = nil
+
         // Setup progress callback for engines
         if let whisperEngine = engine as? WhisperEngine {
             whisperEngine.onProgressUpdate = { [weak self] newProgress in
@@ -172,6 +193,9 @@ class TranscriptionService: ObservableObject {
         }
         
         let task = Task.detached(priority: .userInitiated) { [weak self] in
+            if let preparation, preparation.engine === engine {
+                try await preparation.task.value
+            }
             try Task.checkCancellation()
             
             let cancelled = await MainActor.run {

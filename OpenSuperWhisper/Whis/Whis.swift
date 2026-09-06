@@ -119,6 +119,8 @@ public class MyWhisperContext {
         return MyWhisperContext(context: context)
     }
     
+    var hasState: Bool { state != nil }
+
     public func initState() -> Bool {
         guard let ctx = ctx else { return false }
         freeState()

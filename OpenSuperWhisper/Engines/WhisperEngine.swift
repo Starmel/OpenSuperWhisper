@@ -69,6 +69,17 @@ class WhisperEngine: TranscriptionEngine {
     var isModelLoaded: Bool {
         context != nil
     }
+
+    var hasPreparedState: Bool { context?.hasState == true }
+
+    func prepareForRecording() throws {
+        guard let context else {
+            throw TranscriptionError.contextInitializationFailed
+        }
+        if !context.hasState && !context.initState() {
+            throw TranscriptionError.contextInitializationFailed
+        }
+    }
     
     func initialize() async throws {
         let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
@@ -113,6 +124,7 @@ class WhisperEngine: TranscriptionEngine {
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
+        defer { context.freeState() }
         
         abortFlag.isSet = false
         try Task.checkCancellation()
@@ -210,12 +222,7 @@ class WhisperEngine: TranscriptionEngine {
         
         // Fresh decoding state per recording: isolates prompt_past between
         // recordings (a hallucination on silence cannot poison the next one).
-        guard context.initState() else {
-            throw TranscriptionError.contextInitializationFailed
-        }
-        defer {
-            context.freeState()
-        }
+        try prepareForRecording()
         
         guard context.full(samples: samples, params: &cParams) else {
             if abortFlag.isSet || Task.isCancelled {

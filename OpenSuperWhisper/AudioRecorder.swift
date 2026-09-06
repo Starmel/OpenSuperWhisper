@@ -198,6 +198,9 @@ class AudioRecorder: NSObject, ObservableObject {
             audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = monitorConnection
             audioRecorder?.record()
+            Task { @MainActor in
+                TranscriptionService.shared.prepareForRecording()
+            }
             if monitorConnection {
                 startConnectionMonitoring()
             } else {
