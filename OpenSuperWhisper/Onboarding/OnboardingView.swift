@@ -51,7 +51,12 @@ class OnboardingViewModel: ObservableObject {
     private var downloadTask: Task<Void, Error>?
     private var downloadID: UUID?
 
-    init() {
+    private let downloadFluid: (AsrModelVersion, ProgressHandler?) async throws -> AsrModels
+
+    init(downloadFluid: @escaping (AsrModelVersion, ProgressHandler?) async throws -> AsrModels = {
+        try await AsrModels.downloadAndLoad(version: $0, progressHandler: $1)
+    }) {
+        self.downloadFluid = downloadFluid
         let systemLanguage = LanguageUtil.getSystemLanguage()
         AppPreferences.shared.whisperLanguage = systemLanguage
         self.selectedLanguage = systemLanguage
@@ -237,7 +242,7 @@ class OnboardingViewModel: ObservableObject {
                 }
                 
                 let modelId = model.id
-                let models = try await AsrModels.downloadAndLoad(version: asrVersion) { [weak self] progress in
+                let models = try await downloadFluid(asrVersion) { [weak self] progress in
                     Task { @MainActor [weak self] in
                         guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
@@ -319,7 +324,6 @@ class OnboardingViewModel: ObservableObject {
         } catch is CancellationError {
             wasCancelled = true
         } catch {
-                guard self.downloadID == id, !Task.isCancelled else { return }
             if !wasCancelled {
                 throw error
             }

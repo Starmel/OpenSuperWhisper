@@ -199,9 +199,14 @@ class SettingsViewModel: ObservableObject {
 
     private let downloadWhisper: (URL, String, @escaping (Double) -> Void) async throws -> Void
 
+    private let downloadFluid: (AsrModelVersion, ProgressHandler?) async throws -> AsrModels
+
     init(downloadWhisper: @escaping (URL, String, @escaping (Double) -> Void) async throws -> Void = {
         try await WhisperModelManager.shared.downloadModel(url: $0, name: $1, progressCallback: $2)
+    }, downloadFluid: @escaping (AsrModelVersion, ProgressHandler?) async throws -> AsrModels = {
+        try await AsrModels.downloadAndLoad(version: $0, progressHandler: $1)
     }) {
+        self.downloadFluid = downloadFluid
         self.downloadWhisper = downloadWhisper
         let prefs = AppPreferences.shared
         self.selectedEngine = prefs.selectedEngine
@@ -425,7 +430,7 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 let modelId = model.id
-                let models = try await AsrModels.downloadAndLoad(version: version) { [weak self] progress in
+                let models = try await downloadFluid(version) { [weak self] progress in
                     print("[ParakeetProgress] fraction=\(progress.fractionCompleted) phase=\(progress.phase)")
                     Task { @MainActor [weak self] in
                         guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
@@ -516,7 +521,6 @@ class SettingsViewModel: ObservableObject {
             // Already handled in catch block above, just consume the error
             wasCancelled = true
         } catch {
-                guard self.downloadID == id, !Task.isCancelled else { return }
             // If we were cancelled, don't throw
             if !wasCancelled {
                 throw error

@@ -15,6 +15,41 @@ private actor DownloadGate {
 
 @MainActor
 final class DownloadCancellationTests: XCTestCase {
+    func testFluidDownloadFailureReachesSettingsAndOnboarding() async throws {
+        let prefs = AppPreferences.shared
+        let language = prefs.whisperLanguage
+        let engine = prefs.selectedEngine
+        let version = prefs.fluidAudioModelVersion
+        let modelPath = prefs.selectedWhisperModelPath
+        let modifier = prefs.modifierOnlyHotkey
+        let lastModifier = prefs.lastModifierOnlyHotkey
+        defer {
+            prefs.whisperLanguage = language
+            prefs.selectedEngine = engine
+            prefs.fluidAudioModelVersion = version
+            prefs.selectedWhisperModelPath = modelPath
+            prefs.modifierOnlyHotkey = modifier
+            prefs.lastModifierOnlyHotkey = lastModifier
+        }
+        let settings = SettingsViewModel(downloadFluid: { _, _ in throw TranscriptionError.processingFailed })
+        let settingsModel = try XCTUnwrap(settings.downloadableFluidAudioModels.first)
+        do {
+            try await settings.downloadFluidAudioModel(settingsModel)
+            XCTFail("Settings swallowed the download error")
+        } catch { XCTAssertTrue(error is TranscriptionError) }
+        XCTAssertFalse(settings.isDownloading)
+        let onboarding = OnboardingViewModel(downloadFluid: { _, _ in throw TranscriptionError.processingFailed })
+        let onboardingModel = try XCTUnwrap(onboarding.unifiedModels.first {
+            if case .parakeet = $0.type { return true }
+            return false
+        })
+        do {
+            try await onboarding.downloadModel(onboardingModel)
+            XCTFail("Onboarding swallowed the download error")
+        } catch { XCTAssertTrue(error is TranscriptionError) }
+        XCTAssertFalse(onboarding.isDownloading)
+    }
+
     func testLateCancelledDownloadCannotResetReplacement() async throws {
         let language = AppPreferences.shared.whisperLanguage
         defer { AppPreferences.shared.whisperLanguage = language }
