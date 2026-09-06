@@ -41,6 +41,10 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
         return appDirectory.appendingPathComponent("recordings")
     }
 
+    static func fileName(for id: UUID) -> String {
+        "\(id.uuidString).wav"
+    }
+
     var url: URL {
         Self.recordingsDirectory.appendingPathComponent(fileName)
     }

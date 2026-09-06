@@ -197,8 +197,8 @@ class ContentViewModel: ObservableObject {
                         print("No speech detected, dictation discarded")
                     } else {
                         let timestamp = Date()
-                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
                         let recordingId = UUID()
+                        let fileName = Recording.fileName(for: recordingId)
                         let newRecording = Recording(
                             id: recordingId,
                             timestamp: timestamp,

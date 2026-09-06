@@ -313,9 +313,6 @@ class AudioRecorder: NSObject, ObservableObject {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
-        if FileManager.default.fileExists(atPath: finalURL.path) {
-            try FileManager.default.removeItem(at: finalURL)
-        }
         try FileManager.default.moveItem(at: tempURL, to: finalURL)
     }
     

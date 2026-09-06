@@ -98,8 +98,8 @@ class TranscriptionQueue: ObservableObject {
             let durationInSeconds = await AudioUtil.audioDuration(url: url)
 
             let timestamp = Date()
-            let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
             let id = UUID()
+            let fileName = Recording.fileName(for: id)
 
             let recording = Recording(
                 id: id,
@@ -255,9 +255,6 @@ class TranscriptionQueue: ObservableObject {
                     )
 
                     if sourceURL.path != finalURL.path {
-                        if FileManager.default.fileExists(atPath: finalURL.path) {
-                            try? FileManager.default.removeItem(at: finalURL)
-                        }
                         // Our own temp recordings are moved (no disk duplication);
                         // user-provided files must stay in place, so they are copied.
                         if sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path) {
