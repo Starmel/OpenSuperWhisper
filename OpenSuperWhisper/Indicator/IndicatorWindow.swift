@@ -265,7 +265,7 @@ class IndicatorViewModel: ObservableObject {
                     )
 
                     try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
-                    self.recordingStore.addRecording(newRecording)
+                    try await self.recordingStore.addRecordingSync(newRecording)
 
                     insertText(text)
                     print("Transcription result: \(text)")

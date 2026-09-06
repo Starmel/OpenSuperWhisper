@@ -77,33 +77,41 @@ class RecordingStore: ObservableObject {
     static let shared = RecordingStore()
 
     @Published private(set) var recordings: [Recording] = []
-    private let dbQueue: DatabaseQueue
+    private let dbQueue: DatabaseQueue?
+    private let initializationError: Error?
 
-    private init() {
-        let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first!
-        let appDirectory = applicationSupport.appendingPathComponent(Bundle.main.bundleIdentifier!)
-        let dbPath = appDirectory.appendingPathComponent("recordings.sqlite")
+    private convenience init() {
+        let directory = Recording.recordingsDirectory.deletingLastPathComponent()
+        self.init(databaseURL: directory.appendingPathComponent("recordings.sqlite"))
+    }
 
-        print("Database path: \(dbPath.path)")
-
+    init(databaseURL: URL) {
         do {
-            try FileManager.default.createDirectory(
-                at: appDirectory, withIntermediateDirectories: true)
-            dbQueue = try DatabaseQueue(path: dbPath.path)
-            try setupDatabase()
+            try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let database = try DatabaseQueue(path: databaseURL.path)
+            try Self.setupDatabase(database)
+            dbQueue = database
+            initializationError = nil
         } catch {
-            fatalError("Failed to setup database: \(error)")
+            dbQueue = nil
+            initializationError = error
+            AppErrorCenter.shared.report("Recordings database is unavailable", error: error)
         }
     }
 
     init(databaseQueue: DatabaseQueue) throws {
+        try Self.setupDatabase(databaseQueue)
         dbQueue = databaseQueue
-        try setupDatabase()
+        initializationError = nil
     }
 
-    private nonisolated func setupDatabase() throws {
+    private nonisolated func database() throws -> DatabaseQueue {
+        if let initializationError { throw initializationError }
+        guard let dbQueue else { throw TranscriptionError.processingFailed }
+        return dbQueue
+    }
+
+    private nonisolated static func setupDatabase(_ dbQueue: DatabaseQueue) throws {
         var migrator = DatabaseMigrator()
         
         migrator.registerMigration("v1") { db in
@@ -141,7 +149,7 @@ class RecordingStore: ObservableObject {
     }
     
     private nonisolated func fetchAllRecordings() async throws -> [Recording] {
-        try await dbQueue.read { db in
+        try await database().read { db in
             try Recording
                 .order(Recording.Columns.timestamp.desc)
                 .fetchAll(db)
@@ -149,7 +157,7 @@ class RecordingStore: ObservableObject {
     }
     
     nonisolated func fetchRecordings(limit: Int, offset: Int) async throws -> [Recording] {
-        try await dbQueue.read { db in
+        try await database().read { db in
             try Recording
                 .order(Recording.Columns.timestamp.desc)
                 .limit(limit, offset: offset)
@@ -157,32 +165,22 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func getPendingRecordings() -> [Recording] {
-        do {
-            return try dbQueue.read { db in
-                try Recording
-                    .filter([RecordingStatus.pending.rawValue, RecordingStatus.converting.rawValue, RecordingStatus.transcribing.rawValue].contains(Recording.Columns.status))
-                    .order(Recording.Columns.timestamp.asc)
-                    .fetchAll(db)
-            }
-        } catch {
-            print("Failed to get pending recordings: \(error)")
-            return []
+    func getPendingRecordings() throws -> [Recording] {
+        return try database().read { db in
+            try Recording
+                .filter([RecordingStatus.pending.rawValue, RecordingStatus.converting.rawValue, RecordingStatus.transcribing.rawValue].contains(Recording.Columns.status))
+                .order(Recording.Columns.timestamp.asc)
+                .fetchAll(db)
         }
     }
 
-    func getNextPendingRecording() -> Recording? {
-        do {
-            return try dbQueue.read { db in
-                try Recording
-                    .filter([RecordingStatus.pending.rawValue, RecordingStatus.converting.rawValue, RecordingStatus.transcribing.rawValue].contains(Recording.Columns.status))
-                    .order(Recording.Columns.timestamp.asc)
-                    .limit(1)
-                    .fetchOne(db)
-            }
-        } catch {
-            print("Failed to get next pending recording: \(error)")
-            return nil
+    func getNextPendingRecording() throws -> Recording? {
+        return try database().read { db in
+            try Recording
+                .filter([RecordingStatus.pending.rawValue, RecordingStatus.converting.rawValue, RecordingStatus.transcribing.rawValue].contains(Recording.Columns.status))
+                .order(Recording.Columns.timestamp.asc)
+                .limit(1)
+                .fetchOne(db)
         }
     }
 
@@ -196,7 +194,7 @@ class RecordingStore: ObservableObject {
                     NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
                 }
             } catch {
-                print("Failed to add recording: \(error)")
+                AppErrorCenter.shared.report("Recording could not be saved", error: error)
             }
         }
     }
@@ -209,7 +207,7 @@ class RecordingStore: ObservableObject {
     }
     
     private nonisolated func insertRecording(_ recording: Recording) async throws {
-        try await dbQueue.write { db in
+        try await database().write { db in
             try recording.insert(db)
         }
     }
@@ -222,7 +220,7 @@ class RecordingStore: ObservableObject {
                     NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
                 }
             } catch {
-                print("Failed to update recording: \(error)")
+                AppErrorCenter.shared.report("Recording could not be updated", error: error)
             }
         }
     }
@@ -236,7 +234,8 @@ class RecordingStore: ObservableObject {
     
     func updateRecordingProgressOnly(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus) {
         Task {
-            await updateRecordingProgressOnlySync(id, transcription: transcription, progress: progress, status: status)
+            do { try await updateRecordingProgressOnlySync(id, transcription: transcription, progress: progress, status: status) }
+            catch { AppErrorCenter.shared.report("Recording could not be updated", error: error) }
         }
     }
     
@@ -279,25 +278,21 @@ class RecordingStore: ObservableObject {
         applyLocalProgressUpdate(id, progress: progress, status: status)
     }
     
-    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
-        do {
-            _ = try await dbQueue.write { db -> Int in
-                try Recording
-                    .filter(Recording.Columns.id == id)
-                    .updateAll(db, [
-                        Recording.Columns.transcription.set(to: transcription),
-                        Recording.Columns.progress.set(to: progress),
-                        Recording.Columns.status.set(to: status.rawValue)
-                    ])
-            }
-            applyLocalProgressUpdate(id, transcription: transcription, progress: progress, status: status, isRegeneration: isRegeneration)
-        } catch {
-            print("Failed to update recording progress: \(error)")
+    func updateRecordingProgressOnlySync(_ id: UUID, transcription: String, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async throws {
+        _ = try await database().write { db -> Int in
+            try Recording
+                .filter(Recording.Columns.id == id)
+                .updateAll(db, [
+                    Recording.Columns.transcription.set(to: transcription),
+                    Recording.Columns.progress.set(to: progress),
+                    Recording.Columns.status.set(to: status.rawValue)
+                ])
         }
+        applyLocalProgressUpdate(id, transcription: transcription, progress: progress, status: status, isRegeneration: isRegeneration)
     }
 
     nonisolated func updateSourceFileURL(_ id: UUID, sourceURL: String) async throws {
-        try await dbQueue.write { db in
+        try await database().write { db in
             try Recording
                 .filter(Recording.Columns.id == id)
                 .updateAll(db, [
@@ -306,82 +301,59 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func updateRecordingStatusOnly(_ id: UUID, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async {
-        do {
-            _ = try await dbQueue.write { db -> Int in
-                try Recording
-                    .filter(Recording.Columns.id == id)
-                    .updateAll(db, [
-                        Recording.Columns.progress.set(to: progress),
-                        Recording.Columns.status.set(to: status.rawValue)
-                    ])
-            }
-            applyLocalProgressUpdate(id, progress: progress, status: status, isRegeneration: isRegeneration)
-        } catch {
-            print("Failed to update recording status: \(error)")
+    func updateRecordingStatusOnly(_ id: UUID, progress: Float, status: RecordingStatus, isRegeneration: Bool? = nil) async throws {
+        _ = try await database().write { db -> Int in
+            try Recording
+                .filter(Recording.Columns.id == id)
+                .updateAll(db, [
+                    Recording.Columns.progress.set(to: progress),
+                    Recording.Columns.status.set(to: status.rawValue)
+                ])
         }
+        applyLocalProgressUpdate(id, progress: progress, status: status, isRegeneration: isRegeneration)
     }
 
     private nonisolated func updateRecordingInDB(_ recording: Recording) async throws {
-        try await dbQueue.write { db in
+        try await database().write { db in
             try recording.update(db)
         }
     }
 
     func deleteRecording(_ recording: Recording) {
-        if recording.isPending {
-            TranscriptionQueue.shared.cancelRecording(recording.id)
-        }
-        
         Task {
-            do {
-                try await deleteRecordingFromDB(recording)
-                try? FileManager.default.removeItem(at: recording.url)
-                await MainActor.run {
-                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
-                }
-            } catch {
-                print("Failed to delete recording: \(error)")
-            }
-        }
-    }
-    
-    func deleteRecordingSync(_ recording: Recording) async {
-        do {
-            try await deleteRecordingFromDB(recording)
-            try? FileManager.default.removeItem(at: recording.url)
-            NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
-        } catch {
-            print("Failed to delete recording: \(error)")
+            do { try await deleteRecordingSync(recording) }
+            catch { AppErrorCenter.shared.report("Recording could not be deleted", error: error) }
         }
     }
 
-    private nonisolated func deleteRecordingFromDB(_ recording: Recording) async throws {
-        try await dbQueue.write { db in
-            _ = try recording.delete(db)
+    func deleteRecordingSync(_ recording: Recording, cancelTranscription: Bool = true) async throws {
+        try await database().write { db in _ = try recording.delete(db) }
+        defer { NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil) }
+        if cancelTranscription && recording.isPending {
+            await TranscriptionQueue.shared.cancelRecordingAndWait(recording.id)
+        }
+        if FileManager.default.fileExists(atPath: recording.url.path) {
+            try FileManager.default.removeItem(at: recording.url)
         }
     }
 
     func deleteAllRecordings() {
         Task {
-            do {
-                let allRecordings = try await fetchAllRecordings()
-                for recording in allRecordings {
-                    try? FileManager.default.removeItem(at: recording.url)
-                }
-                try await deleteAllRecordingsFromDB()
-                await MainActor.run {
-                    NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
-                }
-            } catch {
-                print("Failed to delete all recordings: \(error)")
-            }
+            do { try await deleteAllRecordingsSync() }
+            catch { AppErrorCenter.shared.report("Recordings could not be deleted", error: error) }
         }
     }
-    
-    private nonisolated func deleteAllRecordingsFromDB() async throws {
-        try await dbQueue.write { db in
+
+    func deleteAllRecordingsSync() async throws {
+        await TranscriptionQueue.shared.stopProcessingQueue()
+        let removed = try await database().write { db in
+            let rows = try Recording.fetchAll(db)
             _ = try Recording.deleteAll(db)
+            return rows
+        }
+        defer { NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil) }
+        for recording in removed where FileManager.default.fileExists(atPath: recording.url.path) {
+            try FileManager.default.removeItem(at: recording.url)
         }
     }
 
@@ -404,7 +376,7 @@ class RecordingStore: ObservableObject {
 
     nonisolated func recordingsOlderThan(days: Int) async throws -> (count: Int, oldestDate: Date?) {
         guard let cutoff = Self.retentionCutoffDate(daysToKeep: days) else { return (0, nil) }
-        return try await dbQueue.read { db in
+        return try await database().read { db in
             let request = Recording
                 .filter(Recording.Columns.timestamp < cutoff)
                 .filter(!Self.pendingStatuses.contains(Recording.Columns.status))
@@ -419,7 +391,7 @@ class RecordingStore: ObservableObject {
 
     func deleteRecordings(olderThanDays days: Int) async throws {
         guard let cutoff = Self.retentionCutoffDate(daysToKeep: days) else { return }
-        let outdated = try await dbQueue.read { db in
+        let outdated = try await database().read { db in
             try Recording
                 .filter(Recording.Columns.timestamp < cutoff)
                 .filter(!Self.pendingStatuses.contains(Recording.Columns.status))
@@ -427,14 +399,14 @@ class RecordingStore: ObservableObject {
         }
         guard !outdated.isEmpty else { return }
 
-        for recording in outdated where Self.isDeletableRecordingURL(recording.url) {
-            try? FileManager.default.removeItem(at: recording.url)
-        }
         let ids = outdated.map { $0.id }
-        try await dbQueue.write { db in
+        try await database().write { db in
             _ = try Recording
                 .filter(ids.contains(Recording.Columns.id))
                 .deleteAll(db)
+        }
+        for recording in outdated where Self.isDeletableRecordingURL(recording.url) {
+            try? FileManager.default.removeItem(at: recording.url)
         }
         NotificationCenter.default.post(name: Self.recordingsDidUpdateNotification, object: nil)
     }
@@ -442,7 +414,7 @@ class RecordingStore: ObservableObject {
     /// Recordings created through the indicator flow used to be saved with
     /// duration = 0. Restores real durations from the audio files on disk.
     nonisolated func backfillMissingDurations() async {
-        let zeroDurationRecordings = (try? await dbQueue.read { db in
+        let zeroDurationRecordings = (try? await database().read { db in
             try Recording
                 .filter(Recording.Columns.duration <= 0)
                 .filter(Recording.Columns.status == RecordingStatus.completed.rawValue)
@@ -456,7 +428,7 @@ class RecordingStore: ObservableObject {
             let duration = await AudioUtil.audioDuration(url: recording.url)
             guard duration > 0 else { continue }
             do {
-                try await dbQueue.write { db in
+                try await database().write { db in
                     _ = try Recording
                         .filter(Recording.Columns.id == recording.id)
                         .updateAll(db, [Recording.Columns.duration.set(to: duration)])
@@ -487,33 +459,23 @@ class RecordingStore: ObservableObject {
         }
     }
 
-    func searchRecordings(query: String) -> [Recording] {
-        do {
-            return try dbQueue.read { db in
-                try Recording
-                    .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
-                    .order(Recording.Columns.timestamp.desc)
-                    .limit(100)
-                    .fetchAll(db)
-            }
-        } catch {
-            print("Failed to search recordings: \(error)")
-            return []
+    func searchRecordings(query: String) throws -> [Recording] {
+        return try database().read { db in
+            try Recording
+                .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
+                .order(Recording.Columns.timestamp.desc)
+                .limit(100)
+                .fetchAll(db)
         }
     }
     
-    nonisolated func searchRecordingsAsync(query: String, limit: Int = 100, offset: Int = 0) async -> [Recording] {
-        do {
-            return try await dbQueue.read { db in
-                try Recording
-                    .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
-                    .order(Recording.Columns.timestamp.desc)
-                    .limit(limit, offset: offset)
-                    .fetchAll(db)
-            }
-        } catch {
-            print("Failed to search recordings: \(error)")
-            return []
+    nonisolated func searchRecordingsAsync(query: String, limit: Int = 100, offset: Int = 0) async throws -> [Recording] {
+        return try await database().read { db in
+            try Recording
+                .filter(Recording.Columns.transcription.like("%\(query)%").collating(.nocase))
+                .order(Recording.Columns.timestamp.desc)
+                .limit(limit, offset: offset)
+                .fetchAll(db)
         }
     }
 }

@@ -44,7 +44,7 @@ class ContentViewModel: ObservableObject {
             if query.isEmpty {
                 return try await RecordingStore.shared.fetchRecordings(limit: limit, offset: offset)
             }
-            return await RecordingStore.shared.searchRecordingsAsync(query: query, limit: limit, offset: offset)
+            return try await RecordingStore.shared.searchRecordingsAsync(query: query, limit: limit, offset: offset)
         }
         recorder.$startFailure
             .compactMap { $0 }
@@ -147,14 +147,10 @@ class ContentViewModel: ObservableObject {
     
     func deleteRecording(_ recording: Recording) {
         recordingStore.deleteRecording(recording)
-        if let index = recordings.firstIndex(where: { $0.id == recording.id }) {
-            recordings.remove(at: index)
-        }
     }
     
     func deleteAllRecordings() {
         recordingStore.deleteAllRecordings()
-        recordings.removeAll()
     }
 
     var isRecording: Bool {
@@ -238,8 +234,8 @@ class ContentViewModel: ObservableObject {
 
                         try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
 
+                        try await self.recordingStore.addRecordingSync(newRecording)
                         await MainActor.run {
-                            self.recordingStore.addRecording(newRecording)
                             
                             if !self.currentSearchQuery.isEmpty {
                                 self.shouldClearSearch = true

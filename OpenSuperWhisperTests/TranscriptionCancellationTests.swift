@@ -187,7 +187,7 @@ final class TranscriptionCancellationTests: XCTestCase {
         }
         XCTAssertEqual(queue.currentRecordingId, id)
         queue.cancelRecording(id)
-        await store.deleteRecordingSync(recording)
+        try await store.deleteRecordingSync(recording)
         XCTAssertEqual(engine.cancelCount, 0)
         XCTAssertTrue(engine.complete(url: audioURL, with: .success("dictation survives")))
         let result = try await dictation.value

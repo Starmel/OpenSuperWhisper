@@ -12,7 +12,7 @@ class TranscriptionQueue: ObservableObject {
     private let recordingStore: RecordingStore
     private var processingTask: Task<Void, Never>?
     private var currentOperationID: UUID?
-    private var currentTranscriptionTask: Task<Void, Never>?
+    private var currentTranscriptionTask: Task<Void, Error>?
     private var cancelledRecordingIds: Set<UUID> = []
     private var progressCancellable: AnyCancellable?
 
@@ -49,6 +49,17 @@ class TranscriptionQueue: ObservableObject {
         }
     }
 
+    func cancelRecordingAndWait(_ id: UUID) async {
+        cancelRecording(id)
+        if currentRecordingId == id { _ = await currentTranscriptionTask?.result }
+    }
+
+    func stopProcessingQueue() async {
+        processingTask?.cancel()
+        if let id = currentRecordingId { cancelRecording(id) }
+        await processingTask?.value
+    }
+
     private func isRecordingCancelled(_ recordingId: UUID) -> Bool {
         return cancelledRecordingIds.contains(recordingId)
     }
@@ -63,15 +74,20 @@ class TranscriptionQueue: ObservableObject {
         isProcessing = true
 
         processingTask = Task {
-            await cleanupMissingFiles()
-            await processQueue()
+            do {
+                try await cleanupMissingFiles()
+                try await processQueue()
+            } catch is CancellationError {
+            } catch {
+                AppErrorCenter.shared.report("Transcription queue stopped", error: error)
+            }
             isProcessing = false
             processingTask = nil
         }
     }
 
-    private func cleanupMissingFiles() async {
-        let pendingRecordings = recordingStore.getPendingRecordings()
+    private func cleanupMissingFiles() async throws {
+        let pendingRecordings = try recordingStore.getPendingRecordings()
 
         let recordingsToDelete = await Task.detached(priority: .utility) {
             var toDelete: [Recording] = []
@@ -91,7 +107,7 @@ class TranscriptionQueue: ObservableObject {
         }.value
         
         for recording in recordingsToDelete {
-            recordingStore.deleteRecording(recording)
+            try await recordingStore.deleteRecordingSync(recording, cancelTranscription: false)
         }
     }
 
@@ -118,11 +134,16 @@ class TranscriptionQueue: ObservableObject {
 
             startProcessingQueue()
         } catch {
-            print("Failed to add file to queue: \(error)")
+            AppErrorCenter.shared.report("File could not be queued", error: error)
         }
     }
 
     func requeueRecording(_ recording: Recording) async {
+        do { try await requeue(recording) }
+        catch { AppErrorCenter.shared.report("Recording could not be queued", error: error) }
+    }
+
+    private func requeue(_ recording: Recording) async throws {
         let sourceURL: URL? = await Task.detached(priority: .userInitiated) {
             if let existingSource = recording.sourceFileURL,
                !existingSource.isEmpty,
@@ -135,7 +156,7 @@ class TranscriptionQueue: ObservableObject {
         }.value
         
         guard let sourceURL = sourceURL else {
-            await recordingStore.updateRecordingProgressOnlySync(
+            try await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Cannot regenerate: audio file not found",
                 progress: 0.0,
@@ -144,18 +165,14 @@ class TranscriptionQueue: ObservableObject {
             return
         }
 
-        await recordingStore.updateRecordingStatusOnly(
+        try await recordingStore.updateRecordingStatusOnly(
             recording.id,
             progress: 0.0,
             status: .pending,
             isRegeneration: true
         )
 
-        do {
-            try await recordingStore.updateSourceFileURL(recording.id, sourceURL: sourceURL.path)
-        } catch {
-            print("Failed to update source URL: \(error)")
-        }
+        try await recordingStore.updateSourceFileURL(recording.id, sourceURL: sourceURL.path)
 
         startProcessingQueue()
     }
@@ -164,17 +181,17 @@ class TranscriptionQueue: ObservableObject {
         text.isEmpty && sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
     }
 
-    private func processQueue() async {
-        while let recording = recordingStore.getNextPendingRecording() {
+    private func processQueue() async throws {
+        while let recording = try recordingStore.getNextPendingRecording() {
+            try Task.checkCancellation()
             currentRecordingId = recording.id
             currentOperationID = UUID()
-            await processRecording(recording)
-            currentRecordingId = nil
-            currentOperationID = nil
+            defer { currentRecordingId = nil; currentOperationID = nil }
+            try await processRecording(recording)
         }
     }
 
-    private func processRecording(_ recording: Recording) async {
+    private func processRecording(_ recording: Recording) async throws {
         if isRecordingCancelled(recording.id) {
             clearCancellation(recording.id)
             return
@@ -182,7 +199,7 @@ class TranscriptionQueue: ObservableObject {
 
         guard let sourceURLString = recording.sourceFileURL,
               !sourceURLString.isEmpty else {
-            await recordingStore.updateRecordingProgressOnlySync(
+            try await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Source file not found",
                 progress: 0.0,
@@ -198,7 +215,7 @@ class TranscriptionQueue: ObservableObject {
         }.value
         
         guard sourceExists else {
-            await recordingStore.updateRecordingProgressOnlySync(
+            try await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "Source file not found",
                 progress: 0.0,
@@ -212,13 +229,13 @@ class TranscriptionQueue: ObservableObject {
             recording.transcription != "Starting transcription..."
 
         if isRegeneration {
-            await recordingStore.updateRecordingStatusOnly(
+            try await recordingStore.updateRecordingStatusOnly(
                 recording.id,
                 progress: 0.0,
                 status: .converting
             )
         } else {
-            await recordingStore.updateRecordingProgressOnlySync(
+            try await recordingStore.updateRecordingProgressOnlySync(
                 recording.id,
                 transcription: "",
                 progress: 0.0,
@@ -248,7 +265,7 @@ class TranscriptionQueue: ObservableObject {
                     await Task.detached(priority: .utility) {
                         try? FileManager.default.removeItem(at: sourceURL)
                     }.value
-                    await recordingStore.deleteRecordingSync(recording)
+                    try await recordingStore.deleteRecordingSync(recording, cancelTranscription: false)
                     return
                 }
 
@@ -270,7 +287,7 @@ class TranscriptionQueue: ObservableObject {
                     }
                 }.value
 
-                await recordingStore.updateRecordingProgressOnlySync(
+                try await recordingStore.updateRecordingProgressOnlySync(
                     recording.id,
                     transcription: text,
                     progress: 1.0,
@@ -280,7 +297,7 @@ class TranscriptionQueue: ObservableObject {
 
             } catch {
                 if !isRecordingCancelled(recording.id) && !Task.isCancelled {
-                    await recordingStore.updateRecordingProgressOnlySync(
+                    try await recordingStore.updateRecordingProgressOnlySync(
                         recording.id,
                         transcription: "Failed to transcribe: \(error.localizedDescription)",
                         progress: 0.0,
@@ -291,9 +308,8 @@ class TranscriptionQueue: ObservableObject {
             }
         }
 
-        await currentTranscriptionTask?.value
-        currentTranscriptionTask = nil
-        clearCancellation(recording.id)
+        defer { currentTranscriptionTask = nil; clearCancellation(recording.id) }
+        try await currentTranscriptionTask?.value
     }
 
 }
