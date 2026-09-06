@@ -17,8 +17,13 @@ class FluidAudioEngine: TranscriptionEngine {
         asrManager != nil
     }
     
+    private let versionString: String
+
+    init(modelVersion: String? = nil) {
+        versionString = modelVersion ?? AppPreferences.shared.fluidAudioModelVersion
+    }
+
     func initialize() async throws {
-        let versionString = AppPreferences.shared.fluidAudioModelVersion
         let version: AsrModelVersion = versionString == "v2" ? .v2 : .v3
         
         let models = try await AsrModels.downloadAndLoad(version: version)

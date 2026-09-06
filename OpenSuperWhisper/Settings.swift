@@ -694,11 +694,6 @@ struct SettingsView: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button("Done") {
-                    if viewModel.selectedEngine == "whisper" {
-                        if viewModel.selectedModelURL != previousModelURL, let modelPath = viewModel.selectedModelURL?.path {
-                            TranscriptionService.shared.reloadModel(with: modelPath)
-                        }
-                    }
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
@@ -729,11 +724,6 @@ struct SettingsView: View {
         .onChange(of: viewModel.selectedEngine) { _, newEngine in
             if newEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
-            }
-        }
-        .onChange(of: viewModel.fluidAudioModelVersion) { _, _ in
-            Task { @MainActor in
-                TranscriptionService.shared.reloadEngine()
             }
         }
         .onChange(of: viewModel.selectedModelURL) { _, newURL in

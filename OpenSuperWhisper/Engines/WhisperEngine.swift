@@ -85,8 +85,13 @@ class WhisperEngine: TranscriptionEngine {
         }
     }
     
+    private let modelPath: String?
+
+    init(modelPath: String? = nil) {
+        self.modelPath = modelPath ?? AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
+    }
+
     func initialize() async throws {
-        let modelPath = AppPreferences.shared.selectedWhisperModelPath ?? AppPreferences.shared.selectedModelPath
         guard let modelPath = modelPath else {
             throw TranscriptionError.contextInitializationFailed
         }

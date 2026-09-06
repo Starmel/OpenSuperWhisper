@@ -47,15 +47,47 @@ class TranscriptionService: ObservableObject {
         )
     }
     
-    init() {
-        loadEngine()
+    struct EngineSelection: Equatable {
+        let engine: String
+        let modelPath: String?
+        let modelVersion: String
+
+        static var current: Self {
+            let prefs = AppPreferences.shared
+            return Self(engine: prefs.selectedEngine,
+                        modelPath: prefs.selectedWhisperModelPath ?? prefs.selectedModelPath,
+                        modelVersion: prefs.fluidAudioModelVersion)
+        }
     }
 
-    /// Test-only dependency injection without starting an asynchronous model load.
+    @Published private(set) var loadingError: String?
+    private let engineLoader: (EngineSelection) async throws -> TranscriptionEngine
+    private var engineLoadTask: Task<TranscriptionEngine, Error>?
+    private var engineLoadID: UUID?
+    private var engineSelection: EngineSelection?
+
+    init(selection: EngineSelection = .current, engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine = TranscriptionService.makeEngine) {
+        self.engineLoader = engineLoader
+        loadEngine(selection: selection)
+    }
+
     init(engine: TranscriptionEngine) {
+        engineLoader = Self.makeEngine
         currentEngine = engine
     }
-    
+
+    private static func makeEngine(_ selection: EngineSelection) async throws -> TranscriptionEngine {
+        let engine: TranscriptionEngine
+        if selection.engine == "fluidaudio" {
+            engine = FluidAudioEngine(modelVersion: selection.modelVersion)
+        } else {
+            guard let path = selection.modelPath else { throw TranscriptionError.contextInitializationFailed }
+            engine = WhisperEngine(modelPath: path)
+        }
+        try await engine.initialize()
+        return engine
+    }
+
     func cancelTranscription() {
         guard let activeTask = transcriptionTask else { return }
 
@@ -83,42 +115,44 @@ class TranscriptionService: ObservableObject {
         progress = 0.0
     }
     
-    private func loadEngine() {
-        let selectedEngine = AppPreferences.shared.selectedEngine
-        print("Loading engine: \(selectedEngine)")
-        
+    func loadEngine(selection: EngineSelection) {
+        guard selection != engineSelection || (!isLoading && currentEngine == nil) else { return }
+        engineLoadTask?.cancel()
+        engineSelection = selection
+        let id = UUID()
+        engineLoadID = id
+        currentEngine = nil
+        recordingPreparation = nil
+        loadingError = nil
         isLoading = true
-        
-        Task.detached(priority: .userInitiated) {
-            let engine: TranscriptionEngine?
-            
-            if selectedEngine == "fluidaudio" {
-                engine = await FluidAudioEngine()
-            } else {
-                engine = await WhisperEngine()
-            }
-            
-            do {
-                try await engine?.initialize()
-                
-                await MainActor.run {
-                    self.currentEngine = engine
-                    self.isLoading = false
-                    print("Engine loaded: \(selectedEngine)")
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                    print("Failed to load engine: \(error)")
-                }
-            }
+        let loader = engineLoader
+        let task = Task.detached(priority: .userInitiated) {
+            let engine = try await loader(selection)
+            try Task.checkCancellation()
+            return engine
+        }
+        engineLoadTask = task
+        Task { [weak self] in
+            let result = await task.result
+            self?.finishEngineLoad(id: id, result: result)
         }
     }
-    
-    func reloadEngine() {
-        loadEngine()
+
+    private func finishEngineLoad(id: UUID, result: Result<TranscriptionEngine, Error>) {
+        guard engineLoadID == id else { return }
+        engineLoadTask = nil
+        engineLoadID = nil
+        isLoading = false
+        switch result {
+        case .success(let engine): currentEngine = engine
+        case .failure(let error): loadingError = error.localizedDescription
+        }
     }
-    
+
+    func reloadEngine() {
+        loadEngine(selection: .current)
+    }
+
     func reloadModel(with path: String) {
         if AppPreferences.shared.selectedEngine == "whisper" {
             AppPreferences.shared.selectedWhisperModelPath = path
