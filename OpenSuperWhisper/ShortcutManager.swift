@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ApplicationServices
 import Carbon
 import Cocoa
@@ -15,6 +16,8 @@ extension KeyboardShortcuts.Name {
 class ShortcutManager {
     static let shared = ShortcutManager()
 
+    private var triggerPermissions: PermissionsManager?
+    private var permissionSubscription: AnyCancellable?
     private var activeVm: IndicatorViewModel?
     private var holdWorkItem: DispatchWorkItem?
     private let holdThreshold: TimeInterval = 0.3
@@ -28,6 +31,12 @@ class ShortcutManager {
 
         setupKeyboardShortcuts()
         setupRecordingTrigger()
+        let permissions = PermissionsManager()
+        triggerPermissions = permissions
+        observeTriggerPermissions(permissions.$isAccessibilityPermissionGranted
+            .combineLatest(permissions.$isInputMonitoringPermissionGranted)
+            .map { ($0 ? 1 : 0) | ($1 ? 2 : 0) }
+            .eraseToAnyPublisher()) { [weak self] in self?.setupRecordingTrigger() }
         
         NotificationCenter.default.addObserver(
             self,
@@ -44,6 +53,13 @@ class ShortcutManager {
         )
     }
     
+    func observeTriggerPermissions(_ publisher: AnyPublisher<Int, Never>, reconfigure: @escaping () -> Void) {
+        permissionSubscription = publisher
+            .removeDuplicates()
+            .dropFirst()
+            .sink { _ in reconfigure() }
+    }
+
     @objc private func indicatorWindowDidHide() {
         activeVm = nil
         holdMode = false
