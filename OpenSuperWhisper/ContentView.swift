@@ -26,6 +26,10 @@ class ContentViewModel: ObservableObject {
     @Published var microphoneService = MicrophoneService.shared
     @Published var shouldClearSearch = false
     
+    @Published private(set) var loadingError: String?
+    private var pageTask: Task<Void, Never>?
+    private var pageRequestID: UUID?
+    private let fetchPage: (String, Int, Int) async throws -> [Recording]
     private var currentPage = 0
     private let pageSize = 100
     private var currentSearchQuery = ""
@@ -34,7 +38,13 @@ class ContentViewModel: ObservableObject {
     private var durationTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     
-    init() {
+    init(fetchPage: ((String, Int, Int) async throws -> [Recording])? = nil) {
+        self.fetchPage = fetchPage ?? { query, limit, offset in
+            if query.isEmpty {
+                return try await RecordingStore.shared.fetchRecordings(limit: limit, offset: offset)
+            }
+            return await RecordingStore.shared.searchRecordingsAsync(query: query, limit: limit, offset: offset)
+        }
         recorder.$isConnecting
             .receive(on: RunLoop.main)
             .sink { [weak self] isConnecting in
@@ -67,66 +77,51 @@ class ContentViewModel: ObservableObject {
     }
     
     func loadInitialData() {
-        currentSearchQuery = ""
-        currentPage = 0
-        canLoadMore = true
-        recordings = []
-        loadMore()
+        search(query: "")
     }
 
     func loadMore() {
         guard !isLoadingMore && canLoadMore else { return }
         isLoadingMore = true
-        
-        // Capture current state for async task
+        loadingError = nil
+        let id = UUID()
+        pageRequestID = id
         let page = currentPage
-        let limit = pageSize
         let query = currentSearchQuery
-        let offset = page * limit
-        
-        
-        Task {
-            let newRecordings: [Recording]
-            if query.isEmpty {
-                newRecordings = try await recordingStore.fetchRecordings(limit: limit, offset: offset)
-            } else {
-                newRecordings = await recordingStore.searchRecordingsAsync(query: query, limit: limit, offset: offset)
+        let limit = pageSize
+        pageTask = Task {
+            defer {
+                if pageRequestID == id {
+                    isLoadingMore = false
+                    pageTask = nil
+                }
             }
-            
-            
-            await MainActor.run {
-                defer {
-                    self.isLoadingMore = false
-                }
-                
-                // Ensure we are still consistent with the request (basic check)
-                guard self.currentSearchQuery == query else { 
-                    return 
-                }
-                
-                if page == 0 {
-                    self.recordings = newRecordings
-                } else {
-                    self.recordings.append(contentsOf: newRecordings)
-                }
-                
-                if newRecordings.count < limit {
-                    self.canLoadMore = false
-                } else {
-                    self.currentPage += 1
-                }
+            do {
+                let result = try await fetchPage(query, limit, page * limit)
+                try Task.checkCancellation()
+                guard pageRequestID == id else { return }
+                if page == 0 { recordings = result }
+                else { recordings.append(contentsOf: result) }
+                canLoadMore = result.count == limit
+                currentPage = page + 1
+            } catch {
+                guard pageRequestID == id, !Task.isCancelled else { return }
+                loadingError = error.localizedDescription
             }
         }
     }
-    
+
     func search(query: String) {
+        pageTask?.cancel()
+        pageRequestID = nil
+        isLoadingMore = false
         currentSearchQuery = query
         currentPage = 0
         canLoadMore = true
         recordings = []
         loadMore()
     }
-    
+
     func handleProgressUpdate(id: UUID, transcription: String?, progress: Float, status: RecordingStatus, isRegeneration: Bool?) {
         if let index = recordings.firstIndex(where: { $0.id == id }) {
             if let transcription = transcription {
