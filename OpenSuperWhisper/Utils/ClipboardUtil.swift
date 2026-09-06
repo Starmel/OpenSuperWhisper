@@ -28,6 +28,10 @@ class ClipboardUtil {
 
     /// Pastes text and restores original clipboard (legacy behavior)
     static func insertText(_ text: String) {
+        insertText(text, postEvent: { $0.post(tap: .cghidEventTap) })
+    }
+
+    static func insertText(_ text: String, postEvent: (CGEvent) -> Void) {
         let pasteboard = NSPasteboard.general
 
         // Save current pasteboard contents
@@ -39,7 +43,7 @@ class ClipboardUtil {
         let changeCountAfterCopy = pasteboard.changeCount
 
         // Simulate Cmd+V using layout-aware keycode resolution
-        simulatePaste()
+        sendCmdV(postEvent: postEvent)
 
         // Restore original contents only after the target app had a chance to
         // process the paste, and only if the pasteboard still holds our text:
@@ -62,10 +66,10 @@ class ClipboardUtil {
     }
     
     private static func simulatePaste() {
-        sendCmdV()
+        sendCmdV(postEvent: { $0.post(tap: .cghidEventTap) })
     }
     
-    private static func sendCmdV() {
+    private static func sendCmdV(postEvent: (CGEvent) -> Void) {
         // QWERTY keycode for V
         let qwertyKeyCodeV: CGKeyCode = 9
         
@@ -91,8 +95,8 @@ class ClipboardUtil {
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
         
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        postEvent(keyDown)
+        postEvent(keyUp)
     }
     
     static func isQwertyCommandLayout() -> Bool {

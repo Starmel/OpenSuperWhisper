@@ -682,503 +682,236 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
 
 // MARK: - Paste Integration Tests
 
+@MainActor
 final class ClipboardUtilPasteIntegrationTests: XCTestCase {
-    
-    private static var sharedTextEditProcess: NSRunningApplication?
-    private static var sharedAppElement: AXUIElement?
-    private static var originalInputSourceID: String?
-    private static var testCounter = 0
-    
-    private func log(_ message: String) {
-        let logMessage = "[TEST \(Date())] \(message)\n"
-        print(logMessage)
-        let logFile = "/tmp/paste_test_log.txt"
-        if let data = logMessage.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logFile) {
-                if let handle = FileHandle(forWritingAtPath: logFile) {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                    handle.closeFile()
-                }
+    private func pasteText(_ text: String, layoutID: String) async throws {
+        let originalInputSourceID = ClipboardUtil.getCurrentInputSourceID()
+        defer {
+            if let originalInputSourceID {
+                _ = ClipboardUtil.switchToInputSource(withID: originalInputSourceID)
+            }
+        }
+        guard ClipboardUtil.switchToInputSource(withID: layoutID) else {
+            throw XCTSkip("\(layoutID) layout not available")
+        }
+
+        let pasteboard = NSPasteboard.general
+        let originalContents = ClipboardUtil.saveCurrentPasteboardContents(from: pasteboard)
+        let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        editor.isRichText = false
+        let editMenu = NSMenu(title: "Edit")
+        let pasteItem = editMenu.addItem(
+            withTitle: "Paste",
+            action: #selector(NSText.paste(_:)),
+            keyEquivalent: "v"
+        )
+        pasteItem.target = editor
+        defer {
+            if let originalContents {
+                ClipboardUtil.restorePasteboardContents(originalContents, to: pasteboard)
             } else {
-                FileManager.default.createFile(atPath: logFile, contents: data)
+                pasteboard.clearContents()
             }
         }
-    }
-    
-    override class func setUp() {
-        super.setUp()
-        print("[TEST] ========== CLASS SETUP ==========")
-        originalInputSourceID = ClipboardUtil.getCurrentInputSourceID()
-        print("[TEST] Original layout: \(originalInputSourceID ?? "nil")")
-        
-        _ = ClipboardUtil.switchToInputSource(withID: "US")
-        print("[TEST] Switched to US layout for setup")
-        
-        terminateTextEditIfRunning()
-        testCounter = 0
-    }
-    
-    override class func tearDown() {
-        print("[TEST] ========== CLASS TEARDOWN ==========")
-        if let originalID = originalInputSourceID {
-            _ = ClipboardUtil.switchToInputSource(withID: originalID)
-        }
-        terminateTextEditIfRunning()
-        sharedTextEditProcess = nil
-        sharedAppElement = nil
-        super.tearDown()
-    }
-    
-    override func setUpWithError() throws {
-        Self.testCounter += 1
-        log("--- Test #\(Self.testCounter) SETUP ---")
-        try super.setUpWithError()
-    }
-    
-    override func tearDownWithError() throws {
-        log("--- Test #\(Self.testCounter) TEARDOWN ---")
-        try super.tearDownWithError()
-    }
-    
-    private static func terminateTextEditIfRunning() {
-        let runningApps = NSWorkspace.shared.runningApplications
-        var terminated = false
-        for app in runningApps where app.bundleIdentifier == "com.apple.TextEdit" {
-            print("[TEST] Force terminating TextEdit (pid: \(app.processIdentifier))")
-            app.forceTerminate()
-            terminated = true
-        }
-        if terminated {
-            Thread.sleep(forTimeInterval: 0.5)
-        }
-        sharedTextEditProcess = nil
-        sharedAppElement = nil
-    }
-    
-    private func terminateTextEditIfRunning() {
-        Self.terminateTextEditIfRunning()
-    }
-    
-    private func launchTextEditIfNeeded() throws -> AXUIElement {
-        if let appElement = Self.sharedAppElement,
-           let process = Self.sharedTextEditProcess,
-           !process.isTerminated {
-            log("TextEdit already running (pid: \(process.processIdentifier))")
-            return appElement
-        }
-        
-        log("Launching TextEdit...")
-        let workspace = NSWorkspace.shared
-        
-        guard let textEditURL = workspace.urlForApplication(withBundleIdentifier: "com.apple.TextEdit") else {
-            throw XCTSkip("TextEdit not found")
-        }
-        
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        
-        let semaphore = DispatchSemaphore(value: 0)
-        var launchedApp: NSRunningApplication?
-        
-        workspace.openApplication(at: textEditURL, configuration: configuration) { app, error in
-            launchedApp = app
-            semaphore.signal()
-        }
-        
-        _ = semaphore.wait(timeout: .now() + 5.0)
-        
-        guard let app = launchedApp else {
-            throw XCTSkip("Failed to launch TextEdit")
-        }
-        
-        log("TextEdit launched (pid: \(app.processIdentifier))")
-        Self.sharedTextEditProcess = app
-        Thread.sleep(forTimeInterval: 1.0)
-        Self.sharedAppElement = AXUIElementCreateApplication(app.processIdentifier)
-        
-        dismissOpenDialogIfPresent()
-        createNewDocumentIfNeeded()
-        
-        return Self.sharedAppElement!
-    }
-    
-    private func activateTextEdit() {
-        Self.sharedTextEditProcess?.activate()
-        Thread.sleep(forTimeInterval: 0.3)
-    }
-    
-    private func sendKeyStroke(keyCode: CGKeyCode, flags: CGEventFlags = []) {
-        let source = CGEventSource(stateID: .combinedSessionState)
-        
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
-        else { return }
-        
-        keyDown.flags = flags
-        keyUp.flags = flags
-        
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
-    }
-    
-    private func dismissOpenDialogIfPresent() {
-        log("Dismissing open dialog if present...")
-        activateTextEdit()
-        sendKeyStroke(keyCode: 53)
-        Thread.sleep(forTimeInterval: 0.5)
-        sendKeyStroke(keyCode: 53)
-        Thread.sleep(forTimeInterval: 0.3)
-    }
-    
-    private func createNewDocumentIfNeeded() {
-        log("Creating new document...")
-        activateTextEdit()
-        sendKeyStroke(keyCode: 45, flags: .maskCommand)
-        Thread.sleep(forTimeInterval: 1.0)
-        
-        clickInTextArea()
-    }
-    
-    private func clickInTextArea() {
-        log("Clicking in text area...")
-        guard let process = Self.sharedTextEditProcess else { return }
-        
-        let appElement = AXUIElementCreateApplication(process.processIdentifier)
-        var windowValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowValue) == .success,
-              let windows = windowValue as? [AXUIElement],
-              let mainWindow = windows.first else {
-            log("No windows found")
-            return
-        }
-        
-        var scrollAreaValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(mainWindow, kAXChildrenAttribute as CFString, &scrollAreaValue) == .success,
-           let children = scrollAreaValue as? [AXUIElement] {
-            for child in children {
-                var roleValue: CFTypeRef?
-                if AXUIElementCopyAttributeValue(child, kAXRoleAttribute as CFString, &roleValue) == .success,
-                   let role = roleValue as? String,
-                   role == "AXScrollArea" {
-                    var textAreaValue: CFTypeRef?
-                    if AXUIElementCopyAttributeValue(child, kAXChildrenAttribute as CFString, &textAreaValue) == .success,
-                       let textAreaChildren = textAreaValue as? [AXUIElement] {
-                        for textChild in textAreaChildren {
-                            var textRoleValue: CFTypeRef?
-                            if AXUIElementCopyAttributeValue(textChild, kAXRoleAttribute as CFString, &textRoleValue) == .success,
-                               let textRole = textRoleValue as? String,
-                               textRole == "AXTextArea" {
-                                log("Found text area, setting focus...")
-                                AXUIElementSetAttributeValue(textChild, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-                                Thread.sleep(forTimeInterval: 0.3)
-                                return
-                            }
-                        }
-                    }
-                }
+
+        var eventTypes: [CGEventType] = []
+        ClipboardUtil.insertText(text, postEvent: { event in
+            eventTypes.append(event.type)
+            XCTAssertTrue(event.flags.contains(.maskCommand))
+            guard event.type == .keyDown else { return }
+            guard let keyEvent = NSEvent(cgEvent: event) else {
+                XCTFail("Paste event must be convertible to an AppKit event")
+                return
             }
+            XCTAssertTrue(editMenu.performKeyEquivalent(with: keyEvent))
+        })
+        XCTAssertEqual(eventTypes, [.keyDown, .keyUp])
+        let pasteDeadline = Date().addingTimeInterval(3)
+        while editor.string != text && Date() < pasteDeadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
         }
-        log("Text area not found, clicking in center of window...")
+        XCTAssertEqual(editor.string, text, "Paste failed for \(layoutID)")
+        try await Task.sleep(nanoseconds: UInt64((ClipboardUtil.clipboardRestoreDelay + 0.1) * 1_000_000_000))
     }
-    
-    private func selectAllAndDelete() {
-        log("Selecting all and deleting...")
-        activateTextEdit()
-        sendKeyStroke(keyCode: 0, flags: .maskCommand)
-        Thread.sleep(forTimeInterval: 0.1)
-        sendKeyStroke(keyCode: 51)
-        Thread.sleep(forTimeInterval: 0.2)
-    }
-    
+
     // MARK: - Basic Layouts
     
-    func testPasteWithUSLayout() throws {
-        try testPasteWithLayout(layoutID: "US", testText: "Hello from US layout test")
+    func testPasteWithUSLayout() async throws {
+        try await testPasteWithLayout(layoutID: "US", testText: "Hello from US layout test")
     }
     
-    func testPasteWithABCLayout() throws {
-        try testPasteWithLayout(layoutID: "ABC", testText: "Hello from ABC layout test")
+    func testPasteWithABCLayout() async throws {
+        try await testPasteWithLayout(layoutID: "ABC", testText: "Hello from ABC layout test")
     }
     
-    func testPasteWithUSInternationalLayout() throws {
-        try testPasteWithLayout(layoutID: "USInternational", testText: "Hello from US International layout test")
+    func testPasteWithUSInternationalLayout() async throws {
+        try await testPasteWithLayout(layoutID: "USInternational", testText: "Hello from US International layout test")
     }
     
-    func testPasteWithBritishLayout() throws {
-        try testPasteWithLayout(layoutID: "British", testText: "Hello from British layout test")
+    func testPasteWithBritishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "British", testText: "Hello from British layout test")
     }
     
-    func testPasteWithColemakLayout() throws {
-        try testPasteWithLayout(layoutID: "Colemak", testText: "Hello from Colemak layout test")
+    func testPasteWithColemakLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Colemak", testText: "Hello from Colemak layout test")
     }
     
     // MARK: - Dvorak Layouts
     
-    func testPasteWithDvorakQwertyLayout() throws {
-        try testPasteWithLayout(layoutID: "DVORAK-QWERTYCMD", testText: "Hello from Dvorak-QWERTY layout test")
+    func testPasteWithDvorakQwertyLayout() async throws {
+        try await testPasteWithLayout(layoutID: "DVORAK-QWERTYCMD", testText: "Hello from Dvorak-QWERTY layout test")
     }
     
-    func testPasteWithDvorakLeftHandLayout() throws {
-        try testPasteWithLayout(layoutID: "Dvorak-Left", testText: "Hello from Dvorak Left-Handed layout test")
+    func testPasteWithDvorakLeftHandLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Dvorak-Left", testText: "Hello from Dvorak Left-Handed layout test")
     }
     
-    func testPasteWithDvorakRightHandLayout() throws {
-        try testPasteWithLayout(layoutID: "Dvorak-Right", testText: "Hello from Dvorak Right-Handed layout test")
+    func testPasteWithDvorakRightHandLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Dvorak-Right", testText: "Hello from Dvorak Right-Handed layout test")
     }
     
     // MARK: - Cyrillic Layouts
     
-    func testPasteWithRussianLayout() throws {
-        try testPasteWithLayout(layoutID: "Russian", testText: "Привет из теста русской раскладки")
+    func testPasteWithRussianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Russian", testText: "Привет из теста русской раскладки")
     }
     
-    func testPasteWithUkrainianLayout() throws {
-        try testPasteWithLayout(layoutID: "Ukrainian", testText: "Привіт з тесту української розкладки")
+    func testPasteWithUkrainianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Ukrainian", testText: "Привіт з тесту української розкладки")
     }
     
     // MARK: - European Layouts
     
-    func testPasteWithGermanLayout() throws {
-        try testPasteWithLayout(layoutID: "German", testText: "Hallo aus dem deutschen Layout-Test")
+    func testPasteWithGermanLayout() async throws {
+        try await testPasteWithLayout(layoutID: "German", testText: "Hallo aus dem deutschen Layout-Test")
     }
     
-    func testPasteWithFrenchLayout() throws {
-        try testPasteWithLayout(layoutID: "French", testText: "Bonjour du test de disposition française")
+    func testPasteWithFrenchLayout() async throws {
+        try await testPasteWithLayout(layoutID: "French", testText: "Bonjour du test de disposition française")
     }
     
-    func testPasteWithSpanishLayout() throws {
-        try testPasteWithLayout(layoutID: "Spanish", testText: "Hola desde la prueba de teclado español")
+    func testPasteWithSpanishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Spanish", testText: "Hola desde la prueba de teclado español")
     }
     
-    func testPasteWithItalianLayout() throws {
-        try testPasteWithLayout(layoutID: "Italian", testText: "Ciao dal test del layout italiano")
+    func testPasteWithItalianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Italian", testText: "Ciao dal test del layout italiano")
     }
     
-    func testPasteWithPortugueseLayout() throws {
-        try testPasteWithLayout(layoutID: "Portuguese", testText: "Olá do teste de layout português")
+    func testPasteWithPortugueseLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Portuguese", testText: "Olá do teste de layout português")
     }
     
-    func testPasteWithPolishLayout() throws {
-        try testPasteWithLayout(layoutID: "Polish", testText: "Cześć z testu polskiego układu")
+    func testPasteWithPolishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Polish", testText: "Cześć z testu polskiego układu")
     }
     
-    func testPasteWithGreekLayout() throws {
-        try testPasteWithLayout(layoutID: "Greek", testText: "Γειά σου από τη δοκιμή ελληνικής διάταξης")
+    func testPasteWithGreekLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Greek", testText: "Γειά σου από τη δοκιμή ελληνικής διάταξης")
     }
     
-    func testPasteWithTurkishLayout() throws {
-        try testPasteWithLayout(layoutID: "Turkish", testText: "Türkçe klavye testinden merhaba")
+    func testPasteWithTurkishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Turkish", testText: "Türkçe klavye testinden merhaba")
     }
     
-    func testPasteWithSwissGermanLayout() throws {
-        try testPasteWithLayout(layoutID: "Swiss German", testText: "Grüezi vom Schweizer Layout-Test")
+    func testPasteWithSwissGermanLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Swiss German", testText: "Grüezi vom Schweizer Layout-Test")
     }
     
-    func testPasteWithDutchLayout() throws {
-        try testPasteWithLayout(layoutID: "Dutch", testText: "Hallo van de Nederlandse layout test")
+    func testPasteWithDutchLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Dutch", testText: "Hallo van de Nederlandse layout test")
     }
     
-    func testPasteWithSwedishLayout() throws {
-        try testPasteWithLayout(layoutID: "Swedish", testText: "Hej från det svenska layouttestet")
+    func testPasteWithSwedishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Swedish", testText: "Hej från det svenska layouttestet")
     }
     
-    func testPasteWithNorwegianLayout() throws {
-        try testPasteWithLayout(layoutID: "Norwegian", testText: "Hei fra den norske layouttesten")
+    func testPasteWithNorwegianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Norwegian", testText: "Hei fra den norske layouttesten")
     }
     
-    func testPasteWithDanishLayout() throws {
-        try testPasteWithLayout(layoutID: "Danish", testText: "Hej fra den danske layouttest")
+    func testPasteWithDanishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Danish", testText: "Hej fra den danske layouttest")
     }
     
-    func testPasteWithFinnishLayout() throws {
-        try testPasteWithLayout(layoutID: "Finnish", testText: "Terve suomalaisesta näppäimistötestistä")
+    func testPasteWithFinnishLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Finnish", testText: "Terve suomalaisesta näppäimistötestistä")
     }
     
-    func testPasteWithCzechLayout() throws {
-        try testPasteWithLayout(layoutID: "Czech", testText: "Ahoj z testu českého rozložení")
+    func testPasteWithCzechLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Czech", testText: "Ahoj z testu českého rozložení")
     }
     
-    func testPasteWithHungarianLayout() throws {
-        try testPasteWithLayout(layoutID: "Hungarian", testText: "Helló a magyar billentyűzet tesztből")
+    func testPasteWithHungarianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Hungarian", testText: "Helló a magyar billentyűzet tesztből")
     }
     
-    func testPasteWithRomanianLayout() throws {
-        try testPasteWithLayout(layoutID: "Romanian", testText: "Bună din testul de layout românesc")
+    func testPasteWithRomanianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Romanian", testText: "Bună din testul de layout românesc")
     }
     
     // MARK: - Asian Layouts
     
-    func testPasteWithChinesePinyinLayout() throws {
-        try testPasteWithLayout(layoutID: "Pinyin", testText: "你好从中文拼音布局测试")
+    func testPasteWithChinesePinyinLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Pinyin", testText: "你好从中文拼音布局测试")
     }
     
-    func testPasteWithChineseTraditionalLayout() throws {
-        try testPasteWithLayout(layoutID: "Traditional", testText: "你好從繁體中文佈局測試")
+    func testPasteWithChineseTraditionalLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Traditional", testText: "你好從繁體中文佈局測試")
     }
     
-    func testPasteWithJapaneseLayout() throws {
-        try testPasteWithLayout(layoutID: "Japanese", testText: "こんにちは日本語レイアウトテストから")
+    func testPasteWithJapaneseLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Japanese", testText: "こんにちは日本語レイアウトテストから")
     }
     
-    func testPasteWithJapaneseRomajiLayout() throws {
-        try testPasteWithLayout(layoutID: "Romaji", testText: "Hello from Japanese Romaji layout test")
+    func testPasteWithJapaneseRomajiLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Romaji", testText: "Hello from Japanese Romaji layout test")
     }
     
-    func testPasteWithKoreanLayout() throws {
-        try testPasteWithLayout(layoutID: "Korean", testText: "안녕하세요 한국어 레이아웃 테스트에서")
+    func testPasteWithKoreanLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Korean", testText: "안녕하세요 한국어 레이아웃 테스트에서")
     }
     
-    func testPasteWithVietnameseLayout() throws {
-        try testPasteWithLayout(layoutID: "Vietnamese", testText: "Xin chào từ bài kiểm tra bố cục tiếng Việt")
+    func testPasteWithVietnameseLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Vietnamese", testText: "Xin chào từ bài kiểm tra bố cục tiếng Việt")
     }
     
-    func testPasteWithThaiLayout() throws {
-        try testPasteWithLayout(layoutID: "Thai", testText: "สวัสดีจากการทดสอบคีย์บอร์ดภาษาไทย")
+    func testPasteWithThaiLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Thai", testText: "สวัสดีจากการทดสอบคีย์บอร์ดภาษาไทย")
     }
     
     // MARK: - Middle Eastern Layouts
     
-    func testPasteWithArabicLayout() throws {
-        try testPasteWithLayout(layoutID: "Arabic", testText: "مرحبا من اختبار تخطيط اللغة العربية")
+    func testPasteWithArabicLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Arabic", testText: "مرحبا من اختبار تخطيط اللغة العربية")
     }
     
-    func testPasteWithHebrewLayout() throws {
-        try testPasteWithLayout(layoutID: "Hebrew", testText: "שלום ממבחן פריסת עברית")
+    func testPasteWithHebrewLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Hebrew", testText: "שלום ממבחן פריסת עברית")
     }
     
-    func testPasteWithPersianLayout() throws {
-        try testPasteWithLayout(layoutID: "Persian", testText: "سلام از آزمایش چیدمان فارسی")
+    func testPasteWithPersianLayout() async throws {
+        try await testPasteWithLayout(layoutID: "Persian", testText: "سلام از آزمایش چیدمان فارسی")
     }
     
-    // MARK: - Helper Method
-    
-    private func testPasteWithLayout(layoutID: String, testText: String) throws {
-        log("Testing layout: \(layoutID)")
-        
-        _ = ClipboardUtil.switchToInputSource(withID: "US")
-        log("Switched to US for TextEdit operations")
-        
-        _ = try launchTextEditIfNeeded()
-        selectAllAndDelete()
-        activateTextEdit()
-        
-        let switched = ClipboardUtil.switchToInputSource(withID: layoutID)
-        if !switched {
-            log("Layout \(layoutID) not available, skipping")
-            throw XCTSkip("\(layoutID) layout not available")
-        }
-        log("Switched to layout: \(layoutID)")
-        
-        Thread.sleep(forTimeInterval: 0.2)
-        
-        activateTextEdit()
-        clickInTextArea()
-        
-        log("Inserting text: \(testText)")
-        ClipboardUtil.insertText(testText)
-        
-        Thread.sleep(forTimeInterval: 0.5)
-        
-        activateTextEdit()
-        Thread.sleep(forTimeInterval: 0.2)
-        
-        let resultText = getTextFromTextEdit()
-        log("Result text: \(resultText ?? "nil")")
-        XCTAssertEqual(resultText, testText, "Text should be pasted correctly with \(layoutID) layout")
+    private func testPasteWithLayout(layoutID: String, testText: String) async throws {
+        try await pasteText(testText, layoutID: layoutID)
     }
-    
-    private func getTextFromTextEdit() -> String? {
-        guard let process = Self.sharedTextEditProcess else { return nil }
-        
-        let appElement = AXUIElementCreateApplication(process.processIdentifier)
-        var windowValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowValue) == .success,
-              let windows = windowValue as? [AXUIElement],
-              let mainWindow = windows.first else {
-            return nil
+
+    func testPasteAllAvailableLayouts() async throws {
+        let filter = [
+            kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource,
+            kTISPropertyInputSourceIsSelectCapable: kCFBooleanTrue,
+        ] as CFDictionary
+        let sources = try XCTUnwrap(
+            TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource]
+        )
+        XCTAssertFalse(sources.isEmpty)
+        for source in sources {
+            let idPointer = try XCTUnwrap(TISGetInputSourceProperty(source, kTISPropertyInputSourceID))
+            let layoutID = Unmanaged<CFString>.fromOpaque(idPointer).takeUnretainedValue() as String
+            try await pasteText("Test for \(layoutID)", layoutID: layoutID)
         }
-        
-        var scrollAreaValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(mainWindow, kAXChildrenAttribute as CFString, &scrollAreaValue) == .success,
-           let children = scrollAreaValue as? [AXUIElement] {
-            for child in children {
-                var roleValue: CFTypeRef?
-                if AXUIElementCopyAttributeValue(child, kAXRoleAttribute as CFString, &roleValue) == .success,
-                   let role = roleValue as? String,
-                   role == "AXScrollArea" {
-                    var textAreaValue: CFTypeRef?
-                    if AXUIElementCopyAttributeValue(child, kAXChildrenAttribute as CFString, &textAreaValue) == .success,
-                       let textAreaChildren = textAreaValue as? [AXUIElement] {
-                        for textChild in textAreaChildren {
-                            var textRoleValue: CFTypeRef?
-                            if AXUIElementCopyAttributeValue(textChild, kAXRoleAttribute as CFString, &textRoleValue) == .success,
-                               let textRole = textRoleValue as? String,
-                               textRole == "AXTextArea" {
-                                var valueRef: CFTypeRef?
-                                if AXUIElementCopyAttributeValue(textChild, kAXValueAttribute as CFString, &valueRef) == .success,
-                                   let text = valueRef as? String {
-                                    return text
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return nil
-    }
-    
-    func testPasteAllAvailableLayouts() throws {
-        log("Testing all available layouts")
-        let layouts = ClipboardUtil.getAvailableInputSources()
-        log("Available layouts: \(layouts)")
-        var results: [(layout: String, success: Bool, error: String?)] = []
-        
-        for layout in layouts {
-            log("Testing layout: \(layout)")
-            
-            _ = ClipboardUtil.switchToInputSource(withID: "US")
-            
-            _ = try launchTextEditIfNeeded()
-            selectAllAndDelete()
-            activateTextEdit()
-            
-            let switched = ClipboardUtil.switchToInputSource(withID: layout)
-            if !switched {
-                log("Failed to switch to \(layout)")
-                results.append((layout, false, "Failed to switch"))
-                continue
-            }
-            
-            Thread.sleep(forTimeInterval: 0.2)
-            
-            activateTextEdit()
-            clickInTextArea()
-            
-            let testText = "Test for \(layout)"
-            ClipboardUtil.insertText(testText)
-            
-            Thread.sleep(forTimeInterval: 0.5)
-            
-            activateTextEdit()
-            Thread.sleep(forTimeInterval: 0.2)
-            
-            let resultText = getTextFromTextEdit() ?? ""
-            let success = resultText == testText
-            log("Layout \(layout): expected '\(testText)', got '\(resultText)' - \(success ? "OK" : "FAIL")")
-            results.append((layout, success, success ? nil : "Expected '\(testText)', got '\(resultText)'"))
-        }
-        
-        print("\n=== Paste Test Results ===")
-        for result in results {
-            let status = result.success ? "✅" : "❌"
-            print("\(status) \(result.layout): \(result.error ?? "OK")")
-        }
-        print("===========================\n")
-        
-        let failedLayouts = results.filter { !$0.success }
-        XCTAssertTrue(failedLayouts.isEmpty, "Failed layouts: \(failedLayouts.map { $0.layout })")
     }
 }
 
