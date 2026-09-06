@@ -1,0 +1,246 @@
+import Foundation
+import XCTest
+@testable import OpenSuperWhisper
+
+private final class ControlledTranscriptionEngine: TranscriptionEngine {
+    var isModelLoaded: Bool { true }
+    var engineName: String { "Controlled test engine" }
+
+    private let lock = NSLock()
+    private var continuations: [String: CheckedContinuation<String, Error>] = [:]
+    private var nextStartHandler: (() -> Void)?
+    private var startCountStorage = 0
+    private var cancelCountStorage = 0
+    private var activeCallCount = 0
+    private var maxConcurrentCallCountStorage = 0
+
+    var startCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return startCountStorage
+    }
+
+    var cancelCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelCountStorage
+    }
+
+    var maxConcurrentCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return maxConcurrentCallCountStorage
+    }
+
+    func initialize() async throws {}
+
+    func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<String, Error>) in
+            lock.lock()
+            continuations[url.path] = continuation
+            startCountStorage += 1
+            activeCallCount += 1
+            maxConcurrentCallCountStorage = max(
+                maxConcurrentCallCountStorage,
+                activeCallCount
+            )
+            let startHandler = nextStartHandler
+            nextStartHandler = nil
+            lock.unlock()
+
+            startHandler?()
+        }
+    }
+
+    func cancelTranscription() {
+        lock.lock()
+        cancelCountStorage += 1
+        lock.unlock()
+    }
+
+    func getSupportedLanguages() -> [String] {
+        ["en", "ru"]
+    }
+
+    func notifyOnNextStart(_ handler: @escaping () -> Void) {
+        lock.lock()
+        nextStartHandler = handler
+        lock.unlock()
+    }
+
+    @discardableResult
+    func complete(
+        url: URL,
+        with result: Result<String, Error>
+    ) -> Bool {
+        lock.lock()
+        guard let continuation = continuations.removeValue(forKey: url.path) else {
+            lock.unlock()
+            return false
+        }
+        activeCallCount -= 1
+        lock.unlock()
+
+        continuation.resume(with: result)
+        return true
+    }
+}
+
+@MainActor
+final class TranscriptionCancellationTests: XCTestCase {
+    private let audioURL = URL(fileURLWithPath: "/tmp/osw-cancellation-test.wav")
+
+    func testEscDuringDecodingCancelsEngineAndRejectsLateResult() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osw-escape-cancel-\(UUID().uuidString).wav")
+        try Data(repeating: 0, count: 64).write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let viewModel = IndicatorViewModel(
+            transcriptionService: service,
+            stopRecording: { tempURL },
+            cancelAudioRecording: {}
+        )
+        viewModel.state = .recording
+
+        let started = expectation(description: "native decode started")
+        engine.notifyOnNextStart { started.fulfill() }
+
+        viewModel.startDecoding()
+
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(viewModel.state == .decoding)
+        viewModel.cancelRecording()
+
+        XCTAssertEqual(engine.cancelCount, 1)
+        XCTAssertTrue(
+            service.isTranscribing,
+            "The service must stay busy until the native decoder actually exits"
+        )
+
+        XCTAssertTrue(
+            engine.complete(url: tempURL, with: .success("late result"))
+        )
+
+        for _ in 0..<100 {
+            if !service.isTranscribing { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertFalse(service.isTranscribing)
+        XCTAssertTrue(service.transcribedText.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempURL.path))
+        viewModel.cleanup()
+    }
+
+    func testScopedCancellationDoesNotCancelDifferentOperation() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let operationID = UUID()
+        let started = expectation(description: "decode started")
+        engine.notifyOnNextStart { started.fulfill() }
+
+        let transcription = Task {
+            try await service.transcribeAudio(
+                url: audioURL,
+                settings: Settings(),
+                operationID: operationID
+            )
+        }
+
+        await fulfillment(of: [started], timeout: 2)
+        service.cancelTranscription(operationID: UUID())
+
+        XCTAssertEqual(engine.cancelCount, 0)
+        XCTAssertTrue(
+            engine.complete(url: audioURL, with: .success("expected result"))
+        )
+        let result = try await transcription.value
+        XCTAssertEqual(result, "expected result")
+    }
+
+    func testCancelledNativeRunBlocksNextDecodeUntilItReturns() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let firstID = UUID()
+        let firstURL = URL(fileURLWithPath: "/tmp/osw-cancellation-first.wav")
+        let secondURL = URL(fileURLWithPath: "/tmp/osw-cancellation-second.wav")
+        let firstStarted = expectation(description: "first decode started")
+        engine.notifyOnNextStart { firstStarted.fulfill() }
+
+        let first = Task {
+            try await service.transcribeAudio(
+                url: firstURL,
+                settings: Settings(),
+                operationID: firstID
+            )
+        }
+
+        await fulfillment(of: [firstStarted], timeout: 2)
+        service.cancelTranscription(operationID: firstID)
+
+        let secondStarted = expectation(description: "second decode started")
+        let secondEnteredService = expectation(
+            description: "second caller entered service"
+        )
+        engine.notifyOnNextStart { secondStarted.fulfill() }
+        let second = Task {
+            secondEnteredService.fulfill()
+            return try await service.transcribeAudio(
+                url: secondURL,
+                settings: Settings(),
+                operationID: UUID()
+            )
+        }
+
+        await fulfillment(of: [secondEnteredService], timeout: 2)
+        await Task.yield()
+        XCTAssertEqual(
+            engine.startCount,
+            1,
+            "A second native decode must wait while cancellation is in flight"
+        )
+        XCTAssertTrue(service.isTranscribing)
+
+        XCTAssertTrue(
+            engine.complete(
+                url: firstURL,
+                with: .success("ignored late result")
+            )
+        )
+        do {
+            _ = try await first.value
+            XCTFail("The first decode must finish as cancelled")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+
+        await fulfillment(of: [secondStarted], timeout: 2)
+        XCTAssertEqual(engine.maxConcurrentCallCount, 1)
+        XCTAssertTrue(
+            engine.complete(url: secondURL, with: .success("second result"))
+        )
+        let secondResult = try await second.value
+        XCTAssertEqual(secondResult, "second result")
+    }
+
+    func testLateViewModelCompletionCannotHideCurrentSession() {
+        let service = TranscriptionService(engine: ControlledTranscriptionEngine())
+        let oldViewModel = IndicatorViewModel(transcriptionService: service)
+        let currentViewModel = IndicatorViewModel(transcriptionService: service)
+        let manager = IndicatorWindowManager.shared
+        let originalViewModel = manager.viewModel
+        defer { manager.viewModel = originalViewModel }
+
+        manager.viewModel = currentViewModel
+        let accepted = manager.didFinishDecoding(from: oldViewModel)
+
+        XCTAssertFalse(accepted)
+        XCTAssertTrue(manager.viewModel === currentViewModel)
+        oldViewModel.cleanup()
+        currentViewModel.cleanup()
+    }
+}

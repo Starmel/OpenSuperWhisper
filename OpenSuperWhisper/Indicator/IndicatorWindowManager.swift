@@ -286,7 +286,12 @@ class IndicatorWindowManager: IndicatorViewDelegate {
         }
     }
     
-    func didFinishDecoding() {
+    @discardableResult
+    func didFinishDecoding(from viewModel: IndicatorViewModel) -> Bool {
+        // A cancelled/older decoding task may finish after a new indicator was
+        // prepared. Never let its late callback hide the new session.
+        guard self.viewModel === viewModel else { return false }
         hide()
+        return true
     }
 }

@@ -342,6 +342,65 @@ final class WhisperLongFormLanguageIntegrationTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testCancellingLongWhisperDecodeStopsNativeOperation() async throws {
+        let modelURL = try multilingualModelURL()
+        let originalModelPath = AppPreferences.shared.selectedWhisperModelPath
+        AppPreferences.shared.selectedWhisperModelPath = modelURL.path
+        defer {
+            AppPreferences.shared.selectedWhisperModelPath = originalModelPath
+        }
+
+        let engine = WhisperEngine()
+        try await engine.initialize()
+        let service = TranscriptionService(engine: engine)
+        let operationID = UUID()
+        let audioURL = try fixtureURL("long_en", fileExtension: "m4a")
+
+        var settings = Settings()
+        settings.selectedLanguage = "en"
+        settings.showTimestamps = false
+        settings.initialPrompt = ""
+        settings.useBeamSearch = false
+        settings.temperature = 0
+        settings.noSpeechThreshold = 0.6
+        settings.suppressBlankAudio = true
+
+        let transcription = Task {
+            try await service.transcribeAudio(
+                url: audioURL,
+                settings: settings,
+                operationID: operationID
+            )
+        }
+
+        var nativeDecodeStarted = false
+        // Other model-backed tests may run in parallel and make conversion/VAD
+        // slower, so allow enough time to reach the native decoder under load.
+        for _ in 0..<1_000 {
+            if service.progress > 0.12 {
+                nativeDecodeStarted = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(
+            nativeDecodeStarted,
+            "The fixture never reached whisper.cpp decoding"
+        )
+
+        service.cancelTranscription(operationID: operationID)
+
+        do {
+            _ = try await transcription.value
+            XCTFail("A native Whisper abort must surface as cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertFalse(service.isTranscribing)
+        XCTAssertEqual(service.progress, 0.0)
+    }
+
     private func multilingualModelURL() throws -> URL {
         let candidates = [
             ProcessInfo.processInfo.environment["OSW_TEST_MULTILINGUAL_MODEL"]

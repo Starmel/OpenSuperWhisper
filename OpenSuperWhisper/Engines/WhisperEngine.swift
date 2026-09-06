@@ -23,7 +23,7 @@ private class ProgressContext {
 
 /// Thread-safe cancellation flag. Owned by the engine for its whole lifetime,
 /// so the pointer passed into whisper's C callback can never dangle.
-private final class AbortFlag {
+private final class AbortFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var _isSet = false
     
@@ -91,12 +91,31 @@ class WhisperEngine: TranscriptionEngine {
         try await transcribeAudioDetailed(url: url, settings: settings).text
     }
 
-    func transcribeAudioDetailed(url: URL, settings: Settings) async throws -> DetailedTranscription {
+    /// Internal detailed result used by long-form regression tests. Production
+    /// callers keep receiving only the final text through TranscriptionEngine.
+    func transcribeAudioDetailed(
+        url: URL,
+        settings: Settings
+    ) async throws -> DetailedTranscription {
+        try await withTaskCancellationHandler {
+            try await performTranscription(url: url, settings: settings)
+        } onCancel: { [abortFlag] in
+            abortFlag.isSet = true
+        }
+    }
+
+    private func performTranscription(
+        url: URL,
+        settings: Settings
+    ) async throws -> DetailedTranscription {
+        try Task.checkCancellation()
+
         guard let context = context else {
             throw TranscriptionError.contextInitializationFailed
         }
         
         abortFlag.isSet = false
+        try Task.checkCancellation()
         
         // Setup progress context for callback
         progressContext = ProgressContext()
@@ -109,7 +128,13 @@ class WhisperEngine: TranscriptionEngine {
         // Notify conversion start (0-10% is conversion phase)
         onProgressUpdate?(0.05)
         
-        guard let converted = try await convertAudioToPCM(fileURL: url) else {
+        guard let converted = try await convertAudioToPCM(
+            fileURL: url,
+            cancellationCheck: { [abortFlag] in abortFlag.isSet }
+        ) else {
+            if abortFlag.isSet || Task.isCancelled {
+                throw CancellationError()
+            }
             throw TranscriptionError.audioConversionFailed
         }
         
@@ -123,6 +148,8 @@ class WhisperEngine: TranscriptionEngine {
         // (whisper_full_with_state has no built-in VAD path — params.vad works
         // only through whisper_full, which would share decoding state.)
         let speechSegments = try detectSpeech(in: converted)
+        try Task.checkCancellation()
+        if abortFlag.isSet { throw CancellationError() }
         if speechSegments.isEmpty {
             return DetailedTranscription(text: "", segments: [])
         }
@@ -191,6 +218,9 @@ class WhisperEngine: TranscriptionEngine {
         }
         
         guard context.full(samples: samples, params: &cParams) else {
+            if abortFlag.isSet || Task.isCancelled {
+                throw CancellationError()
+            }
             throw TranscriptionError.processingFailed
         }
         
@@ -361,8 +391,12 @@ class WhisperEngine: TranscriptionEngine {
         return (fileURL, false)
     }
 
-    nonisolated func convertAudioToPCM(fileURL: URL) async throws -> [Float]? {
+    nonisolated func convertAudioToPCM(
+        fileURL: URL,
+        cancellationCheck: @escaping () -> Bool = { false }
+    ) async throws -> [Float]? {
         return try await Task.detached(priority: .userInitiated) {
+            if cancellationCheck() { throw CancellationError() }
             let (resolvedURL, isTempFile) = try self.resolveFileURL(fileURL)
             defer {
                 if isTempFile { try? FileManager.default.removeItem(at: resolvedURL) }
@@ -370,6 +404,7 @@ class WhisperEngine: TranscriptionEngine {
             let audioFile = try AVAudioFile(forReading: resolvedURL)
             let sourceFormat = audioFile.processingFormat
             let totalFrames = audioFile.length
+            if cancellationCheck() { throw CancellationError() }
             
             guard let targetFormat = self.makeTargetFormat(channelCount: sourceFormat.channelCount) else {
                 return nil
@@ -390,7 +425,8 @@ class WhisperEngine: TranscriptionEngine {
                     ratio: ratio,
                     startFrame: 0,
                     frameCount: totalFrames,
-                    inputChunkSize: 1_048_576
+                    inputChunkSize: 1_048_576,
+                    cancellationCheck: cancellationCheck
                 )
                 return result.isEmpty ? nil : result
             }
@@ -420,7 +456,8 @@ class WhisperEngine: TranscriptionEngine {
                         ratio: ratio,
                         startFrame: startFrame,
                         frameCount: endFrame - startFrame,
-                        inputChunkSize: 262_144
+                        inputChunkSize: 262_144,
+                        cancellationCheck: cancellationCheck
                     )
                     
                     resultLock.lock()
@@ -430,6 +467,8 @@ class WhisperEngine: TranscriptionEngine {
             }
             
             group.wait()
+
+            if cancellationCheck() { throw CancellationError() }
             
             guard !segmentResults.contains(where: { $0 == nil }) else { return nil }
             
@@ -438,6 +477,7 @@ class WhisperEngine: TranscriptionEngine {
             var result = [Float]()
             result.reserveCapacity(segmentResults.reduce(0) { $0 + ($1?.count ?? 0) })
             for index in segmentResults.indices {
+                if cancellationCheck() { throw CancellationError() }
                 result.append(contentsOf: segmentResults[index]!)
                 segmentResults[index] = nil
             }
@@ -453,8 +493,10 @@ class WhisperEngine: TranscriptionEngine {
         ratio: Double,
         startFrame: AVAudioFramePosition,
         frameCount: AVAudioFramePosition,
-        inputChunkSize: AVAudioFrameCount
+        inputChunkSize: AVAudioFrameCount,
+        cancellationCheck: @escaping () -> Bool
     ) throws -> [Float] {
+        if cancellationCheck() { throw CancellationError() }
         let audioFile = try AVAudioFile(forReading: fileURL)
         audioFile.framePosition = startFrame
         
@@ -481,6 +523,7 @@ class WhisperEngine: TranscriptionEngine {
         var framesRead: AVAudioFramePosition = 0
         
         while framesRead < frameCount {
+            if cancellationCheck() { throw CancellationError() }
             let framesToRead = min(AVAudioFrameCount(frameCount - framesRead), chunkFrames)
             inputBuffer.frameLength = 0
             try audioFile.read(into: inputBuffer, frameCount: framesToRead)
@@ -513,6 +556,7 @@ class WhisperEngine: TranscriptionEngine {
         // (the last few milliseconds of audio) is silently dropped.
         var status = AVAudioConverterOutputStatus.haveData
         while status == .haveData {
+            if cancellationCheck() { throw CancellationError() }
             var convError: NSError?
             outputBuffer.frameLength = 0
             status = converter.convert(to: outputBuffer, error: &convError) { _, outStatus in
@@ -583,4 +627,3 @@ class WhisperEngine: TranscriptionEngine {
         )
     }
 }
-

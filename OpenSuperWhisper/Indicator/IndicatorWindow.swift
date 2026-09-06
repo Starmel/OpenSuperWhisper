@@ -14,7 +14,8 @@ enum RecordingState {
 @MainActor
 protocol IndicatorViewDelegate: AnyObject {
     
-    func didFinishDecoding()
+    @discardableResult
+    func didFinishDecoding(from viewModel: IndicatorViewModel) -> Bool
 }
 
 @MainActor
@@ -33,16 +34,30 @@ class IndicatorViewModel: ObservableObject {
     private var blinkTimer: Timer?
     private var hideTimer: Timer?
     private var confirmCancelTimer: Timer?
+    private var decodingTask: Task<Void, Never>?
+    private var decodingSessionID: UUID?
     private var cancellables = Set<AnyCancellable>()
     
     private let recordingStore: RecordingStore
     private let transcriptionService: TranscriptionService
     private let transcriptionQueue: TranscriptionQueue
+    private let stopRecordingOperation: () async -> URL?
+    private let cancelAudioRecordingOperation: () -> Void
     
-    init() {
+    init(
+        transcriptionService: TranscriptionService = .shared,
+        stopRecording: @escaping () async -> URL? = {
+            await AudioRecorder.shared.stopRecording()
+        },
+        cancelAudioRecording: @escaping () -> Void = {
+            AudioRecorder.shared.cancelRecording()
+        }
+    ) {
         self.recordingStore = RecordingStore.shared
-        self.transcriptionService = TranscriptionService.shared
+        self.transcriptionService = transcriptionService
         self.transcriptionQueue = TranscriptionQueue.shared
+        self.stopRecordingOperation = stopRecording
+        self.cancelAudioRecordingOperation = cancelAudioRecording
         
         recorder.$isConnecting
             .receive(on: RunLoop.main)
@@ -81,7 +96,8 @@ class IndicatorViewModel: ObservableObject {
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                self?.delegate?.didFinishDecoding()
+                guard let self else { return }
+                _ = self.delegate?.didFinishDecoding(from: self)
             }
         }
     }
@@ -150,7 +166,7 @@ class IndicatorViewModel: ObservableObject {
             // and put it into the queue instead of deleting it.
             Task { [weak self] in
                 guard let self = self else { return }
-                if let tempURL = await self.recorder.stopRecording() {
+                if let tempURL = await self.stopRecordingOperation() {
                     await self.transcriptionQueue.addFileToQueue(url: tempURL)
                 }
             }
@@ -159,59 +175,87 @@ class IndicatorViewModel: ObservableObject {
         }
         
         state = .decoding
-        
-        Task { [weak self] in
+
+        let sessionID = UUID()
+        decodingSessionID = sessionID
+        decodingTask = Task { [weak self] in
             guard let self = self else { return }
-            
-            if let tempURL = await self.recorder.stopRecording() {
-                do {
-                    print("start decoding...")
-                    let duration = await AudioUtil.audioDuration(url: tempURL)
-                    let text = try await transcriptionService.transcribeAudio(url: tempURL, settings: Settings())
-                    
-                    if text.isEmpty {
-                        try? FileManager.default.removeItem(at: tempURL)
-                        print("No speech detected, dictation discarded")
-                    } else {
-                        let timestamp = Date()
-                        let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
-                        let recordingId = UUID()
-                        let newRecording = Recording(
-                            id: recordingId,
-                            timestamp: timestamp,
-                            fileName: fileName,
-                            transcription: text,
-                            duration: duration,
-                            status: .completed,
-                            progress: 1.0,
-                            sourceFileURL: nil
-                        )
-                        
-                        try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
-                        
-                        await MainActor.run {
-                            self.recordingStore.addRecording(newRecording)
-                        }
-                        
-                        insertText(text)
-                        print("Transcription result: \(text)")
-                    }
-                } catch {
+
+            guard let tempURL = await self.stopRecordingOperation() else {
+                print("!!! Not found record url !!!")
+                self.finishDecoding(sessionID: sessionID)
+                return
+            }
+
+            do {
+                try Task.checkCancellation()
+                guard self.decodingSessionID == sessionID else {
+                    throw CancellationError()
+                }
+
+                print("start decoding...")
+                let duration = await AudioUtil.audioDuration(url: tempURL)
+                try Task.checkCancellation()
+                guard self.decodingSessionID == sessionID else {
+                    throw CancellationError()
+                }
+
+                let text = try await transcriptionService.transcribeAudio(
+                    url: tempURL,
+                    settings: Settings(),
+                    operationID: sessionID
+                )
+                try Task.checkCancellation()
+                guard self.decodingSessionID == sessionID else {
+                    throw CancellationError()
+                }
+
+                if text.isEmpty {
+                    try? FileManager.default.removeItem(at: tempURL)
+                    print("No speech detected, dictation discarded")
+                } else {
+                    let timestamp = Date()
+                    let fileName = "\(Int(timestamp.timeIntervalSince1970)).wav"
+                    let recordingId = UUID()
+                    let newRecording = Recording(
+                        id: recordingId,
+                        timestamp: timestamp,
+                        fileName: fileName,
+                        transcription: text,
+                        duration: duration,
+                        status: .completed,
+                        progress: 1.0,
+                        sourceFileURL: nil
+                    )
+
+                    try recorder.moveTemporaryRecording(from: tempURL, to: newRecording.url)
+                    self.recordingStore.addRecording(newRecording)
+
+                    insertText(text)
+                    print("Transcription result: \(text)")
+                }
+            } catch is CancellationError {
+                try? FileManager.default.removeItem(at: tempURL)
+                print("Transcription cancelled")
+            } catch {
+                if Task.isCancelled || self.decodingSessionID != sessionID {
+                    try? FileManager.default.removeItem(at: tempURL)
+                    print("Transcription cancelled")
+                } else {
                     print("Error transcribing audio: \(error)")
                     try? FileManager.default.removeItem(at: tempURL)
                 }
-                
-                await MainActor.run {
-                    self.delegate?.didFinishDecoding()
-                }
-            } else {
-                print("!!! Not found record url !!!")
-                
-                await MainActor.run {
-                    self.delegate?.didFinishDecoding()
-                }
             }
+
+            self.finishDecoding(sessionID: sessionID)
         }
+    }
+
+    private func finishDecoding(sessionID: UUID) {
+        guard decodingSessionID == sessionID else { return }
+        decodingSessionID = nil
+        decodingTask = nil
+        _ = delegate?.didFinishDecoding(from: self)
     }
     
     func insertText(_ text: String) {
@@ -273,7 +317,23 @@ class IndicatorViewModel: ObservableObject {
     func cancelRecording() {
         hideTimer?.invalidate()
         hideTimer = nil
-        recorder.cancelRecording()
+
+        if state == .decoding {
+            // In decoding the recorder is already stopped. Cancel both the
+            // Swift task and the native engine operation, and invalidate the
+            // session before either can save or paste a late result.
+            let cancelledSessionID = decodingSessionID
+            decodingSessionID = nil
+            decodingTask?.cancel()
+            decodingTask = nil
+            if let cancelledSessionID {
+                transcriptionService.cancelTranscription(
+                    operationID: cancelledSessionID
+                )
+            }
+        }
+
+        cancelAudioRecordingOperation()
     }
 }
 
