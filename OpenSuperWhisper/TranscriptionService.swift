@@ -149,6 +149,16 @@ class TranscriptionService: ObservableObject {
         }
     }
 
+    func waitUntilReady() async throws {
+        while let task = engineLoadTask, let id = engineLoadID {
+            let result = await task.result
+            try Task.checkCancellation()
+            finishEngineLoad(id: id, result: result)
+        }
+        try Task.checkCancellation()
+        guard currentEngine != nil else { throw TranscriptionError.contextInitializationFailed }
+    }
+
     func reloadEngine() {
         loadEngine(selection: .current)
     }
@@ -180,7 +190,9 @@ class TranscriptionService: ObservableObject {
         // Serialize access to the engine: a whisper context must not process
         // two transcriptions concurrently (indicator flow and queue flow can
         // both reach this point due to async busy checks).
-        while let existing = transcriptionTask {
+        while true {
+            try await waitUntilReady()
+            guard let existing = transcriptionTask else { break }
             _ = try? await existing.task.value
             try Task.checkCancellation()
             if transcriptionTask === existing {

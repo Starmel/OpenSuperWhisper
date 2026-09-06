@@ -83,7 +83,7 @@ class IndicatorViewModel: ObservableObject {
     }
     
     var isTranscriptionBusy: Bool {
-        transcriptionService.isTranscribing || transcriptionQueue.isProcessing
+        transcriptionService.isLoading || transcriptionService.isTranscribing || transcriptionQueue.isProcessing
     }
     
     func showBusyMessage() {

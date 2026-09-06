@@ -61,6 +61,34 @@ final class EngineLoadingTests: XCTestCase {
         XCTAssertEqual(text, "B")
     }
 
+    func testTranscriptionWaitsForColdModelLoad() async throws {
+        let gate = EngineLoadGate()
+        let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
+        try await waitForRequest("A", gate: gate)
+        let task = Task { try await service.transcribeAudio(url: url, settings: Settings()) }
+        await Task.yield()
+        XCTAssertTrue(service.isLoading)
+        XCTAssertFalse(service.isTranscribing)
+        await gate.finish("A", result: .success(NamedTestEngine("ready")))
+        let text = try await task.value
+        XCTAssertEqual(text, "ready")
+    }
+
+    func testCancelledWaiterDoesNotDecodeAfterModelLoads() async throws {
+        let gate = EngineLoadGate()
+        let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
+        try await waitForRequest("A", gate: gate)
+        let task = Task { try await service.transcribeAudio(url: url, settings: Settings()) }
+        await Task.yield()
+        task.cancel()
+        await gate.finish("A", result: .success(NamedTestEngine("ready")))
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled waiter decoded")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertTrue(service.transcribedText.isEmpty)
+    }
+
     func testDuplicateSelectionLoadsOnceAndFailureIsExposed() async throws {
         let gate = EngineLoadGate()
         let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
