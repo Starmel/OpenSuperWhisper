@@ -22,7 +22,8 @@ class ShortcutManager {
     private var useModifierOnlyHotkey = false
     private var useMouseButtonHotkey = false
 
-    private init() {
+    init(registerShortcuts: Bool = true) {
+        guard registerShortcuts else { return }
         print("ShortcutManager init")
 
         setupKeyboardShortcuts()
@@ -63,14 +64,18 @@ class ShortcutManager {
 
         KeyboardShortcuts.onKeyUp(for: .escape) { [weak self] in
             Task { @MainActor in
-                if self?.activeVm != nil, IndicatorWindowManager.shared.requestCancel() {
-                    self?.activeVm = nil
-                }
+                self?.handleEscape()
             }
         }
         KeyboardShortcuts.disable(.escape)
     }
     
+    func handleEscape() {
+        if IndicatorWindowManager.shared.requestCancel() {
+            activeVm = nil
+        }
+    }
+
     private func setupRecordingTrigger() {
         let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         let mouseButton = MouseButton(rawValue: AppPreferences.shared.mouseButtonHotkey) ?? .none
@@ -145,7 +150,6 @@ class ShortcutManager {
                 IndicatorWindowManager.shared.presentWindow(for: vm, nearPoint: indicatorPoint)
             } else if !self.holdMode {
                 IndicatorWindowManager.shared.stopRecording()
-                self.activeVm = nil
             }
         }
         
@@ -200,7 +204,6 @@ class ShortcutManager {
         Task { @MainActor in
             if holdToRecordEnabled && self.holdMode && self.activeVm != nil {
                 IndicatorWindowManager.shared.stopRecording()
-                self.activeVm = nil
             }
             self.holdMode = false
         }

@@ -136,6 +136,33 @@ final class TranscriptionCancellationTests: XCTestCase {
         viewModel.cleanup()
     }
 
+    func testShortcutEscapeReachesDecodingWithoutActiveRecordingReference() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data([1]).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vm = IndicatorViewModel(transcriptionService: service,
+                                    stopRecording: { RecordedAudio(url: url, samples: []) },
+                                    cancelAudioRecording: {})
+        vm.state = .recording
+        let manager = IndicatorWindowManager.shared
+        let original = manager.viewModel
+        manager.viewModel = vm
+        defer { manager.viewModel = original; vm.cleanup() }
+        let started = expectation(description: "started")
+        engine.notifyOnNextStart { started.fulfill() }
+        vm.startDecoding()
+        await fulfillment(of: [started], timeout: 2)
+        ShortcutManager(registerShortcuts: false).handleEscape()
+        XCTAssertEqual(engine.cancelCount, 1)
+        XCTAssertTrue(engine.complete(url: url, with: .success("must not publish")))
+        for _ in 0..<100 where service.isTranscribing {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(service.transcribedText.isEmpty)
+    }
+
     func testScopedCancellationDoesNotCancelDifferentOperation() async throws {
         let engine = ControlledTranscriptionEngine()
         let service = TranscriptionService(engine: engine)
