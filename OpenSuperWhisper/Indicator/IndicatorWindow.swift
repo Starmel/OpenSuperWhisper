@@ -282,7 +282,7 @@ class IndicatorViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 if let savedRecording {
-                    do { try await recordingStore.deleteRecordingSync(savedRecording, cancelTranscription: false) }
+                    do { try await Task { try await recordingStore.deleteRecordingSync(savedRecording, cancelTranscription: false) }.value }
                     catch { AppErrorCenter.shared.report("Cancelled recording could not be removed", error: error) }
                 } else {
                     try? FileManager.default.removeItem(at: tempURL)
@@ -290,7 +290,12 @@ class IndicatorViewModel: ObservableObject {
                 print("Transcription cancelled")
             } catch {
                 if Task.isCancelled || self.decodingSessionID != sessionID {
-                    try? FileManager.default.removeItem(at: tempURL)
+                    if let savedRecording {
+                        do { try await Task { try await recordingStore.deleteRecordingSync(savedRecording, cancelTranscription: false) }.value }
+                        catch { AppErrorCenter.shared.report("Cancelled recording could not be removed", error: error) }
+                    } else {
+                        try? FileManager.default.removeItem(at: tempURL)
+                    }
                     print("Transcription cancelled")
                 } else {
                     let source = (error as? PreservedAudioError)?.url ?? audio.url
