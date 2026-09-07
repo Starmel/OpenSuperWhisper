@@ -94,6 +94,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var recordingRetentionTimer: Timer?
     private var hideMainWindowAtLaunch = false
     
+    private var terminationTask: Task<Void, Never>?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard terminationTask == nil else { return .terminateLater }
+        terminationTask = Task { @MainActor in
+            await TranscriptionService.shared.shutdown()
+            await TranscriptionQueue.shared.stopProcessingQueue()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !OpenSuperWhisperApp.isRunningTests else { return }
 

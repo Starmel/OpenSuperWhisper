@@ -35,16 +35,60 @@ class TranscriptionService: ObservableObject {
     }
 
     private var recordingPreparation: RecordingPreparation?
+    private var backgroundOperations: [UUID: Task<Void, Never>] = [:]
+    private var shutdownTask: Task<Void, Never>?
+    private var shutdownEngines: [WhisperEngine] = []
+    private(set) var isShuttingDown = false
+
+    func shutdown() async {
+        if let shutdownTask {
+            await shutdownTask.value
+            return
+        }
+        isShuttingDown = true
+        engineLoadTask?.cancel()
+        cancelTranscription()
+        let engine = currentEngine
+        let preparation = recordingPreparation
+        let activeTask = transcriptionTask
+        let operations = Array(backgroundOperations.values)
+        let task = Task {
+            _ = await activeTask?.task.result
+            _ = await preparation?.task.result
+            for operation in operations {
+                await operation.value
+            }
+            for engine in shutdownEngines {
+                engine.unload()
+            }
+            shutdownEngines.removeAll()
+            (activeTask?.engine as? WhisperEngine)?.unload()
+            preparation?.engine.unload()
+            (engine as? WhisperEngine)?.unload()
+            currentEngine = nil
+            recordingPreparation = nil
+            transcriptionTask = nil
+            engineLoadTask = nil
+            engineLoadID = nil
+            isLoading = false
+            isTranscribing = false
+        }
+        shutdownTask = task
+        await task.value
+    }
 
     func prepareForRecording() {
-        guard !isLoading, transcriptionTask == nil, recordingPreparation == nil,
+        guard !isShuttingDown, !isLoading, transcriptionTask == nil, recordingPreparation == nil,
               let engine = currentEngine as? WhisperEngine else { return }
-        recordingPreparation = RecordingPreparation(
-            engine: engine,
-            task: Task.detached(priority: .userInitiated) {
-                try engine.prepareForRecording()
-            }
-        )
+        let task = Task.detached(priority: .userInitiated) {
+            try engine.prepareForRecording()
+        }
+        recordingPreparation = RecordingPreparation(engine: engine, task: task)
+        let id = UUID()
+        backgroundOperations[id] = Task { [weak self] in
+            _ = await task.result
+            self?.backgroundOperations[id] = nil
+        }
     }
     
     struct EngineSelection: Equatable {
@@ -116,6 +160,7 @@ class TranscriptionService: ObservableObject {
     }
     
     func loadEngine(selection: EngineSelection) {
+        guard !isShuttingDown else { return }
         guard selection != engineSelection || (!isLoading && currentEngine == nil) else { return }
         engineLoadTask?.cancel()
         engineSelection = selection
@@ -132,13 +177,20 @@ class TranscriptionService: ObservableObject {
             return engine
         }
         engineLoadTask = task
-        Task { [weak self] in
+        backgroundOperations[id] = Task { [weak self] in
             let result = await task.result
             self?.finishEngineLoad(id: id, result: result)
+            self?.backgroundOperations[id] = nil
         }
     }
 
     private func finishEngineLoad(id: UUID, result: Result<TranscriptionEngine, Error>) {
+        guard !isShuttingDown else {
+            if case .success(let engine as WhisperEngine) = result {
+                shutdownEngines.append(engine)
+            }
+            return
+        }
         guard engineLoadID == id else { return }
         engineLoadTask = nil
         engineLoadID = nil
@@ -150,12 +202,15 @@ class TranscriptionService: ObservableObject {
     }
 
     func waitUntilReady() async throws {
+        guard !isShuttingDown else { throw CancellationError() }
         while let task = engineLoadTask, let id = engineLoadID {
             let result = await task.result
             try Task.checkCancellation()
+            guard !isShuttingDown else { throw CancellationError() }
             finishEngineLoad(id: id, result: result)
         }
         try Task.checkCancellation()
+        guard !isShuttingDown else { throw CancellationError() }
         guard currentEngine != nil else { throw TranscriptionError.contextInitializationFailed }
     }
 

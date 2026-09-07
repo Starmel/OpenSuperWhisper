@@ -29,6 +29,43 @@ private final class PreparingWhisperEngine: WhisperEngine {
 
 final class WhisperPreparationTests: XCTestCase {
     @MainActor
+    func testShutdownWaitsForPreparation() async throws {
+        let entered = expectation(description: "preparation started")
+        let engine = PreparingWhisperEngine(entered: entered)
+        let service = TranscriptionService(engine: engine)
+        service.prepareForRecording()
+        await fulfillment(of: [entered], timeout: 2)
+        var finished = false
+        let shutdown = Task {
+            await service.shutdown()
+            finished = true
+        }
+        while !service.isShuttingDown { await Task.yield() }
+        XCTAssertFalse(finished)
+        engine.release.signal()
+        await shutdown.value
+        XCTAssertTrue(finished)
+        XCTAssertEqual(engine.decodeCount, 0)
+    }
+
+    @MainActor
+    func testShutdownReleasesLoadedMetalModelAndPreparedState() async throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let model = root.appendingPathComponent("ggml-tiny.en.bin")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: model.path))
+        let engine = WhisperEngine(modelPath: model.path)
+        try await engine.initialize()
+        try engine.prepareForRecording()
+        XCTAssertTrue(engine.isModelLoaded)
+        XCTAssertTrue(engine.hasPreparedState)
+        let service = TranscriptionService(engine: engine)
+        await service.shutdown()
+        XCTAssertFalse(engine.isModelLoaded)
+        XCTAssertFalse(engine.hasPreparedState)
+        await service.shutdown()
+    }
+
+    @MainActor
     func testServiceWaitsForPreparationAndDoesNotPrepareDuringDecode() async throws {
         let entered = expectation(description: "preparation started")
         let engine = PreparingWhisperEngine(entered: entered)

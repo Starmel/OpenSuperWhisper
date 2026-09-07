@@ -77,8 +77,8 @@ public class MyWhisperContext {
     }
     
     deinit {
-        freeContext()
         freeState()
+        freeContext()
     }
     
     // MARK: - Initialization

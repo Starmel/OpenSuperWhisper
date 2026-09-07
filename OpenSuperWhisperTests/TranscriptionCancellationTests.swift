@@ -92,6 +92,34 @@ private final class ControlledTranscriptionEngine: TranscriptionEngine {
 final class TranscriptionCancellationTests: XCTestCase {
     private let audioURL = URL(fileURLWithPath: "/tmp/osw-cancellation-test.wav")
 
+    func testShutdownWaitsUntilNativeTranscriptionReturns() async throws {
+        let engine = ControlledTranscriptionEngine()
+        let service = TranscriptionService(engine: engine)
+        let started = expectation(description: "decode started")
+        engine.notifyOnNextStart { started.fulfill() }
+        let transcription = Task {
+            try await service.transcribeAudio(url: audioURL, settings: Settings())
+        }
+        await fulfillment(of: [started], timeout: 2)
+        var finished = false
+        let shutdown = Task {
+            await service.shutdown()
+            finished = true
+        }
+        while !service.isShuttingDown { await Task.yield() }
+        XCTAssertEqual(engine.cancelCount, 1)
+        XCTAssertFalse(finished)
+        XCTAssertTrue(engine.complete(url: audioURL, with: .success("late result")))
+        await shutdown.value
+        do {
+            _ = try await transcription.value
+            XCTFail("Cancelled transcription succeeded")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertFalse(service.isTranscribing)
+    }
+
     func testEscDuringDecodingCancelsEngineAndRejectsLateResult() async throws {
         let engine = ControlledTranscriptionEngine()
         let service = TranscriptionService(engine: engine)

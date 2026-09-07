@@ -47,6 +47,36 @@ final class EngineLoadingTests: XCTestCase {
         XCTAssertFalse(service.isLoading)
     }
 
+    func testShutdownWaitsForSupersededLoadsAndPreventsNewWork() async throws {
+        let gate = EngineLoadGate()
+        let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
+        try await waitForRequest("A", gate: gate)
+        service.loadEngine(selection: b)
+        try await waitForRequest("B", gate: gate)
+        var finished = false
+        let shutdown = Task {
+            await service.shutdown()
+            finished = true
+        }
+        while !service.isShuttingDown { await Task.yield() }
+        await gate.finish("B", result: .success(NamedTestEngine("B")))
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertFalse(finished)
+        await gate.finish("A", result: .success(NamedTestEngine("A")))
+        await shutdown.value
+        await service.shutdown()
+        XCTAssertFalse(service.isLoading)
+        service.loadEngine(selection: a)
+        let count = await gate.count
+        XCTAssertEqual(count, 2)
+        do {
+            _ = try await service.transcribeAudio(url: url, settings: Settings())
+            XCTFail("Shutdown service accepted transcription")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+    }
+
     func testLateOldLoadCannotReplaceNewSelection() async throws {
         let gate = EngineLoadGate()
         let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
