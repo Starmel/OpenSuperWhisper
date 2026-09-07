@@ -85,10 +85,11 @@ class AppState: ObservableObject {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject {
     private var statusItem: NSStatusItem?
     private var mainWindow: NSWindow?
     private var languageSubmenu: NSMenu?
+    private var copyTranscriptionItem: NSMenuItem?
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
     private var recordingRetentionTimer: Timer?
@@ -243,9 +244,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     private func updateStatusBarMenu() {
         let menu = NSMenu()
+        menu.delegate = self
         
         menu.addItem(NSMenuItem(title: "OpenSuperWhisper", action: #selector(openApp), keyEquivalent: "o"))
-        
+
         let transcriptionLanguageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
         languageSubmenu = NSMenu()
         
@@ -255,6 +257,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         
         transcriptionLanguageItem.submenu = languageSubmenu
         menu.addItem(transcriptionLanguageItem)
+
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(copyLastTranscription(_:)), keyEquivalent: "")
+        copyItem.target = self
+        copyItem.isHidden = true
+        copyTranscriptionItem = copyItem
+        menu.addItem(copyItem)
         
         // Listen for language preference changes
         NotificationCenter.default.addObserver(
@@ -326,6 +334,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         statusItem?.menu = menu
     }
     
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === statusItem?.menu, let item = copyTranscriptionItem else { return }
+        item.isHidden = true
+        item.representedObject = nil
+        do {
+            guard let transcription = try RecordingStore.shared.latestSuccessfulTranscription() else { return }
+            let words = transcription.split(whereSeparator: { $0.isWhitespace })
+            let beginning = words.prefix(6).joined(separator: " ")
+            let preview = String(beginning.prefix(32))
+                + (words.count > 6 || beginning.count > 32 ? "…" : "")
+            let title = NSMutableAttributedString(string: "Copy")
+            title.append(NSAttributedString(string: "\n\(preview)", attributes: [
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize)
+            ]))
+            item.attributedTitle = title
+            item.representedObject = transcription
+            item.isHidden = false
+        } catch {
+            AppErrorCenter.shared.report("Last transcription could not be loaded", error: error)
+        }
+    }
+
+    @objc private func copyLastTranscription(_ sender: NSMenuItem) {
+        guard let transcription = sender.representedObject as? String else { return }
+        ClipboardUtil.copyToClipboard(transcription)
+    }
+
     @objc private func selectMicrophone(_ sender: NSMenuItem) {
         guard let device = sender.representedObject as? MicrophoneService.AudioDevice else { return }
         microphoneService.selectMicrophone(device)

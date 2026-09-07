@@ -485,6 +485,21 @@ class RecordingStore: ObservableObject {
         }
     }
 
+    func latestSuccessfulTranscription() throws -> String? {
+        try database().read { db in
+            let cursor = try Recording
+                .filter(Recording.Columns.status == RecordingStatus.completed.rawValue)
+                .order(Recording.Columns.timestamp.desc)
+                .fetchCursor(db)
+            while let recording = try cursor.next() {
+                if !recording.transcription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return recording.transcription
+                }
+            }
+            return nil
+        }
+    }
+
     func searchRecordings(query: String) throws -> [Recording] {
         return try database().read { db in
             try Recording
