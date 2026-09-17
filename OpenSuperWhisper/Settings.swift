@@ -255,6 +255,7 @@ class SettingsViewModel: ObservableObject {
     }
     
     func isFluidAudioModelDownloaded(version: String) -> Bool {
+        if version == "orukeet" { return OrukeetModelStore.isInstalled }
         let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
         
         // Используем правильный путь к кэшу согласно документации:
@@ -265,6 +266,12 @@ class SettingsViewModel: ObservableObject {
         return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
     }
     
+    var fluidAudioModelsDirectory: URL {
+        fluidAudioModelVersion == "orukeet"
+            ? OrukeetModelStore.directory
+            : AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent()
+    }
+
     func initializeDownloadableModels() {
         let modelManager = WhisperModelManager.shared
         downloadableModels = SettingsDownloadableModels.availableModels.map { model in
@@ -430,16 +437,22 @@ class SettingsViewModel: ObservableObject {
                 }
                 
                 let modelId = model.id
-                let models = try await downloadFluid(version) { [weak self] progress in
-                    print("[ParakeetProgress] fraction=\(progress.fractionCompleted) phase=\(progress.phase)")
+                let reportProgress: @Sendable (Double) -> Void = { [weak self] fraction in
                     Task { @MainActor [weak self] in
                         guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
                         guard let task = self.downloadTask, !task.isCancelled else { return }
-                        self.downloadProgress = progress.fractionCompleted
+                        self.downloadProgress = fraction
                         if let index = self.downloadableFluidAudioModels.firstIndex(where: { $0.id == modelId }) {
-                            self.downloadableFluidAudioModels[index].downloadProgress = progress.fractionCompleted
+                            self.downloadableFluidAudioModels[index].downloadProgress = fraction
                         }
                     }
+                }
+
+                let models: AsrModels
+                if model.version == "orukeet" {
+                    models = try await OrukeetModelStore.prepare(progress: reportProgress)
+                } else {
+                    models = try await downloadFluid(version) { reportProgress($0.fractionCompleted) }
                 }
                 
                 guard !Task.isCancelled else {
@@ -847,9 +860,7 @@ struct SettingsView: View {
                                 Text("Models Directory:")
                                     .font(.subheadline)
                                 Button(action: {
-                                    let cacheDir = AsrModels.defaultCacheDirectory(for: .v3)
-                                    let parentDir = cacheDir.deletingLastPathComponent()
-                                    NSWorkspace.shared.open(parentDir)
+                                    NSWorkspace.shared.open(viewModel.fluidAudioModelsDirectory)
                                 }) {
                                     Label("Open Folder", systemImage: "folder")
                                         .font(.subheadline)
@@ -857,7 +868,7 @@ struct SettingsView: View {
                                 .buttonStyle(.borderless)
                                 .help("Open models directory")
                             }
-                            Text(AsrModels.defaultCacheDirectory(for: .v3).deletingLastPathComponent().path)
+                            Text(viewModel.fluidAudioModelsDirectory.path)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .textSelection(.enabled)
@@ -1449,6 +1460,13 @@ struct SettingsFluidAudioModels {
             isDownloaded: false,
             description: "English-only, higher recall",
             size: 464
+        ),
+        SettingsFluidAudioModel(
+            name: "Orukeet (preview)",
+            version: "orukeet",
+            isDownloaded: false,
+            description: "25 languages, local Core ML. Oruk/NVIDIA weights: CC BY-SA 4.0.",
+            size: 445
         )
     ]
 }

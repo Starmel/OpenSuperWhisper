@@ -24,9 +24,13 @@ class FluidAudioEngine: TranscriptionEngine {
     }
 
     func initialize() async throws {
-        let version: AsrModelVersion = versionString == "v2" ? .v2 : .v3
-        
-        let models = try await AsrModels.downloadAndLoad(version: version)
+        let models: AsrModels
+        if versionString == "orukeet" {
+            models = try await OrukeetModelStore.prepare()
+        } else {
+            let version: AsrModelVersion = versionString == "v2" ? .v2 : .v3
+            models = try await AsrModels.downloadAndLoad(version: version)
+        }
         let manager = AsrManager(config: .default)
         try await manager.loadModels(models)
         
@@ -112,7 +116,7 @@ class FluidAudioEngine: TranscriptionEngine {
     func getSupportedLanguages() -> [String] {
         LanguageUtil.supportedLanguages(
             engine: "fluidaudio",
-            fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion
+            fluidAudioModelVersion: versionString
         )
     }
 }

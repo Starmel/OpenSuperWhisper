@@ -76,3 +76,16 @@ You can download Whisper model files (`.bin`) from the [Whisper.cpp Hugging Face
 ### Hebrew (ivrit.ai)
 
 For Hebrew transcription, download the **"Turbo V3 Hebrew"** model from Settings → Model. It is [ivrit.ai](https://www.ivrit.ai/)'s Hebrew fine-tune of `whisper-large-v3-turbo` ([whisper-large-v3-turbo-ggml](https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ggml)) — the same base model as the other "Turbo V3" entries, but tuned for Hebrew. Selecting it automatically sets the input language to Hebrew, which these models require to be set explicitly.
+
+### Orukeet preview
+
+Settings → Model → Parakeet includes an optional **Orukeet (preview)** choice for
+local transcription in 25 languages. The app downloads the portable Core ML
+bundle from a pinned [Hugging Face release](https://huggingface.co/oruk/orukeet),
+checks the manifest, size and SHA-256, then compiles it on your Mac. Subsequent
+use reads its separate local cache without model-download requests. Existing
+model defaults are unchanged.
+
+The weights are CC BY-SA 4.0 and retain Oruk and NVIDIA Parakeet attribution.
+This preview uses the baseline Core ML export; no speed or accuracy advantage
+over the current Parakeet choice is claimed for this app.
