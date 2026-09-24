@@ -13,7 +13,7 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.selectedEngine = selectedEngine
             if selectedEngine == "whisper" {
                 loadAvailableModels()
-            } else {
+            } else if selectedEngine == "fluidaudio" {
                 initializeFluidAudioModels()
             }
             resetLanguageIfUnsupported()
@@ -777,6 +777,7 @@ struct SettingsView: View {
                 Picker("Engine", selection: $viewModel.selectedEngine) {
                     Text("Parakeet").tag("fluidaudio")
                     Text("Whisper").tag("whisper")
+                    Text("GigaAM").tag("gigaam")
                 }
                 .pickerStyle(.segmented)
                 .padding(.bottom, 8)
@@ -825,6 +826,8 @@ struct SettingsView: View {
                         }
                         .padding(.top, 8)
                     }
+                } else if viewModel.selectedEngine == "gigaam" {
+                    GigaAMModelSettingsView()
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Parakeet Model")
@@ -1519,6 +1522,115 @@ struct OnboardingUnifiedModels {
             )
         )
     ]
+}
+
+struct GigaAMModelSettingsView: View {
+    @ObservedObject private var store = GigaAMModelStore.shared
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("GigaAM Model")
+                .font(.headline)
+                .foregroundColor(.primary)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("GigaAM-v3 e2e RNNT")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    Text("Russian only. State-of-the-art Russian accuracy with punctuation and text normalization, runs on-device via Core ML.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if store.isDownloading {
+                        ProgressView(value: store.progress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .frame(height: 6)
+                            .padding(.top, 4)
+                    }
+                }
+
+                Spacer()
+
+                if store.isDownloading {
+                    Button("Cancel") {
+                        store.cancelDownload()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                } else if store.isInstalled {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .imageScale(.large)
+                } else {
+                    HStack(spacing: 8) {
+                        Text(ByteCountFormatter.string(fromByteCount: GigaAMModel.totalSize, countStyle: .file))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Button(action: download) {
+                            Label("Download", systemImage: "arrow.down.circle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(.controlBackgroundColor).opacity(0.7))
+            .cornerRadius(8)
+
+            Link("Model: ai-sage/GigaAM-v3 (MIT), Core ML export by smkrv",
+                 destination: URL(string: "https://huggingface.co/\(GigaAMModel.repository)")!)
+                .font(.caption)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Models Directory:")
+                        .font(.subheadline)
+                    Button(action: {
+                        try? FileManager.default.createDirectory(at: GigaAMModel.baseDirectory, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(GigaAMModel.baseDirectory)
+                    }) {
+                        Label("Open Folder", systemImage: "folder")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Open models directory")
+                }
+                Text(GigaAMModel.baseDirectory.path)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .background(Color(.textBackgroundColor).opacity(0.5))
+                    .cornerRadius(6)
+            }
+            .padding(.top, 8)
+        }
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    private func download() {
+        Task {
+            do {
+                try await store.download()
+                TranscriptionService.shared.reloadEngine()
+            } catch is CancellationError {
+                // Don't show error for manual cancellation
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
+    }
 }
 
 struct FluidAudioModelDownloadItemView: View {

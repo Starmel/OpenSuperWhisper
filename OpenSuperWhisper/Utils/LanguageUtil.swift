@@ -13,6 +13,8 @@ class LanguageUtil {
         "bg", "hr", "cs", "da", "el", "et", "hu", "lv", "lt", "mt", "ro", "sk", "sl", "uk",
     ]
 
+    static let gigaAMLanguages = ["ru"]
+
     static let languageNames = [
         "auto": "Auto-detect",
         "en": "English",
@@ -52,12 +54,17 @@ class LanguageUtil {
     ]
 
     static func supportedLanguages(engine: String, fluidAudioModelVersion: String) -> [String] {
+        if engine == "gigaam" { return gigaAMLanguages }
         guard engine == "fluidaudio" else { return availableLanguages }
         return fluidAudioModelVersion == "v2" ? parakeetV2Languages : parakeetV3Languages
     }
 
     static func fallbackLanguage(engine: String) -> String {
-        engine == "fluidaudio" ? "en" : "auto"
+        switch engine {
+        case "fluidaudio": return "en"
+        case "gigaam": return "ru"
+        default: return "auto"
+        }
     }
 
     static func getSystemLanguage() -> String {

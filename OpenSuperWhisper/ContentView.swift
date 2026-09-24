@@ -656,7 +656,7 @@ struct ContentView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                        Text("Loading Whisper Model...")
+                        Text("Loading \(Self.engineDisplayName(AppPreferences.shared.selectedEngine)) Model...")
                             .foregroundColor(.white)
                             .font(.headline)
                     }
@@ -690,6 +690,14 @@ struct ContentView: View {
                 searchTask?.cancel()
                 viewModel.shouldClearSearch = false
             }
+        }
+    }
+
+    static func engineDisplayName(_ engine: String) -> String {
+        switch engine {
+        case "fluidaudio": return "Parakeet"
+        case "gigaam": return "GigaAM"
+        default: return "Whisper"
         }
     }
 }

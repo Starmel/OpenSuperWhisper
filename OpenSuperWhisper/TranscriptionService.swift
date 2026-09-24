@@ -124,6 +124,8 @@ class TranscriptionService: ObservableObject {
         let engine: TranscriptionEngine
         if selection.engine == "fluidaudio" {
             engine = FluidAudioEngine(modelVersion: selection.modelVersion)
+        } else if selection.engine == "gigaam" {
+            engine = GigaAMEngine()
         } else {
             guard let path = selection.modelPath else { throw TranscriptionError.contextInitializationFailed }
             engine = WhisperEngine(modelPath: path)
@@ -287,6 +289,15 @@ class TranscriptionService: ObservableObject {
             }
         } else if let fluidEngine = engine as? FluidAudioEngine {
             fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self,
+                          self.transcriptionTask?.id == operationID,
+                          self.cancellationRequestedFor != operationID else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let gigaAMEngine = engine as? GigaAMEngine {
+            gigaAMEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self,
                           self.transcriptionTask?.id == operationID,
