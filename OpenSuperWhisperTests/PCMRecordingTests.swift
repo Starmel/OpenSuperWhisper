@@ -118,6 +118,79 @@ final class PCMRecordingTests: XCTestCase {
         XCTAssertEqual(zip(recording.samples, fromFile).map { abs($0 - $1) }.max(), 0)
     }
 
+    func testMixedSamplesKeepSpeechOnlyPresentOnFirstOfFourChannels() throws {
+        let rate = 48000.0
+        let frameCount = Int(rate)
+        let layout = try XCTUnwrap(AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | 4))
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate,
+                                   interleaved: false, channelLayout: layout)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pcm-4ch-\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try PCMRecordingWriter(url: url, inputFormat: format)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)))
+        buffer.frameLength = AVAudioFrameCount(frameCount)
+        for frame in 0..<frameCount {
+            let time = Double(frame) / rate
+            buffer.floatChannelData![0][frame] = Float(0.2 * sin(time * 440 * 2 * .pi))
+            buffer.floatChannelData![1][frame] = Float(0.00001 * sin(time * 97 * 2 * .pi))
+            buffer.floatChannelData![2][frame] = 0
+            buffer.floatChannelData![3][frame] = 0
+        }
+        try writer.append(buffer)
+        let samples = try writer.finish().samples
+        let rms = sqrt(samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count))
+        XCTAssertEqual(rms, Float(0.2 / 2.0.squareRoot()), accuracy: 0.01)
+    }
+
+    /// Interfaces such as the Audient EVO 4 expose 4 inputs (2 mics + 2 loopback) with
+    /// speech only on the first; Parakeet must decode the recorder's mix, not the raw WAV.
+    @MainActor
+    func testFluidAudioDecodesPreparedMultiChannelAudioWithoutReadingTheFile() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["OSW_TEST_FLUIDAUDIO"] == "1",
+                          "Downloads Parakeet models")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("pcm-4ch-speech-\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: output) }
+        let audio = try Self.prepare(file: root.appendingPathComponent("jfk.wav"), output: output,
+                                     channelCount: 4)
+        let engine = FluidAudioEngine(modelVersion: "v3")
+        try await engine.initialize()
+        let service = TranscriptionService(engine: engine)
+        let text = try await service.transcribeAudio(
+            url: output.appendingPathExtension("does-not-exist"), settings: Settings(), pcmSamples: audio.samples
+        )
+        XCTAssertTrue(text.lowercased().contains("your country"), text)
+    }
+
+    /// Writes `input` through the recorder; with `channelCount` > 1 the source goes to
+    /// the first channel and the rest stay silent, like a multi-input interface.
+    static func prepare(file input: URL, output: URL, channelCount: Int) throws -> RecordedAudio {
+        let file = try AVAudioFile(forReading: input)
+        let source = file.processingFormat
+        let layout = try XCTUnwrap(AVAudioChannelLayout(
+            layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | UInt32(channelCount)))
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: source.sampleRate,
+                                   interleaved: false, channelLayout: layout)
+        let writer = try PCMRecordingWriter(url: output, inputFormat: format)
+        let read = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: source, frameCapacity: 4096))
+        let multi = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096))
+        while file.framePosition < file.length {
+            try file.read(into: read)
+            if read.frameLength == 0 { break }
+            multi.frameLength = read.frameLength
+            for channel in 0..<channelCount {
+                let destination = multi.floatChannelData![channel]
+                if channel == 0 {
+                    destination.update(from: read.floatChannelData![0], count: Int(read.frameLength))
+                } else {
+                    destination.update(repeating: 0, count: Int(read.frameLength))
+                }
+            }
+            try writer.append(multi)
+        }
+        return try writer.finish()
+    }
+
     static func prepare(file input: URL, output: URL) throws -> RecordedAudio {
         let file = try AVAudioFile(forReading: input)
         let writer = try PCMRecordingWriter(url: output, inputFormat: file.processingFormat)

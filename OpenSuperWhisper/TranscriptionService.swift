@@ -315,6 +315,8 @@ class TranscriptionService: ObservableObject {
             do {
                 if let pcmSamples, let whisper = engine as? WhisperEngine {
                     result = try await whisper.transcribeSamples(pcmSamples, settings: settings)
+                } else if let pcmSamples, let fluid = engine as? FluidAudioEngine {
+                    result = try await fluid.transcribeSamples(pcmSamples, settings: settings)
                 } else {
                     result = try await engine.transcribeAudio(url: url, settings: settings)
                 }
