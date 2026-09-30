@@ -106,6 +106,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         }
         return .terminateLater
     }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        // Last-resort guard: if a session is still muted when the app exits, the
+        // user would be left with silent speakers until they use the volume keys.
+        OutputVolumeController.shared.restore()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !OpenSuperWhisperApp.isRunningTests else { return }

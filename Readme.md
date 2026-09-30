@@ -13,6 +13,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 - ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
 - 🖱️ Mouse button trigger — bind the middle or an extra (thumb) mouse button to start/stop recording
 - ✊ Hold-to-record mode — hold the shortcut, modifier key or mouse button to record, release to stop
+- 🔇 Optional speaker mute while recording — silences the output volume and restores your previous level when the recording ends
 - 📁 Drag & drop audio files for transcription with queue processing
 - 🎤 Microphone selection — switch between built-in, external, Bluetooth and iPhone (Apple Continuity) mics from the menu bar
 - 🌍 Support for multiple languages with auto-detection
