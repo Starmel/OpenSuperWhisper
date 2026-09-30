@@ -138,6 +138,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var muteOutputWhileRecording: Bool {
+        didSet {
+            AppPreferences.shared.muteOutputWhileRecording = muteOutputWhileRecording
+        }
+    }
+    
     @Published var useAsianAutocorrect: Bool {
         didSet {
             AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
@@ -221,6 +227,7 @@ class SettingsViewModel: ObservableObject {
         self.beamSize = prefs.beamSize
         self.debugMode = prefs.debugMode
         self.playSoundOnRecordStart = prefs.playSoundOnRecordStart
+        self.muteOutputWhileRecording = prefs.muteOutputWhileRecording
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
@@ -1368,6 +1375,21 @@ struct SettingsView: View {
                                 .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
                                 .labelsHidden()
                                 .help("Play a notification sound when recording begins")
+                        }
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Mute speakers while recording")
+                                    .font(.subheadline)
+                                Text("Sets the output volume to 0 and restores your previous level when recording ends")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $viewModel.muteOutputWhileRecording)
+                                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                                .labelsHidden()
+                                .help("Silence the Mac's speakers while dictating so playback is not picked up by the microphone")
                         }
                         
                         HStack {

@@ -93,6 +93,9 @@ final class AppPreferences {
     @UserDefault(key: "playSoundOnRecordStart", defaultValue: false)
     var playSoundOnRecordStart: Bool
     
+    @UserDefault(key: "muteOutputWhileRecording", defaultValue: false)
+    var muteOutputWhileRecording: Bool
+    
     @UserDefault(key: "hasCompletedOnboarding", defaultValue: false)
     var hasCompletedOnboarding: Bool
     
