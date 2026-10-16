@@ -52,14 +52,15 @@ final class EngineLoadingTests: XCTestCase {
         let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
         try await waitForRequest("A", gate: gate)
         service.loadEngine(selection: b)
-        try await waitForRequest("B", gate: gate)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        let didStartReplacement = await gate.hasRequest("B")
+        XCTAssertFalse(didStartReplacement)
         var finished = false
         let shutdown = Task {
             await service.shutdown()
             finished = true
         }
         while !service.isShuttingDown { await Task.yield() }
-        await gate.finish("B", result: .success(NamedTestEngine("B")))
         try await Task.sleep(nanoseconds: 20_000_000)
         XCTAssertFalse(finished)
         await gate.finish("A", result: .success(NamedTestEngine("A")))
@@ -68,7 +69,7 @@ final class EngineLoadingTests: XCTestCase {
         XCTAssertFalse(service.isLoading)
         service.loadEngine(selection: a)
         let count = await gate.count
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(count, 1)
         do {
             _ = try await service.transcribeAudio(url: url, settings: Settings())
             XCTFail("Shutdown service accepted transcription")
@@ -82,11 +83,13 @@ final class EngineLoadingTests: XCTestCase {
         let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })
         try await waitForRequest("A", gate: gate)
         service.loadEngine(selection: b)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        let didStartReplacement = await gate.hasRequest("B")
+        XCTAssertFalse(didStartReplacement)
+        await gate.finish("A", result: .success(NamedTestEngine("A")))
         try await waitForRequest("B", gate: gate)
         await gate.finish("B", result: .success(NamedTestEngine("B")))
         try await waitForCompletion(service)
-        await gate.finish("A", result: .success(NamedTestEngine("A")))
-        try await Task.sleep(nanoseconds: 20_000_000)
         let text = try await service.transcribeAudio(url: url, settings: Settings())
         XCTAssertEqual(text, "B")
     }

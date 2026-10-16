@@ -165,6 +165,10 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
 
     func cancel() {
         lock.lock()
+        if cancellationInProgress {
+            lock.unlock()
+            return
+        }
         let connection = connection
         let pendingReplies = Array(self.pendingReplies.values)
         cancellationInProgress = connection != nil
@@ -177,9 +181,8 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
             return
         }
 
-        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self, weak connection] error in
-            guard let self, let connection else { return }
-            self.failConnection(connection, with: error)
+        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self, weak connection] _ in
+            self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
         } as! PhononXPCProtocol
         proxy.cancel { [weak self, weak connection] in
             self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
@@ -199,7 +202,10 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let gate = ReplyGate(continuation)
-                register(gate)
+                if let error = register(gate, on: connection) {
+                    _ = gate.resume(with: .failure(error))
+                    return
+                }
                 if Task.isCancelled {
                     cancel()
                     return
@@ -211,10 +217,16 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         }
     }
 
-    private func register(_ gate: ReplyGate) {
+    private func register(_ gate: ReplyGate, on connection: ConnectionHandle) -> Error? {
         lock.lock()
+        defer { lock.unlock() }
+        if cancellationInProgress { return CancellationError() }
+        guard self.connection === connection.connection,
+              connectionID == connection.id else {
+            return ClientError.connectionInvalidated
+        }
         pendingReplies[ObjectIdentifier(gate)] = gate
-        lock.unlock()
+        return nil
     }
 
     private func submit(

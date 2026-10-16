@@ -207,7 +207,8 @@ class TranscriptionService: ObservableObject {
     func loadEngine(selection: EngineSelection) {
         guard !isShuttingDown else { return }
         guard selection != engineSelection || (!isLoading && currentEngine == nil) else { return }
-        engineLoadTask?.cancel()
+        let previousTask = engineLoadTask
+        previousTask?.cancel()
         engineSelection = selection
         let id = UUID()
         engineLoadID = id
@@ -218,6 +219,10 @@ class TranscriptionService: ObservableObject {
         isLoading = true
         let loader = engineLoader
         let task = Task.detached(priority: .userInitiated) {
+            if let previousTask {
+                _ = await previousTask.result
+                try Task.checkCancellation()
+            }
             let engine = try await loader(selection)
             try Task.checkCancellation()
             return engine
