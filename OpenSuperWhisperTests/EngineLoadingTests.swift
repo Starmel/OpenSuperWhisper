@@ -119,6 +119,33 @@ final class EngineLoadingTests: XCTestCase {
         XCTAssertEqual(text, "C")
     }
 
+    func testReplacementDoesNotWaitForPhononWhisperFallback() async throws {
+        let gate = EngineLoadGate()
+        let service = TranscriptionService(
+            selection: phonon,
+            engineLoader: { try await gate.load($0) },
+            nativePhononLoader: { _ in
+                try await gate.load(.init(engine: "phonon-native", modelPath: nil, modelVersion: "v3"))
+            },
+            phononFallbackLoader: { _, _ in
+                try await gate.load(.init(engine: "phonon-fallback", modelPath: nil, modelVersion: "v3"))
+            }
+        )
+        try await waitForRequest("phonon-native", gate: gate)
+        await gate.finish("phonon-native", result: .failure(TranscriptionError.contextInitializationFailed))
+        try await waitForRequest("phonon-fallback", gate: gate)
+
+        service.loadEngine(selection: b)
+        try await waitForRequest("B", gate: gate)
+        await gate.finish("B", result: .success(NamedTestEngine("B")))
+        try await waitForCompletion(service)
+
+        await gate.finish("phonon-fallback", result: .success(NamedTestEngine("fallback")))
+        try await Task.sleep(nanoseconds: 20_000_000)
+        let text = try await service.transcribeAudio(url: url, settings: Settings())
+        XCTAssertEqual(text, "B")
+    }
+
     func testTranscriptionWaitsForColdModelLoad() async throws {
         let gate = EngineLoadGate()
         let service = TranscriptionService(selection: a, engineLoader: { try await gate.load($0) })

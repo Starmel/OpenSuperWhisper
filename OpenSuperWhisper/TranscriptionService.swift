@@ -123,24 +123,55 @@ class TranscriptionService: ObservableObject {
 
     @Published private(set) var loadingError: String?
     private let engineLoader: (EngineSelection) async throws -> TranscriptionEngine
+    private let nativePhononLoader: (EngineSelection) async throws -> TranscriptionEngine
+    private let phononFallbackLoader: (EngineSelection, Error) async throws -> TranscriptionEngine
     private var engineLoadTask: Task<TranscriptionEngine, Error>?
     private var engineLoadID: UUID?
     private var engineSelection: EngineSelection?
     private var phononLoadTask: Task<TranscriptionEngine, Error>?
     private var phononLoadID: UUID?
 
-    init(
-        selection: EngineSelection = .current,
-        engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine = {
-            try await TranscriptionService.makeEngine($0)
+    init(selection: EngineSelection = .current) {
+        engineLoader = { try await TranscriptionService.makeEngine($0) }
+        nativePhononLoader = {
+            try await TranscriptionService.makeNativePhononEngine($0)
         }
+        phononFallbackLoader = {
+            try await TranscriptionService.makePhononFallbackEngine($0, error: $1)
+        }
+        loadEngine(selection: selection)
+    }
+
+    init(
+        selection: EngineSelection,
+        engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine
     ) {
         self.engineLoader = engineLoader
+        nativePhononLoader = engineLoader
+        phononFallbackLoader = { _, error in throw error }
+        loadEngine(selection: selection)
+    }
+
+    init(
+        selection: EngineSelection,
+        engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine,
+        nativePhononLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine,
+        phononFallbackLoader: @escaping (EngineSelection, Error) async throws -> TranscriptionEngine
+    ) {
+        self.engineLoader = engineLoader
+        self.nativePhononLoader = nativePhononLoader
+        self.phononFallbackLoader = phononFallbackLoader
         loadEngine(selection: selection)
     }
 
     init(engine: TranscriptionEngine) {
         engineLoader = { try await TranscriptionService.makeEngine($0) }
+        nativePhononLoader = {
+            try await TranscriptionService.makeNativePhononEngine($0)
+        }
+        phononFallbackLoader = {
+            try await TranscriptionService.makePhononFallbackEngine($0, error: $1)
+        }
         currentEngine = engine
     }
 
@@ -160,23 +191,38 @@ class TranscriptionService: ObservableObject {
             return engine
         case "phonon":
             do {
-                let engine = factories.makePhonon()
-                try await engine.initialize()
-                return engine
+                return try await makeNativePhononEngine(selection, factories: factories)
             } catch {
                 if error is CancellationError { throw CancellationError() }
                 try Task.checkCancellation()
-                guard let path = selection.modelPath else { throw error }
-                let whisper = factories.makeWhisper(path)
-                try await whisper.initialize()
-                return FallbackPCMEngine(
-                    engine: whisper,
-                    warning: "Phonon-2 is unavailable (\(error.localizedDescription)). Using the selected Whisper model locally until Phonon-2 is repaired."
-                )
+                return try await makePhononFallbackEngine(selection, error: error, factories: factories)
             }
         default:
             throw TranscriptionError.unsupportedEngine(selection.engine)
         }
+    }
+
+    private static func makeNativePhononEngine(
+        _ selection: EngineSelection,
+        factories: EngineFactories = .production
+    ) async throws -> TranscriptionEngine {
+        let engine = factories.makePhonon()
+        try await engine.initialize()
+        return engine
+    }
+
+    private static func makePhononFallbackEngine(
+        _ selection: EngineSelection,
+        error: Error,
+        factories: EngineFactories = .production
+    ) async throws -> TranscriptionEngine {
+        guard let path = selection.modelPath else { throw error }
+        let whisper = factories.makeWhisper(path)
+        try await whisper.initialize()
+        return FallbackPCMEngine(
+            engine: whisper,
+            warning: "Phonon-2 is unavailable (\(error.localizedDescription)). Using the selected Whisper model locally until Phonon-2 is repaired."
+        )
     }
 
     func cancelTranscription() {
@@ -220,20 +266,50 @@ class TranscriptionService: ObservableObject {
         loadingWarning = nil
         isLoading = true
         let loader = engineLoader
-        let task = Task.detached(priority: .userInitiated) {
-            if let pendingPhononLoad {
-                _ = await pendingPhononLoad.result
-                try Task.checkCancellation()
+        let task: Task<TranscriptionEngine, Error>
+        if selection.engine == "phonon" {
+            let nativeLoader = nativePhononLoader
+            let fallbackLoader = phononFallbackLoader
+            let nativeTask = Task.detached(priority: .userInitiated) {
+                if let pendingPhononLoad {
+                    _ = await pendingPhononLoad.result
+                    try Task.checkCancellation()
+                }
+                return try await nativeLoader(selection)
             }
-            let engine = try await loader(selection)
-            try Task.checkCancellation()
-            return engine
+            phononLoadTask = nativeTask
+            phononLoadID = id
+            task = Task.detached(priority: .userInitiated) { [weak self] in
+                let nativeResult = await withTaskCancellationHandler {
+                    await nativeTask.result
+                } onCancel: {
+                    nativeTask.cancel()
+                }
+                await MainActor.run {
+                    self?.finishNativePhononLoad(id: id)
+                }
+                switch nativeResult {
+                case .success(let engine):
+                    try Task.checkCancellation()
+                    return engine
+                case .failure(let error):
+                    if error is CancellationError { throw CancellationError() }
+                    try Task.checkCancellation()
+                    return try await fallbackLoader(selection, error)
+                }
+            }
+        } else {
+            task = Task.detached(priority: .userInitiated) {
+                if let pendingPhononLoad {
+                    _ = await pendingPhononLoad.result
+                    try Task.checkCancellation()
+                }
+                let engine = try await loader(selection)
+                try Task.checkCancellation()
+                return engine
+            }
         }
         engineLoadTask = task
-        if selection.engine == "phonon" {
-            phononLoadTask = task
-            phononLoadID = id
-        }
         backgroundOperations[id] = Task { [weak self] in
             let result = await task.result
             self?.finishEngineLoad(id: id, result: result)
@@ -241,11 +317,13 @@ class TranscriptionService: ObservableObject {
         }
     }
 
+    private func finishNativePhononLoad(id: UUID) {
+        guard phononLoadID == id else { return }
+        phononLoadTask = nil
+        phononLoadID = nil
+    }
+
     private func finishEngineLoad(id: UUID, result: Result<TranscriptionEngine, Error>) {
-        if phononLoadID == id {
-            phononLoadTask = nil
-            phononLoadID = nil
-        }
         guard !isShuttingDown else {
             if case .success(let engine as WhisperEngine) = result {
                 shutdownEngines.append(engine)
