@@ -60,29 +60,31 @@ state; the check is cached and does not add a CoreAudio round-trip.
 
 ## M5 local benchmark
 
-Measured on an Apple M5 MacBook Pro with 16 GB RAM and macOS 26.2. Both engines
+Measured on an Apple M5 MacBook Pro with 16 GB RAM and macOS 26.2. All engines
 used the same 5.000-second English PCM clip and 97.106-second English fixture.
 Phonon ran through the real app selection, direct-PCM, embedded XPC, and URL
 paths. The current Whisper fast tier on this installation was
 `ggml-large-v3-turbo.bin`. Times are wall-clock seconds. Peak memory is the Mach
-physical-footprint peak for the engine process; Phonon is isolated in its helper,
-while Parakeet and Whisper share the test host, so those values are approximate
-comparisons.
+physical-footprint peak. Each engine ran in a separately launched XCTest app
+host, verified by distinct worker PIDs in the raw report. Phonon's value comes
+from its fresh XPC helper; Parakeet and Whisper values come from their respective
+fresh app hosts, so no earlier engine can contaminate a lifetime high-water mark.
 
 | Measurement | Phonon-2 | Parakeet v3 | Whisper large-v3-turbo |
 | --- | ---: | ---: | ---: |
-| Fresh-process model preparation/load | 126.03 | 32.64 | 13.12 |
-| First 5 s dictation after ready | 0.269 | — | — |
-| Warm 5 s dictation | 0.241 | 0.149 | 1.898 |
-| 97.106 s clip | 6.648 wall / 4.075 decode | 1.417 | 14.912 |
-| Peak physical footprint | 135.3 MiB | 92.5 MiB | 1,974.8 MiB |
+| Fresh-process model preparation/load | 100.98 | 27.07 | 12.48 |
+| First 5 s dictation after ready | 0.189 | — | — |
+| Warm 5 s dictation | 0.156 | 0.153 | 1.520 |
+| 97.106 s clip | 3.083 wall / 3.051 decode | 1.004 | 11.598 |
+| Peak physical footprint | 134.9 MiB | 95.5 MiB | 1,922.1 MiB |
 
 The compiled Core ML package already existed for the final run, so its package
-compile counter was effectively zero; the measured 124.63 seconds inside the
-runtime was Neural Engine function loading/preparation. An earlier first-ever
-run measured 1.17 seconds for package compilation plus 105.30 seconds for its
-then-selected function. This supports the UI's warning that initial preparation
-can take roughly one to two minutes, while same-process transcriptions are fast.
+compile counter was effectively zero; the measured 100.62 seconds inside the
+runtime was Neural Engine function loading/preparation. An earlier run measured
+124.63 seconds for the same preparation, while an earlier first-ever run measured
+1.17 seconds for package compilation plus 105.30 seconds for its then-selected
+function. This supports the UI's warning that initial preparation can take
+roughly one to two minutes, while same-process transcriptions are fast.
 
 The pinned download is 345,012,107 bytes. After Core ML compilation, the model
 plus content-addressed compiled cache occupied 676,914,435 logical bytes
@@ -110,12 +112,15 @@ locally established facts.
 The benchmark is intentionally opt-in because it downloads/loads real models:
 
 ```sh
-RUN_PHONON_BENCHMARKS=1 xcodebuild test \
+touch /tmp/run-osw-phonon-benchmark
+trap 'rm -f /tmp/run-osw-phonon-benchmark' EXIT
+xcodebuild test \
   -project OpenSuperWhisper.xcodeproj \
   -scheme OpenSuperWhisper \
   -destination 'platform=macOS,arch=arm64' \
-  -only-testing:OpenSuperWhisperTests/PhononBenchmarkTests
+  -only-testing:OpenSuperWhisperTests/PhononBenchmarkTests/testM5LocalEngineComparisonAndPhononAppPath
 ```
 
-It writes the raw report to `/tmp/osw-phonon-benchmark.json` and does not copy or
-replace `/Applications/OpenSuperWhisper.app`.
+The coordinator launches one fresh test process per engine and writes the raw
+report to `/tmp/osw-phonon-benchmark.json`. It does not copy or replace
+`/Applications/OpenSuperWhisper.app`.

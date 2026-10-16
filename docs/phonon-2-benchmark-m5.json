@@ -2,9 +2,10 @@
   "long_clip_seconds" : 97.105999999999995,
   "machine" : "Apple M5, 16 GB",
   "parakeet_v3" : {
-    "cold_load_seconds" : 32.63575804233551,
+    "benchmark_worker_pid" : 56967,
+    "cold_load_seconds" : 27.068786025047302,
     "long_transcript" : "Today, I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning, I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear, calm, and easy to read. The first checkpoint phrase is Amber Lighthouse. It appears before the middle of the recording and should survive transcription without losing the nearby context. The team notices that the northern path needs better lighting, while the southern garden needs more benches. They also decide that the playground should remain open during the repairs. Nobody wants the transcript to start a new paragraph merely because the speech model created another internal segment. Now the recording continues beyond a typical 30-second window, the same report is still being discussed, so the words that follow belong to the same dictation. The second checkpoint phrase is quiet river, it marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time, they verify vary date, every number, and every recommendation. The final checkpoint phrase is silver compass. If this phrase is present, the last part of the audio was not clipped during conversion or decoding. This concludes the long English dictation test with one continuous passage and no artificial paragraph breaks.",
-    "long_wall_seconds" : 1.417478084564209,
+    "long_wall_seconds" : 1.0039490461349487,
     "long_word_timings" : [
       {
         "end" : 0.32000000000000001,
@@ -1462,16 +1463,18 @@
         "word" : "breaks."
       }
     ],
-    "peak_resident_bytes" : 97027104,
+    "peak_memory_process" : "fresh XCTest app host",
+    "peak_resident_bytes" : 100172784,
     "short_transcript" : "And so, my fellow Americans, ask not!",
-    "warm_short_wall_seconds" : 0.14942800998687744
+    "warm_short_wall_seconds" : 0.15321898460388184
   },
   "phonon" : {
-    "cold_prepare_wall_seconds" : 126.0345059633255,
-    "first_short_wall_seconds" : 0.26860296726226807,
-    "long_decode_seconds" : 4.0748410224914551,
+    "benchmark_worker_pid" : 51947,
+    "cold_prepare_wall_seconds" : 100.98341798782349,
+    "first_short_wall_seconds" : 0.18946099281311035,
+    "long_decode_seconds" : 3.0509299039840698,
     "long_transcript" : "Today I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear. Calm and easy to read. The first checkpoint phrase is Amber Lighthouse. It appears before the middle of the recording and should survive transcription without losing the nearby context. The team notices that the northern path needs better lighting, while the southern garden needs more benches. They also decide that the playground should remain open during the repairs. Nobody wants the transcripts. to start a new paragraph merely because the speech model created another internal segment. Now the recording continues beyond a typical thirty second window. The same report is still being discussed. So the words that follow belong to the same dictation. The second checkpoint phrase is quiet river. It marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time. They verify every date, every number, and every recommendation. The final checkpoint phrase is silver compass. If this phrase is present, the last part of the audio was not clipped during conversion or decoding. This concludes the long English dictation test with one continuous passage and no artificial paragraph breaks.",
-    "long_wall_seconds" : 6.6478099822998047,
+    "long_wall_seconds" : 3.0831190347671509,
     "long_word_timings" : [
       {
         "end" : 0.32000000000000001,
@@ -2934,19 +2937,21 @@
         "word" : "breaks."
       }
     ],
-    "peak_resident_bytes" : 141886352,
-    "runtime_compile_seconds" : 2.09808349609375e-05,
-    "runtime_load_seconds" : 124.63127505779266,
+    "peak_memory_process" : "PhononService XPC helper",
+    "peak_resident_bytes" : 141411216,
+    "runtime_compile_seconds" : 2.3007392883300781e-05,
+    "runtime_load_seconds" : 100.62326896190643,
     "short_transcript" : "And so, my fellow Americans, ask not",
-    "warm_short_decode_seconds" : 0.23975801467895508,
-    "warm_short_wall_seconds" : 0.24066495895385742
+    "warm_short_decode_seconds" : 0.15536308288574219,
+    "warm_short_wall_seconds" : 0.15598201751708984
   },
-  "phonon_download_seconds_this_run" : 0.0017969608306884766,
+  "phonon_download_seconds_this_run" : 0.0018389225006103516,
   "phonon_on_disk_bytes_including_compiled_cache" : 676914435,
   "phonon_pinned_download_bytes" : 345012107,
-  "short_clip_seconds" : 5,
+  "short_clip_seconds" : 4.9905625000000002,
   "whisper_large_v3_turbo" : {
-    "cold_load_seconds" : 13.122022986412048,
+    "benchmark_worker_pid" : 61979,
+    "cold_load_seconds" : 12.483768939971924,
     "long_segment_end_times_seconds" : [
       30,
       60,
@@ -2954,9 +2959,10 @@
       120
     ],
     "long_transcript" : "Today I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear, calm, and easy to read. The first checkpoint phrase is Amber Lighthouse. The report is still being discussed. So the words that follow belong to the same dictation. The second checkpoint phrase is quiet river. It marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time. They verify every date, every number, and every recommendation. The final checkpoint phrase is silver compass. This concludes the Long English dictation test with one continuous passage and no artificial paragraph breaks.",
-    "long_wall_seconds" : 14.911535978317261,
-    "peak_resident_bytes" : 2070694480,
+    "long_wall_seconds" : 11.598475098609924,
+    "peak_memory_process" : "fresh XCTest app host",
+    "peak_resident_bytes" : 2015447512,
     "short_transcript" : "and so my fellow Americans, ask not",
-    "warm_short_wall_seconds" : 1.8984229564666748
+    "warm_short_wall_seconds" : 1.5200769901275635
   }
 }
