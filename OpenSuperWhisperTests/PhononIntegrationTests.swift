@@ -32,6 +32,7 @@ private final class TestPhononDownloader: PhononDownloading, @unchecked Sendable
 
 private final class TestPhononClient: PhononTranscribing {
     var onPreparationProgress: ((String, Double) -> Void)?
+    private(set) var isPrepared = false
     private(set) var prepareCalls = 0
     private(set) var sampleCalls = 0
     private(set) var fileCalls = 0
@@ -39,6 +40,7 @@ private final class TestPhononClient: PhononTranscribing {
 
     func prepare(modelDirectory: URL) async throws -> PhononPreparationResult {
         prepareCalls += 1
+        isPrepared = true
         onPreparationProgress?("loaded enc_5s", 0.25)
         return .init(loadSeconds: 0.25, compileSeconds: 0, loadedFunctions: [15], peakResidentMemoryBytes: 1)
     }
@@ -53,7 +55,14 @@ private final class TestPhononClient: PhononTranscribing {
         return Self.result("queued url")
     }
 
-    func cancel() { cancelled = true }
+    func cancel() {
+        cancelled = true
+        isPrepared = false
+    }
+
+    func simulateInvalidation() {
+        isPrepared = false
+    }
 
     private static func result(_ text: String) -> PhononTranscriptionResult {
         .init(
@@ -180,13 +189,20 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertEqual(client.sampleCalls, 1)
         XCTAssertEqual(client.fileCalls, 1)
         XCTAssertEqual(engine.lastResult?.words.first?.end, 0.5)
+
+        client.simulateInvalidation()
+        XCTAssertFalse(engine.isModelLoaded)
+        let recoveredText = try await engine.transcribeSamples([0.15], settings: settings)
+        XCTAssertEqual(recoveredText, "direct pcm")
+        XCTAssertEqual(client.prepareCalls, 2)
+
         engine.cancelTranscription()
         XCTAssertTrue(client.cancelled)
 
         let retriedText = try await engine.transcribeSamples([0.2], settings: settings)
         XCTAssertEqual(retriedText, "direct pcm")
-        XCTAssertEqual(client.prepareCalls, 2)
-        XCTAssertEqual(client.sampleCalls, 2)
+        XCTAssertEqual(client.prepareCalls, 3)
+        XCTAssertEqual(client.sampleCalls, 3)
     }
 
     func testStorageAccountingAndDeleteIncludeCompiledCache() throws {
