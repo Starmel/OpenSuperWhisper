@@ -1,0 +1,6 @@
+phonon-coreml
+Copyright 2026 Fermion Research
+
+Swift package, command-line tool and Python runner for Phonon-2 Core ML (Apache License, Version 2.0).
+The model weights live at https://huggingface.co/FermionResearch/Phonon-2-CoreML under CC-BY-4.0; see that repository's NOTICE.
+The greedy TDT decoder in Sources/PhononTDT is Fermion Research's C implementation.

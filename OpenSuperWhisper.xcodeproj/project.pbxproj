@@ -34,6 +34,8 @@
 		CEAC00032D82F00200000000 /* libautocorrect_swift.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; };
 		CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00072D82F40000000000 /* libomp.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A10000000000000000000003 /* PhononCoreML in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000002 /* PhononCoreML */; };
+		A1000000000000000000000B /* PhononService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* PhononService.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -107,6 +109,13 @@
 			remoteGlobalIDString = CE57B0272D52C7BB00929AF3;
 			remoteInfo = OpenSuperWhisper;
 		};
+		A10000000000000000000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CE57B0202D52C7BB00929AF3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000000000000000000000C;
+			remoteInfo = PhononService;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -119,6 +128,17 @@
 				CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */,
 				CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */,
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1000000000000000000000A /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/XPCServices;
+			dstSubfolderSpec = 1;
+			files = (
+				A1000000000000000000000B /* PhononService.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -169,6 +189,7 @@
 		CE84DF792D5578BE00C54EA6 /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libautocorrect_swift.dylib; path = build/libautocorrect_swift.dylib; sourceTree = "<group>"; };
 		CEAC00072D82F40000000000 /* libomp.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libomp.dylib; path = build/libomp.dylib; sourceTree = "<group>"; };
+		A10000000000000000000004 /* PhononService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = PhononService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -178,6 +199,13 @@
 				"OpenSuperWhisper-Info.plist",
 			);
 			target = CE57B0272D52C7BB00929AF3 /* OpenSuperWhisper */;
+		};
+		A10000000000000000000006 /* Exceptions for "PhononService" folder in "PhononService" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A1000000000000000000000C /* PhononService */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -198,6 +226,14 @@
 		CE57B0462D52C7BC00929AF3 /* OpenSuperWhisperUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OpenSuperWhisperUITests;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000005 /* PhononService */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000006 /* Exceptions for "PhononService" folder in "PhononService" target */,
+			);
+			path = PhononService;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -234,6 +270,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000003 /* PhononCoreML in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,6 +328,7 @@
 				CE57B02A2D52C7BB00929AF3 /* OpenSuperWhisper */,
 				CE57B03C2D52C7BC00929AF3 /* OpenSuperWhisperTests */,
 				CE57B0462D52C7BC00929AF3 /* OpenSuperWhisperUITests */,
+				A10000000000000000000005 /* PhononService */,
 				CE37B60E2D54F274009D6564 /* Frameworks */,
 				CE57B0292D52C7BB00929AF3 /* Products */,
 				CE84DF772D55789800C54EA6 /* ggml-tiny.en.bin */,
@@ -298,6 +343,7 @@
 				CE57B0282D52C7BB00929AF3 /* OpenSuperWhisper.app */,
 				CE57B0392D52C7BC00929AF3 /* OpenSuperWhisperTests.xctest */,
 				CE57B0432D52C7BC00929AF3 /* OpenSuperWhisperUITests.xctest */,
+				A10000000000000000000004 /* PhononService.xpc */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -416,10 +462,12 @@
 				CE57B0252D52C7BB00929AF3 /* Frameworks */,
 				CE57B0262D52C7BB00929AF3 /* Resources */,
 				CEAC00052D82F20000000000 /* CopyFiles */,
+				A1000000000000000000000A /* Embed XPC Services */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000011 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				CE57B02A2D52C7BB00929AF3 /* OpenSuperWhisper */,
@@ -480,6 +528,29 @@
 			productReference = CE57B0432D52C7BC00929AF3 /* OpenSuperWhisperUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A1000000000000000000000C /* PhononService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000000F /* Build configuration list for PBXNativeTarget "PhononService" */;
+			buildPhases = (
+				A10000000000000000000007 /* Sources */,
+				A10000000000000000000008 /* Frameworks */,
+				A10000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000005 /* PhononService */,
+			);
+			name = PhononService;
+			packageProductDependencies = (
+				A10000000000000000000002 /* PhononCoreML */,
+			);
+			productName = PhononService;
+			productReference = A10000000000000000000004 /* PhononService.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -501,6 +572,9 @@
 						CreatedOnToolsVersion = 16.1;
 						TestTargetID = CE57B0272D52C7BB00929AF3;
 					};
+					A1000000000000000000000C = {
+						CreatedOnToolsVersion = 26.0;
+					};
 				};
 			};
 			buildConfigurationList = CE57B0232D52C7BB00929AF3 /* Build configuration list for PBXProject "OpenSuperWhisper" */;
@@ -516,6 +590,7 @@
 				CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				CE0EAD6C2D56ACA80067FDEE /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				A10000000000000000000001 /* XCLocalSwiftPackageReference "Vendor/phonon-coreml-1.1.2" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CE57B0292D52C7BB00929AF3 /* Products */;
@@ -531,6 +606,7 @@
 				CE57B0272D52C7BB00929AF3 /* OpenSuperWhisper */,
 				CE57B0382D52C7BC00929AF3 /* OpenSuperWhisperTests */,
 				CE57B0422D52C7BC00929AF3 /* OpenSuperWhisperUITests */,
+				A1000000000000000000000C /* PhononService */,
 			);
 		};
 /* End PBXProject section */
@@ -602,6 +678,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -638,6 +721,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -650,6 +740,11 @@
 			isa = PBXTargetDependency;
 			target = CE57B0272D52C7BB00929AF3 /* OpenSuperWhisper */;
 			targetProxy = CE57B0442D52C7BC00929AF3 /* PBXContainerItemProxy */;
+		};
+		A10000000000000000000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000000000000000000000C /* PhononService */;
+			targetProxy = A10000000000000000000010 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -987,6 +1082,51 @@
 			};
 			name = Release;
 		};
+		A1000000000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 8LLDD7HWZK;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PhononService/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper.PhononService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A1000000000000000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 8LLDD7HWZK;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PhononService/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ru.starmel.OpenSuperWhisper.PhononService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1026,6 +1166,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A1000000000000000000000F /* Build configuration list for PBXNativeTarget "PhononService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000000D /* Debug */,
+				A1000000000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1055,6 +1204,13 @@
 		};
 /* End XCRemoteSwiftPackageReference section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		A10000000000000000000001 /* XCLocalSwiftPackageReference "Vendor/phonon-coreml-1.1.2" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Vendor/phonon-coreml-1.1.2";
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		CE0EAD6D2D56ACA80067FDEE /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1070,6 +1226,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CE84E17D2D56550B00C54EA7 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		A10000000000000000000002 /* PhononCoreML */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000001 /* XCLocalSwiftPackageReference "Vendor/phonon-coreml-1.1.2" */;
+			productName = PhononCoreML;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

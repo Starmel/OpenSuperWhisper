@@ -1,0 +1,5 @@
+module PhononTDT [system] {
+    header "phonon2_tdt.h"
+    link "PhononTDT"
+    export *
+}

@@ -1,0 +1,91 @@
+Phonon-2 integration notices
+
+Pinned model repository revision:
+1143812fd4236522232a8c33e3115f0577e3cd7d
+https://huggingface.co/FermionResearch/Phonon-2-CoreML
+
+Pinned Swift runtime: phonon-coreml 1.1.2
+https://github.com/fermionresearch/phonon-coreml/tree/1.1.2
+
+The Phonon-2 weights are licensed under Creative Commons Attribution 4.0
+International (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+The phonon-coreml Swift runtime is licensed under the Apache License 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+===============================================================================
+UPSTREAM MODEL NOTICE (verbatim)
+===============================================================================
+
+Phonon-2 Core ML
+Copyright 2026 Fermion Research
+
+This product includes software and models developed by Fermion Research.
+
+================================================================================
+BASE MODEL
+================================================================================
+
+This model is derived from NVIDIA's Parakeet TDT 0.6B v3
+(nvidia/parakeet-tdt-0.6b-v3), (c) NVIDIA Corporation, licensed under the
+Creative Commons Attribution 4.0 International licence (CC-BY-4.0).
+
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+    https://creativecommons.org/licenses/by/4.0/
+
+Changes: the encoder's linear weights were re-trained and quantised to a
+five-value alphabet by Fermion Research; the remaining parameters were
+quantised to 6-bit integer tables. The FastConformer encoder architecture,
+the TDT decoder, the tokenizer and the feature-extractor configuration derive
+from that model and remain under CC-BY-4.0. This package converts the same
+weights to Core ML programs for the Apple Neural Engine (encoder weights stored
+exactly as five-value palettes: a 1-bit zero mask and 16-bit floating-point
+lookup tables shared by groups of 16 output rows; activations in 16-bit
+floating point) and carries the decoder's 6-bit tables unchanged, packed four
+codes to three bytes.
+
+These weights are therefore distributed under CC-BY-4.0. The Fermion code in
+this repository (the Swift package, the command-line tool and the export
+scripts) remains under the Apache License, Version 2.0.
+
+================================================================================
+TRAINING DATA
+================================================================================
+
+Training audio includes CHiME-6, distributed under the Creative Commons
+Attribution-ShareAlike 4.0 International licence (CC-BY-SA-4.0)
+
+    https://chimechallenge.github.io/chime6/
+    https://creativecommons.org/licenses/by-sa/4.0/
+
+and SPGISpeech, used under Kensho's public terms
+
+    https://datasets.kensho.com/datasets/spgispeech
+
+================================================================================
+RUNTIME DEPENDENCIES
+================================================================================
+
+Core ML, Accelerate, AVFoundation ...... Apple system frameworks
+    The encoder runs as Core ML programs; the log-mel front end uses Accelerate.
+The greedy TDT loop is Fermion's C implementation (Apache-2.0), included.
+
+================================================================================
+EXPORT / REFERENCE TOOLING (optional, not needed to run the model)
+================================================================================
+
+coremltools ................. BSD-3-Clause ........ https://github.com/apple/coremltools
+PyTorch ..................... BSD-3-Clause ........ https://pytorch.org
+transformers ................ Apache-2.0 .......... https://github.com/huggingface/transformers
+NumPy ....................... BSD-3-Clause ........ https://numpy.org
+soundfile ................... BSD-3-Clause ........ https://github.com/bastibe/python-soundfile
+
+===============================================================================
+UPSTREAM RUNTIME NOTICE (verbatim)
+===============================================================================
+
+phonon-coreml
+Copyright 2026 Fermion Research
+
+Swift package, command-line tool and Python runner for Phonon-2 Core ML (Apache License, Version 2.0).
+The model weights live at https://huggingface.co/FermionResearch/Phonon-2-CoreML under CC-BY-4.0; see that repository's NOTICE.
+The greedy TDT decoder in Sources/PhononTDT is Fermion Research's C implementation.

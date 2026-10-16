@@ -11,6 +11,11 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var progress: Float = 0.0
     @Published private(set) var isConverting = false
     @Published private(set) var conversionProgress: Float = 0.0
+    @Published private(set) var loadingWarning: String?
+
+    var activeEngineName: String? { currentEngine?.engineName }
+    var activePhononResult: PhononTranscriptionResult? { (currentEngine as? PhononEngine)?.lastResult }
+    var activePhononPreparation: PhononPreparationResult? { (currentEngine as? PhononEngine)?.preparationMetrics }
     
     private final class TranscriptionTaskBox {
         let id: UUID
@@ -104,32 +109,70 @@ class TranscriptionService: ObservableObject {
         }
     }
 
+    struct EngineFactories {
+        var makeWhisper: (String) -> PCMTranscriptionEngine
+        var makeFluidAudio: (String) -> TranscriptionEngine
+        var makePhonon: () -> TranscriptionEngine
+
+        static let production = EngineFactories(
+            makeWhisper: { WhisperEngine(modelPath: $0) },
+            makeFluidAudio: { FluidAudioEngine(modelVersion: $0) },
+            makePhonon: { PhononEngine() }
+        )
+    }
+
     @Published private(set) var loadingError: String?
     private let engineLoader: (EngineSelection) async throws -> TranscriptionEngine
     private var engineLoadTask: Task<TranscriptionEngine, Error>?
     private var engineLoadID: UUID?
     private var engineSelection: EngineSelection?
 
-    init(selection: EngineSelection = .current, engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine = TranscriptionService.makeEngine) {
+    init(
+        selection: EngineSelection = .current,
+        engineLoader: @escaping (EngineSelection) async throws -> TranscriptionEngine = {
+            try await TranscriptionService.makeEngine($0)
+        }
+    ) {
         self.engineLoader = engineLoader
         loadEngine(selection: selection)
     }
 
     init(engine: TranscriptionEngine) {
-        engineLoader = Self.makeEngine
+        engineLoader = { try await TranscriptionService.makeEngine($0) }
         currentEngine = engine
     }
 
-    private static func makeEngine(_ selection: EngineSelection) async throws -> TranscriptionEngine {
-        let engine: TranscriptionEngine
-        if selection.engine == "fluidaudio" {
-            engine = FluidAudioEngine(modelVersion: selection.modelVersion)
-        } else {
+    static func makeEngine(
+        _ selection: EngineSelection,
+        factories: EngineFactories = .production
+    ) async throws -> TranscriptionEngine {
+        switch selection.engine {
+        case "fluidaudio":
+            let engine = factories.makeFluidAudio(selection.modelVersion)
+            try await engine.initialize()
+            return engine
+        case "whisper":
             guard let path = selection.modelPath else { throw TranscriptionError.contextInitializationFailed }
-            engine = WhisperEngine(modelPath: path)
+            let engine = factories.makeWhisper(path)
+            try await engine.initialize()
+            return engine
+        case "phonon":
+            do {
+                let engine = factories.makePhonon()
+                try await engine.initialize()
+                return engine
+            } catch {
+                guard let path = selection.modelPath else { throw error }
+                let whisper = factories.makeWhisper(path)
+                try await whisper.initialize()
+                return FallbackPCMEngine(
+                    engine: whisper,
+                    warning: "Phonon-2 is unavailable (\(error.localizedDescription)). Using the selected Whisper model locally until Phonon-2 is repaired."
+                )
+            }
+        default:
+            throw TranscriptionError.unsupportedEngine(selection.engine)
         }
-        try await engine.initialize()
-        return engine
     }
 
     func cancelTranscription() {
@@ -169,6 +212,7 @@ class TranscriptionService: ObservableObject {
         currentEngine = nil
         recordingPreparation = nil
         loadingError = nil
+        loadingWarning = nil
         isLoading = true
         let loader = engineLoader
         let task = Task.detached(priority: .userInitiated) {
@@ -196,7 +240,9 @@ class TranscriptionService: ObservableObject {
         engineLoadID = nil
         isLoading = false
         switch result {
-        case .success(let engine): currentEngine = engine
+        case .success(let engine):
+            currentEngine = engine
+            loadingWarning = (engine as? EngineLoadWarningProviding)?.loadWarning
         case .failure(let error): loadingError = error.localizedDescription
         }
     }
@@ -275,18 +321,9 @@ class TranscriptionService: ObservableObject {
         let preparation = recordingPreparation
         recordingPreparation = nil
 
-        // Setup progress callback for engines
-        if let whisperEngine = engine as? WhisperEngine {
-            whisperEngine.onProgressUpdate = { [weak self] newProgress in
-                Task { @MainActor in
-                    guard let self,
-                          self.transcriptionTask?.id == operationID,
-                          self.cancellationRequestedFor != operationID else { return }
-                    self.progress = newProgress
-                }
-            }
-        } else if let fluidEngine = engine as? FluidAudioEngine {
-            fluidEngine.onProgressUpdate = { [weak self] newProgress in
+        // Setup progress callback for engines through an explicit capability.
+        if let progressEngine = engine as? ProgressReportingTranscriptionEngine {
+            progressEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self,
                           self.transcriptionTask?.id == operationID,
@@ -313,8 +350,8 @@ class TranscriptionService: ObservableObject {
             
             let result: String
             do {
-                if let pcmSamples, let whisper = engine as? WhisperEngine {
-                    result = try await whisper.transcribeSamples(pcmSamples, settings: settings)
+                if let pcmSamples, let pcmEngine = engine as? PCMTranscriptionEngine {
+                    result = try await pcmEngine.transcribeSamples(pcmSamples, settings: settings)
                 } else {
                     result = try await engine.transcribeAudio(url: url, settings: settings)
                 }
@@ -394,4 +431,46 @@ enum TranscriptionError: Error {
     case contextInitializationFailed
     case audioConversionFailed
     case processingFailed
+    case unsupportedEngine(String)
+}
+
+extension TranscriptionError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .contextInitializationFailed: return "The transcription engine could not be initialized."
+        case .audioConversionFailed: return "The audio could not be converted."
+        case .processingFailed: return "The transcription engine could not process the audio."
+        case .unsupportedEngine(let engine): return "Unknown transcription engine: \(engine)."
+        }
+    }
+}
+
+private protocol EngineLoadWarningProviding {
+    var loadWarning: String { get }
+}
+
+private final class FallbackPCMEngine: PCMTranscriptionEngine, ProgressReportingTranscriptionEngine, EngineLoadWarningProviding {
+    let engine: PCMTranscriptionEngine
+    let loadWarning: String
+    var engineName: String { "Whisper (Phonon fallback)" }
+    var isModelLoaded: Bool { engine.isModelLoaded }
+    var onProgressUpdate: ((Float) -> Void)? {
+        get { (engine as? ProgressReportingTranscriptionEngine)?.onProgressUpdate }
+        set { (engine as? ProgressReportingTranscriptionEngine)?.onProgressUpdate = newValue }
+    }
+
+    init(engine: PCMTranscriptionEngine, warning: String) {
+        self.engine = engine
+        self.loadWarning = warning
+    }
+
+    func initialize() async throws { try await engine.initialize() }
+    func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+        try await engine.transcribeAudio(url: url, settings: settings)
+    }
+    func transcribeSamples(_ samples: [Float], settings: Settings) async throws -> String {
+        try await engine.transcribeSamples(samples, settings: settings)
+    }
+    func cancelTranscription() { engine.cancelTranscription() }
+    func getSupportedLanguages() -> [String] { engine.getSupportedLanguages() }
 }

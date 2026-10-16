@@ -18,6 +18,13 @@ enum OnboardingShortcutOption: String, CaseIterable {
 class OnboardingViewModel: ObservableObject {
     @Published var selectedLanguage: String {
         didSet {
+            if selectedLanguage != "en",
+               let selectedModelId,
+               let model = unifiedModels.first(where: { $0.id == selectedModelId }),
+               case .phonon = model.type {
+                selectedLanguage = "en"
+                return
+            }
             AppPreferences.shared.whisperLanguage = selectedLanguage
         }
     }
@@ -53,6 +60,13 @@ class OnboardingViewModel: ObservableObject {
 
     private let downloadFluid: (AsrModelVersion, ProgressHandler?) async throws -> AsrModels
 
+    var supportedLanguages: [String] {
+        guard let selectedModelId,
+              let model = unifiedModels.first(where: { $0.id == selectedModelId }),
+              case .phonon = model.type else { return LanguageUtil.availableLanguages }
+        return ["en"]
+    }
+
     init(downloadFluid: @escaping (AsrModelVersion, ProgressHandler?) async throws -> AsrModels = {
         try await AsrModels.downloadAndLoad(version: $0, progressHandler: $1)
     }) {
@@ -85,6 +99,8 @@ class OnboardingViewModel: ObservableObject {
                 updatedModel.isDownloaded = modelManager.isModelDownloaded(name: filename)
             case .parakeet(let version):
                 updatedModel.isDownloaded = isFluidAudioModelDownloaded(version: version)
+            case .phonon:
+                updatedModel.isDownloaded = PhononModelManager.shared.isModelInstalled
             }
             return updatedModel
         }
@@ -116,6 +132,9 @@ class OnboardingViewModel: ObservableObject {
         case .parakeet(let version):
             AppPreferences.shared.selectedEngine = "fluidaudio"
             AppPreferences.shared.fluidAudioModelVersion = version
+        case .phonon:
+            AppPreferences.shared.selectedEngine = "phonon"
+            selectedLanguage = "en"
         }
     }
 
@@ -137,7 +156,51 @@ class OnboardingViewModel: ObservableObject {
             try await downloadWhisperModel(model: model, url: url)
         case .parakeet(let version):
             try await downloadParakeetModel(model: model, version: version)
+        case .phonon:
+            try await downloadPhononModel(model: model)
         }
+    }
+
+    @MainActor
+    private func downloadPhononModel(model: OnboardingUnifiedModel) async throws {
+        let id = UUID()
+        downloadID = id
+        downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
+            do {
+                try await PhononModelManager.shared.downloadModel { [weak self] progress in
+                    Task { @MainActor in
+                        guard let self, self.downloadID == id, !Task.isCancelled else { return }
+                        self.downloadProgress = progress
+                        if let index = self.unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                            self.unifiedModels[index].downloadProgress = progress
+                        }
+                    }
+                }
+                try Task.checkCancellation()
+                guard downloadID == id else { throw CancellationError() }
+                if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                    unifiedModels[index].isDownloaded = true
+                    unifiedModels[index].downloadProgress = 0
+                }
+                selectModel(model)
+                isDownloading = false
+                downloadingModelName = nil
+                downloadProgress = 0
+            } catch {
+                guard downloadID == id else { throw CancellationError() }
+                isDownloading = false
+                downloadingModelName = nil
+                downloadProgress = 0
+                if let index = unifiedModels.firstIndex(where: { $0.id == model.id }) {
+                    unifiedModels[index].downloadProgress = 0
+                }
+                throw error
+            }
+        }
+        try await downloadTask?.value
     }
     
     @MainActor
@@ -380,7 +443,7 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     
                     Picker("Language", selection: $viewModel.selectedLanguage) {
-                        ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
+                        ForEach(viewModel.supportedLanguages, id: \.self) { code in
                             Text(LanguageUtil.languageNames[code] ?? code)
                                 .tag(code)
                         }

@@ -13,8 +13,10 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.selectedEngine = selectedEngine
             if selectedEngine == "whisper" {
                 loadAvailableModels()
-            } else {
+            } else if selectedEngine == "fluidaudio" {
                 initializeFluidAudioModels()
+            } else if selectedEngine == "phonon" {
+                refreshPhononState()
             }
             resetLanguageIfUnsupported()
             Task { @MainActor in
@@ -74,6 +76,8 @@ class SettingsViewModel: ObservableObject {
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadingModelName: String?
+    @Published private(set) var isPhononInstalled = false
+    @Published private(set) var phononStorageBytes: Int64 = 0
     private var downloadTask: Task<Void, Error>?
     private var downloadID: UUID?
     
@@ -237,6 +241,7 @@ class SettingsViewModel: ObservableObject {
         loadAvailableModels()
         initializeDownloadableModels()
         initializeFluidAudioModels()
+        refreshPhononState()
         
         if !supportedLanguages.contains(selectedLanguage) {
             let fallback = LanguageUtil.fallbackLanguage(engine: selectedEngine)
@@ -244,6 +249,58 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.whisperLanguage = fallback
             NotificationCenter.default.post(name: .appPreferencesLanguageChanged, object: nil)
         }
+    }
+
+    func refreshPhononState() {
+        isPhononInstalled = PhononModelManager.shared.isModelInstalled
+        phononStorageBytes = PhononModelManager.shared.storageBytes()
+    }
+
+    @MainActor
+    func downloadPhononModel() async throws {
+        guard !isDownloading else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
+        isDownloading = true
+        downloadingModelName = "Phonon-2"
+        downloadProgress = 0
+        let id = UUID()
+        downloadID = id
+        downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
+            do {
+                try await PhononModelManager.shared.downloadModel { [weak self] value in
+                    Task { @MainActor in
+                        guard let self, self.downloadID == id, !Task.isCancelled else { return }
+                        self.downloadProgress = value
+                    }
+                }
+                try Task.checkCancellation()
+                guard downloadID == id else { throw CancellationError() }
+                isDownloading = false
+                downloadingModelName = nil
+                downloadProgress = 0
+                refreshPhononState()
+                selectedEngine = "phonon"
+            } catch {
+                guard downloadID == id else { throw CancellationError() }
+                isDownloading = false
+                downloadingModelName = nil
+                downloadProgress = 0
+                refreshPhononState()
+                throw error
+            }
+        }
+        try await downloadTask?.value
+    }
+
+    func deletePhononModel() throws {
+        if selectedEngine == "phonon" {
+            selectedEngine = "whisper"
+        }
+        try PhononModelManager.shared.deleteModel()
+        refreshPhononState()
     }
     
     func initializeFluidAudioModels() {
@@ -777,6 +834,9 @@ struct SettingsView: View {
                 Picker("Engine", selection: $viewModel.selectedEngine) {
                     Text("Parakeet").tag("fluidaudio")
                     Text("Whisper").tag("whisper")
+                    if PhononPlatform.isSupported {
+                        Text("Phonon-2").tag("phonon")
+                    }
                 }
                 .pickerStyle(.segmented)
                 .padding(.bottom, 8)
@@ -825,7 +885,7 @@ struct SettingsView: View {
                         }
                         .padding(.top, 8)
                     }
-                } else {
+                } else if viewModel.selectedEngine == "fluidaudio" {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Parakeet Model")
                             .font(.headline)
@@ -866,6 +926,83 @@ struct SettingsView: View {
                                 .cornerRadius(6)
                         }
                         .padding(.top, 8)
+                    }
+                } else if viewModel.selectedEngine == "phonon" {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Phonon-2")
+                            .font(.headline)
+
+                        Label("English only · Apple Neural Engine · speed-oriented", systemImage: "bolt.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Text("Audio and transcripts stay on this Mac. The official Core ML model is downloaded only when requested. First preparation can take one or two minutes; later warm loads are fast.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        if viewModel.isDownloading && viewModel.downloadingModelName == "Phonon-2" {
+                            ProgressView(value: viewModel.downloadProgress) {
+                                Text("Downloading and verifying… \(Int(viewModel.downloadProgress * 100))%")
+                            }
+                            Button("Cancel") { viewModel.cancelDownload() }
+                                .buttonStyle(.bordered)
+                        } else if viewModel.isPhononInstalled {
+                            HStack {
+                                Label("Installed", systemImage: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Spacer()
+                                Button("Delete Model", role: .destructive) {
+                                    do { try viewModel.deletePhononModel() }
+                                    catch { AppErrorCenter.shared.report("Phonon-2 could not be deleted", error: error) }
+                                }
+                            }
+                        } else {
+                            HStack {
+                                Text(ByteCountFormatter.string(fromByteCount: PhononModelRelease.pinned.downloadSize, countStyle: .file))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Button {
+                                    Task {
+                                        do { try await viewModel.downloadPhononModel() }
+                                        catch is CancellationError {}
+                                        catch { AppErrorCenter.shared.report("Phonon-2 download failed", error: error) }
+                                    }
+                                } label: {
+                                    Label("Download", systemImage: "arrow.down.circle")
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+
+                        if viewModel.phononStorageBytes > 0 {
+                            Text("Model and compiled cache: \(ByteCountFormatter.string(fromByteCount: viewModel.phononStorageBytes, countStyle: .file))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Button {
+                                NSWorkspace.shared.open(PhononModelManager.shared.modelsDirectory)
+                            } label: {
+                                Label("Open Models Folder", systemImage: "folder")
+                            }
+                            .buttonStyle(.borderless)
+
+                            Link("Model & licence", destination: URL(string: "https://huggingface.co/FermionResearch/Phonon-2-CoreML")!)
+                            Link("Runtime", destination: URL(string: "https://github.com/fermionresearch/phonon-coreml/tree/1.1.2")!)
+                            Button("Bundled notice") {
+                                if let url = Bundle.main.url(forResource: "Phonon2-NOTICE", withExtension: "txt") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.link)
+                        }
+                        .font(.caption)
+
+                        Text("Weights: CC BY 4.0 · Runtime: Apache 2.0 · Attribution and notices are included with OpenSuperWhisper and the downloaded model.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -1456,6 +1593,7 @@ struct SettingsFluidAudioModels {
 enum OnboardingModelType {
     case whisper(url: URL, size: Int)
     case parakeet(version: String)
+    case phonon
 }
 
 struct OnboardingUnifiedModel: Identifiable {
@@ -1473,12 +1611,15 @@ struct OnboardingUnifiedModel: Identifiable {
         case .parakeet(let version):
             let repo = version == "v2" ? "parakeet-tdt-0.6b-v2-coreml" : "parakeet-tdt-0.6b-v3-coreml"
             return URL(string: "https://huggingface.co/FluidInference/\(repo)")
+        case .phonon:
+            return URL(string: "https://huggingface.co/FermionResearch/Phonon-2-CoreML")
         }
     }
 }
 
 struct OnboardingUnifiedModels {
-    static let availableModels = [
+    static var availableModels: [OnboardingUnifiedModel] {
+        var models = [
         OnboardingUnifiedModel(
             name: "Whisper V3 Large",
             isDownloaded: false,
@@ -1518,7 +1659,20 @@ struct OnboardingUnifiedModels {
                 size: 574
             )
         )
-    ]
+        ]
+        if PhononPlatform.isSupported {
+            models.insert(
+                OnboardingUnifiedModel(
+                    name: "Phonon-2",
+                    isDownloaded: false,
+                    description: "English only · Apple Neural Engine · speed-oriented · about 345 MB",
+                    type: .phonon
+                ),
+                at: 1
+            )
+        }
+        return models
+    }
 }
 
 struct FluidAudioModelDownloadItemView: View {

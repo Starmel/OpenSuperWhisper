@@ -1,0 +1,2962 @@
+{
+  "long_clip_seconds" : 97.105999999999995,
+  "machine" : "Apple M5, 16 GB",
+  "parakeet_v3" : {
+    "cold_load_seconds" : 32.63575804233551,
+    "long_transcript" : "Today, I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning, I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear, calm, and easy to read. The first checkpoint phrase is Amber Lighthouse. It appears before the middle of the recording and should survive transcription without losing the nearby context. The team notices that the northern path needs better lighting, while the southern garden needs more benches. They also decide that the playground should remain open during the repairs. Nobody wants the transcript to start a new paragraph merely because the speech model created another internal segment. Now the recording continues beyond a typical 30-second window, the same report is still being discussed, so the words that follow belong to the same dictation. The second checkpoint phrase is quiet river, it marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time, they verify vary date, every number, and every recommendation. The final checkpoint phrase is silver compass. If this phrase is present, the last part of the audio was not clipped during conversion or decoding. This concludes the long English dictation test with one continuous passage and no artificial paragraph breaks.",
+    "long_wall_seconds" : 1.417478084564209,
+    "long_word_timings" : [
+      {
+        "end" : 0.32000000000000001,
+        "start" : 0,
+        "word" : "Today,"
+      },
+      {
+        "end" : 0.40000000000000002,
+        "start" : 0.32000000000000001,
+        "word" : "I"
+      },
+      {
+        "end" : 0.56000000000000005,
+        "start" : 0.40000000000000002,
+        "word" : "am"
+      },
+      {
+        "end" : 0.88,
+        "start" : 0.56000000000000005,
+        "word" : "testing"
+      },
+      {
+        "end" : 1.04,
+        "start" : 0.88,
+        "word" : "a"
+      },
+      {
+        "end" : 1.3600000000000001,
+        "start" : 1.04,
+        "word" : "long"
+      },
+      {
+        "end" : 1.6799999999999999,
+        "start" : 1.3600000000000001,
+        "word" : "English"
+      },
+      {
+        "end" : 2.2400000000000002,
+        "start" : 1.6799999999999999,
+        "word" : "dictation"
+      },
+      {
+        "end" : 2.4000000000000004,
+        "start" : 2.2400000000000002,
+        "word" : "in"
+      },
+      {
+        "end" : 2.6400000000000001,
+        "start" : 2.3999999999999999,
+        "word" : "open"
+      },
+      {
+        "end" : 2.8800000000000003,
+        "start" : 2.8000000000000003,
+        "word" : "super"
+      },
+      {
+        "end" : 3.8400000000000003,
+        "start" : 3.1200000000000001,
+        "word" : "whisper."
+      },
+      {
+        "end" : 4,
+        "start" : 3.8399999999999999,
+        "word" : "The"
+      },
+      {
+        "end" : 4.3200000000000003,
+        "start" : 4,
+        "word" : "purpose"
+      },
+      {
+        "end" : 4.4800000000000004,
+        "start" : 4.3200000000000003,
+        "word" : "of"
+      },
+      {
+        "end" : 4.6400000000000006,
+        "start" : 4.4800000000000004,
+        "word" : "this"
+      },
+      {
+        "end" : 5.2000000000000002,
+        "start" : 4.6399999999999997,
+        "word" : "recording"
+      },
+      {
+        "end" : 5.3600000000000003,
+        "start" : 5.2000000000000002,
+        "word" : "is"
+      },
+      {
+        "end" : 5.5200000000000005,
+        "start" : 5.3600000000000003,
+        "word" : "to"
+      },
+      {
+        "end" : 5.6800000000000006,
+        "start" : 5.5200000000000005,
+        "word" : "make"
+      },
+      {
+        "end" : 5.9199999999999999,
+        "start" : 5.6799999999999997,
+        "word" : "sure"
+      },
+      {
+        "end" : 6.0800000000000001,
+        "start" : 5.9199999999999999,
+        "word" : "that"
+      },
+      {
+        "end" : 6.2400000000000002,
+        "start" : 6.0800000000000001,
+        "word" : "a"
+      },
+      {
+        "end" : 6.8799999999999999,
+        "start" : 6.2400000000000002,
+        "word" : "continuous"
+      },
+      {
+        "end" : 7.2000000000000002,
+        "start" : 6.8799999999999999,
+        "word" : "thought"
+      },
+      {
+        "end" : 7.6800000000000006,
+        "start" : 7.2000000000000002,
+        "word" : "remains"
+      },
+      {
+        "end" : 8.3200000000000003,
+        "start" : 7.6799999999999997,
+        "word" : "continuous"
+      },
+      {
+        "end" : 8.6400000000000006,
+        "start" : 8.3200000000000003,
+        "word" : "after"
+      },
+      {
+        "end" : 8.8000000000000007,
+        "start" : 8.6400000000000006,
+        "word" : "more"
+      },
+      {
+        "end" : 9.0400000000000009,
+        "start" : 8.8000000000000007,
+        "word" : "than"
+      },
+      {
+        "end" : 9.2000000000000011,
+        "start" : 9.0400000000000009,
+        "word" : "one"
+      },
+      {
+        "end" : 9.4399999999999995,
+        "start" : 9.2000000000000011,
+        "word" : "minute"
+      },
+      {
+        "end" : 9.5999999999999996,
+        "start" : 9.4399999999999995,
+        "word" : "of"
+      },
+      {
+        "end" : 10.32,
+        "start" : 9.5999999999999996,
+        "word" : "speech."
+      },
+      {
+        "end" : 10.48,
+        "start" : 10.32,
+        "word" : "At"
+      },
+      {
+        "end" : 10.56,
+        "start" : 10.48,
+        "word" : "the"
+      },
+      {
+        "end" : 11.040000000000001,
+        "start" : 10.56,
+        "word" : "beginning,"
+      },
+      {
+        "end" : 11.200000000000001,
+        "start" : 11.040000000000001,
+        "word" : "I"
+      },
+      {
+        "end" : 11.360000000000001,
+        "start" : 11.200000000000001,
+        "word" : "will"
+      },
+      {
+        "end" : 11.84,
+        "start" : 11.359999999999999,
+        "word" : "describe"
+      },
+      {
+        "end" : 12,
+        "start" : 11.84,
+        "word" : "a"
+      },
+      {
+        "end" : 12.4,
+        "start" : 12,
+        "word" : "simple"
+      },
+      {
+        "end" : 13.040000000000001,
+        "start" : 12.4,
+        "word" : "project."
+      },
+      {
+        "end" : 13.200000000000001,
+        "start" : 13.040000000000001,
+        "word" : "A"
+      },
+      {
+        "end" : 13.440000000000001,
+        "start" : 13.200000000000001,
+        "word" : "small"
+      },
+      {
+        "end" : 13.68,
+        "start" : 13.44,
+        "word" : "team"
+      },
+      {
+        "end" : 13.84,
+        "start" : 13.68,
+        "word" : "is"
+      },
+      {
+        "end" : 14.24,
+        "start" : 13.84,
+        "word" : "preparing"
+      },
+      {
+        "end" : 14.32,
+        "start" : 14.24,
+        "word" : "a"
+      },
+      {
+        "end" : 14.48,
+        "start" : 14.32,
+        "word" : "report"
+      },
+      {
+        "end" : 15.360000000000001,
+        "start" : 15.200000000000001,
+        "word" : "about"
+      },
+      {
+        "end" : 15.52,
+        "start" : 15.359999999999999,
+        "word" : "a"
+      },
+      {
+        "end" : 15.92,
+        "start" : 15.52,
+        "word" : "city"
+      },
+      {
+        "end" : 16.400000000000002,
+        "start" : 15.92,
+        "word" : "park."
+      },
+      {
+        "end" : 16.640000000000001,
+        "start" : 16.399999999999999,
+        "word" : "They"
+      },
+      {
+        "end" : 16.879999999999999,
+        "start" : 16.640000000000001,
+        "word" : "count"
+      },
+      {
+        "end" : 17.119999999999997,
+        "start" : 16.879999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 17.359999999999999,
+        "start" : 17.120000000000001,
+        "word" : "old"
+      },
+      {
+        "end" : 17.920000000000002,
+        "start" : 17.359999999999999,
+        "word" : "trees,"
+      },
+      {
+        "end" : 18.240000000000002,
+        "start" : 17.920000000000002,
+        "word" : "check"
+      },
+      {
+        "end" : 18.400000000000002,
+        "start" : 18.240000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 18.879999999999999,
+        "start" : 18.400000000000002,
+        "word" : "walking"
+      },
+      {
+        "end" : 19.440000000000001,
+        "start" : 18.879999999999999,
+        "word" : "paths,"
+      },
+      {
+        "end" : 19.68,
+        "start" : 19.440000000000001,
+        "word" : "and"
+      },
+      {
+        "end" : 20,
+        "start" : 19.68,
+        "word" : "speak"
+      },
+      {
+        "end" : 20.16,
+        "start" : 20,
+        "word" : "with"
+      },
+      {
+        "end" : 20.640000000000001,
+        "start" : 20.16,
+        "word" : "neighbors"
+      },
+      {
+        "end" : 20.800000000000001,
+        "start" : 20.640000000000001,
+        "word" : "who"
+      },
+      {
+        "end" : 21.120000000000001,
+        "start" : 20.800000000000001,
+        "word" : "visit"
+      },
+      {
+        "end" : 21.280000000000001,
+        "start" : 21.120000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 21.52,
+        "start" : 21.280000000000001,
+        "word" : "park"
+      },
+      {
+        "end" : 21.84,
+        "start" : 21.52,
+        "word" : "every"
+      },
+      {
+        "end" : 22.399999999999999,
+        "start" : 21.84,
+        "word" : "morning."
+      },
+      {
+        "end" : 22.560000000000002,
+        "start" : 22.400000000000002,
+        "word" : "The"
+      },
+      {
+        "end" : 22.960000000000001,
+        "start" : 22.559999999999999,
+        "word" : "report"
+      },
+      {
+        "end" : 23.199999999999999,
+        "start" : 22.960000000000001,
+        "word" : "should"
+      },
+      {
+        "end" : 23.359999999999999,
+        "start" : 23.199999999999999,
+        "word" : "be"
+      },
+      {
+        "end" : 24.079999999999998,
+        "start" : 23.359999999999999,
+        "word" : "clear,"
+      },
+      {
+        "end" : 24.559999999999999,
+        "start" : 24.080000000000002,
+        "word" : "calm,"
+      },
+      {
+        "end" : 24.720000000000002,
+        "start" : 24.560000000000002,
+        "word" : "and"
+      },
+      {
+        "end" : 25.120000000000001,
+        "start" : 24.719999999999999,
+        "word" : "easy"
+      },
+      {
+        "end" : 25.359999999999999,
+        "start" : 25.120000000000001,
+        "word" : "to"
+      },
+      {
+        "end" : 25.760000000000002,
+        "start" : 25.359999999999999,
+        "word" : "read."
+      },
+      {
+        "end" : 25.920000000000002,
+        "start" : 25.760000000000002,
+        "word" : "The"
+      },
+      {
+        "end" : 26.16,
+        "start" : 25.920000000000002,
+        "word" : "first"
+      },
+      {
+        "end" : 26.720000000000002,
+        "start" : 26.16,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 27.039999999999999,
+        "start" : 26.719999999999999,
+        "word" : "phrase"
+      },
+      {
+        "end" : 27.199999999999999,
+        "start" : 27.039999999999999,
+        "word" : "is"
+      },
+      {
+        "end" : 27.359999999999999,
+        "start" : 27.199999999999999,
+        "word" : "Amber"
+      },
+      {
+        "end" : 28.48,
+        "start" : 27.760000000000002,
+        "word" : "Lighthouse."
+      },
+      {
+        "end" : 28.719999999999999,
+        "start" : 28.48,
+        "word" : "It"
+      },
+      {
+        "end" : 29.120000000000001,
+        "start" : 28.719999999999999,
+        "word" : "appears"
+      },
+      {
+        "end" : 29.439999999999998,
+        "start" : 29.120000000000001,
+        "word" : "before"
+      },
+      {
+        "end" : 29.600000000000001,
+        "start" : 29.440000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 29.84,
+        "start" : 29.600000000000001,
+        "word" : "middle"
+      },
+      {
+        "end" : 30,
+        "start" : 29.84,
+        "word" : "of"
+      },
+      {
+        "end" : 30.079999999999998,
+        "start" : 30,
+        "word" : "the"
+      },
+      {
+        "end" : 30.48,
+        "start" : 30.080000000000002,
+        "word" : "recording"
+      },
+      {
+        "end" : 30.720000000000002,
+        "start" : 30.560000000000002,
+        "word" : "and"
+      },
+      {
+        "end" : 30.959999999999997,
+        "start" : 30.719999999999999,
+        "word" : "should"
+      },
+      {
+        "end" : 31.439999999999998,
+        "start" : 30.960000000000001,
+        "word" : "survive"
+      },
+      {
+        "end" : 32.240000000000002,
+        "start" : 31.440000000000001,
+        "word" : "transcription"
+      },
+      {
+        "end" : 32.560000000000002,
+        "start" : 32.240000000000002,
+        "word" : "without"
+      },
+      {
+        "end" : 32.879999999999995,
+        "start" : 32.560000000000002,
+        "word" : "losing"
+      },
+      {
+        "end" : 33.039999999999999,
+        "start" : 32.880000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 33.600000000000001,
+        "start" : 33.039999999999999,
+        "word" : "nearby"
+      },
+      {
+        "end" : 34.400000000000006,
+        "start" : 33.600000000000001,
+        "word" : "context."
+      },
+      {
+        "end" : 34.559999999999995,
+        "start" : 34.399999999999999,
+        "word" : "The"
+      },
+      {
+        "end" : 34.879999999999995,
+        "start" : 34.560000000000002,
+        "word" : "team"
+      },
+      {
+        "end" : 35.359999999999999,
+        "start" : 34.880000000000003,
+        "word" : "notices"
+      },
+      {
+        "end" : 35.519999999999996,
+        "start" : 35.359999999999999,
+        "word" : "that"
+      },
+      {
+        "end" : 35.68,
+        "start" : 35.520000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 36.079999999999998,
+        "start" : 35.68,
+        "word" : "northern"
+      },
+      {
+        "end" : 36.399999999999999,
+        "start" : 36.079999999999998,
+        "word" : "path"
+      },
+      {
+        "end" : 36.640000000000001,
+        "start" : 36.399999999999999,
+        "word" : "needs"
+      },
+      {
+        "end" : 36.960000000000001,
+        "start" : 36.640000000000001,
+        "word" : "better"
+      },
+      {
+        "end" : 37.519999999999996,
+        "start" : 36.960000000000001,
+        "word" : "lighting,"
+      },
+      {
+        "end" : 37.759999999999998,
+        "start" : 37.520000000000003,
+        "word" : "while"
+      },
+      {
+        "end" : 37.919999999999995,
+        "start" : 37.759999999999998,
+        "word" : "the"
+      },
+      {
+        "end" : 38.32,
+        "start" : 37.920000000000002,
+        "word" : "southern"
+      },
+      {
+        "end" : 38.720000000000006,
+        "start" : 38.32,
+        "word" : "garden"
+      },
+      {
+        "end" : 38.960000000000001,
+        "start" : 38.719999999999999,
+        "word" : "needs"
+      },
+      {
+        "end" : 39.200000000000003,
+        "start" : 38.960000000000001,
+        "word" : "more"
+      },
+      {
+        "end" : 39.759999999999998,
+        "start" : 39.200000000000003,
+        "word" : "benches."
+      },
+      {
+        "end" : 40,
+        "start" : 39.759999999999998,
+        "word" : "They"
+      },
+      {
+        "end" : 40.159999999999997,
+        "start" : 40,
+        "word" : "also"
+      },
+      {
+        "end" : 40.879999999999995,
+        "start" : 40.480000000000004,
+        "word" : "decide"
+      },
+      {
+        "end" : 41.039999999999999,
+        "start" : 40.880000000000003,
+        "word" : "that"
+      },
+      {
+        "end" : 41.199999999999996,
+        "start" : 41.039999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 41.68,
+        "start" : 41.200000000000003,
+        "word" : "playground"
+      },
+      {
+        "end" : 42.079999999999998,
+        "start" : 41.840000000000003,
+        "word" : "should"
+      },
+      {
+        "end" : 42.399999999999999,
+        "start" : 42.079999999999998,
+        "word" : "remain"
+      },
+      {
+        "end" : 42.719999999999999,
+        "start" : 42.399999999999999,
+        "word" : "open"
+      },
+      {
+        "end" : 42.960000000000001,
+        "start" : 42.719999999999999,
+        "word" : "during"
+      },
+      {
+        "end" : 43.119999999999997,
+        "start" : 42.960000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 43.920000000000002,
+        "start" : 43.119999999999997,
+        "word" : "repairs."
+      },
+      {
+        "end" : 44.399999999999999,
+        "start" : 43.920000000000002,
+        "word" : "Nobody"
+      },
+      {
+        "end" : 44.640000000000001,
+        "start" : 44.399999999999999,
+        "word" : "wants"
+      },
+      {
+        "end" : 44.799999999999997,
+        "start" : 44.640000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 45.439999999999998,
+        "start" : 44.800000000000004,
+        "word" : "transcript"
+      },
+      {
+        "end" : 45.68,
+        "start" : 45.439999999999998,
+        "word" : "to"
+      },
+      {
+        "end" : 45.919999999999995,
+        "start" : 45.68,
+        "word" : "start"
+      },
+      {
+        "end" : 46,
+        "start" : 45.920000000000002,
+        "word" : "a"
+      },
+      {
+        "end" : 46.239999999999995,
+        "start" : 46,
+        "word" : "new"
+      },
+      {
+        "end" : 46.799999999999997,
+        "start" : 46.240000000000002,
+        "word" : "paragraph"
+      },
+      {
+        "end" : 47.199999999999996,
+        "start" : 46.800000000000004,
+        "word" : "merely"
+      },
+      {
+        "end" : 47.440000000000005,
+        "start" : 47.200000000000003,
+        "word" : "because"
+      },
+      {
+        "end" : 47.599999999999994,
+        "start" : 47.439999999999998,
+        "word" : "the"
+      },
+      {
+        "end" : 48.080000000000005,
+        "start" : 47.600000000000001,
+        "word" : "speech"
+      },
+      {
+        "end" : 48.399999999999999,
+        "start" : 48.079999999999998,
+        "word" : "model"
+      },
+      {
+        "end" : 48.799999999999997,
+        "start" : 48.399999999999999,
+        "word" : "created"
+      },
+      {
+        "end" : 49.280000000000001,
+        "start" : 48.800000000000004,
+        "word" : "another"
+      },
+      {
+        "end" : 49.68,
+        "start" : 49.280000000000001,
+        "word" : "internal"
+      },
+      {
+        "end" : 50.399999999999999,
+        "start" : 49.68,
+        "word" : "segment."
+      },
+      {
+        "end" : 50.560000000000002,
+        "start" : 50.399999999999999,
+        "word" : "Now"
+      },
+      {
+        "end" : 50.799999999999997,
+        "start" : 50.640000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 51.359999999999999,
+        "start" : 50.800000000000004,
+        "word" : "recording"
+      },
+      {
+        "end" : 51.840000000000003,
+        "start" : 51.359999999999999,
+        "word" : "continues"
+      },
+      {
+        "end" : 52.239999999999995,
+        "start" : 51.840000000000003,
+        "word" : "beyond"
+      },
+      {
+        "end" : 52.399999999999999,
+        "start" : 52.240000000000002,
+        "word" : "a"
+      },
+      {
+        "end" : 52.719999999999999,
+        "start" : 52.399999999999999,
+        "word" : "typical"
+      },
+      {
+        "end" : 53.280000000000001,
+        "start" : 52.800000000000004,
+        "word" : "30-second"
+      },
+      {
+        "end" : 54.32,
+        "start" : 53.759999999999998,
+        "word" : "window,"
+      },
+      {
+        "end" : 54.560000000000002,
+        "start" : 54.32,
+        "word" : "the"
+      },
+      {
+        "end" : 54.799999999999997,
+        "start" : 54.560000000000002,
+        "word" : "same"
+      },
+      {
+        "end" : 55.199999999999996,
+        "start" : 54.800000000000004,
+        "word" : "report"
+      },
+      {
+        "end" : 55.359999999999999,
+        "start" : 55.200000000000003,
+        "word" : "is"
+      },
+      {
+        "end" : 55.68,
+        "start" : 55.359999999999999,
+        "word" : "still"
+      },
+      {
+        "end" : 56,
+        "start" : 55.68,
+        "word" : "being"
+      },
+      {
+        "end" : 56.719999999999999,
+        "start" : 56,
+        "word" : "discussed,"
+      },
+      {
+        "end" : 56.879999999999995,
+        "start" : 56.719999999999999,
+        "word" : "so"
+      },
+      {
+        "end" : 57.119999999999997,
+        "start" : 56.960000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 57.439999999999998,
+        "start" : 57.120000000000005,
+        "word" : "words"
+      },
+      {
+        "end" : 57.599999999999994,
+        "start" : 57.439999999999998,
+        "word" : "that"
+      },
+      {
+        "end" : 58.079999999999998,
+        "start" : 57.600000000000001,
+        "word" : "follow"
+      },
+      {
+        "end" : 58.399999999999999,
+        "start" : 58.079999999999998,
+        "word" : "belong"
+      },
+      {
+        "end" : 58.559999999999995,
+        "start" : 58.399999999999999,
+        "word" : "to"
+      },
+      {
+        "end" : 58.640000000000001,
+        "start" : 58.560000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 59.040000000000006,
+        "start" : 58.640000000000001,
+        "word" : "same"
+      },
+      {
+        "end" : 59.840000000000003,
+        "start" : 59.039999999999999,
+        "word" : "dictation."
+      },
+      {
+        "end" : 60,
+        "start" : 59.840000000000003,
+        "word" : "The"
+      },
+      {
+        "end" : 60.32,
+        "start" : 60,
+        "word" : "second"
+      },
+      {
+        "end" : 60.960000000000001,
+        "start" : 60.32,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 61.280000000000001,
+        "start" : 60.960000000000001,
+        "word" : "phrase"
+      },
+      {
+        "end" : 61.359999999999999,
+        "start" : 61.280000000000001,
+        "word" : "is"
+      },
+      {
+        "end" : 61.759999999999998,
+        "start" : 61.520000000000003,
+        "word" : "quiet"
+      },
+      {
+        "end" : 62.399999999999999,
+        "start" : 61.920000000000002,
+        "word" : "river,"
+      },
+      {
+        "end" : 62.559999999999995,
+        "start" : 62.399999999999999,
+        "word" : "it"
+      },
+      {
+        "end" : 62.960000000000001,
+        "start" : 62.560000000000002,
+        "word" : "marks"
+      },
+      {
+        "end" : 63.039999999999999,
+        "start" : 62.960000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 63.280000000000001,
+        "start" : 63.039999999999999,
+        "word" : "middle"
+      },
+      {
+        "end" : 63.439999999999998,
+        "start" : 63.280000000000001,
+        "word" : "of"
+      },
+      {
+        "end" : 63.600000000000001,
+        "start" : 63.440000000000005,
+        "word" : "the"
+      },
+      {
+        "end" : 64.239999999999995,
+        "start" : 63.600000000000001,
+        "word" : "sample."
+      },
+      {
+        "end" : 64.560000000000002,
+        "start" : 64.239999999999995,
+        "word" : "After"
+      },
+      {
+        "end" : 65.039999999999992,
+        "start" : 64.560000000000002,
+        "word" : "reviewing"
+      },
+      {
+        "end" : 65.120000000000005,
+        "start" : 65.040000000000006,
+        "word" : "the"
+      },
+      {
+        "end" : 65.760000000000005,
+        "start" : 65.120000000000005,
+        "word" : "measurements,"
+      },
+      {
+        "end" : 65.840000000000003,
+        "start" : 65.760000000000005,
+        "word" : "the"
+      },
+      {
+        "end" : 66.159999999999997,
+        "start" : 65.840000000000003,
+        "word" : "team"
+      },
+      {
+        "end" : 66.959999999999994,
+        "start" : 66.480000000000004,
+        "word" : "estimates"
+      },
+      {
+        "end" : 67.120000000000005,
+        "start" : 66.960000000000008,
+        "word" : "that"
+      },
+      {
+        "end" : 67.359999999999999,
+        "start" : 67.120000000000005,
+        "word" : "the"
+      },
+      {
+        "end" : 67.599999999999994,
+        "start" : 67.359999999999999,
+        "word" : "work"
+      },
+      {
+        "end" : 67.759999999999991,
+        "start" : 67.599999999999994,
+        "word" : "can"
+      },
+      {
+        "end" : 67.920000000000002,
+        "start" : 67.760000000000005,
+        "word" : "be"
+      },
+      {
+        "end" : 68.399999999999991,
+        "start" : 67.920000000000002,
+        "word" : "completed"
+      },
+      {
+        "end" : 68.560000000000002,
+        "start" : 68.400000000000006,
+        "word" : "in"
+      },
+      {
+        "end" : 68.879999999999995,
+        "start" : 68.560000000000002,
+        "word" : "three"
+      },
+      {
+        "end" : 69.439999999999998,
+        "start" : 68.879999999999995,
+        "word" : "weeks."
+      },
+      {
+        "end" : 69.840000000000003,
+        "start" : 69.439999999999998,
+        "word" : "Rain"
+      },
+      {
+        "end" : 70,
+        "start" : 69.840000000000003,
+        "word" : "may"
+      },
+      {
+        "end" : 70.319999999999993,
+        "start" : 70,
+        "word" : "delay"
+      },
+      {
+        "end" : 70.480000000000004,
+        "start" : 70.320000000000007,
+        "word" : "the"
+      },
+      {
+        "end" : 71.040000000000006,
+        "start" : 70.480000000000004,
+        "word" : "painting,"
+      },
+      {
+        "end" : 71.280000000000001,
+        "start" : 71.040000000000006,
+        "word" : "but"
+      },
+      {
+        "end" : 71.439999999999998,
+        "start" : 71.280000000000001,
+        "word" : "it"
+      },
+      {
+        "end" : 71.680000000000007,
+        "start" : 71.439999999999998,
+        "word" : "should"
+      },
+      {
+        "end" : 71.840000000000003,
+        "start" : 71.680000000000007,
+        "word" : "not"
+      },
+      {
+        "end" : 72.239999999999995,
+        "start" : 71.840000000000003,
+        "word" : "affect"
+      },
+      {
+        "end" : 72.399999999999991,
+        "start" : 72.239999999999995,
+        "word" : "the"
+      },
+      {
+        "end" : 72.879999999999995,
+        "start" : 72.400000000000006,
+        "word" : "replacement"
+      },
+      {
+        "end" : 73.11999999999999,
+        "start" : 72.879999999999995,
+        "word" : "of"
+      },
+      {
+        "end" : 73.519999999999996,
+        "start" : 73.120000000000005,
+        "word" : "signs"
+      },
+      {
+        "end" : 73.679999999999993,
+        "start" : 73.519999999999996,
+        "word" : "or"
+      },
+      {
+        "end" : 73.760000000000005,
+        "start" : 73.680000000000007,
+        "word" : "the"
+      },
+      {
+        "end" : 74.159999999999997,
+        "start" : 73.760000000000005,
+        "word" : "planting"
+      },
+      {
+        "end" : 74.319999999999993,
+        "start" : 74.159999999999997,
+        "word" : "of"
+      },
+      {
+        "end" : 75.039999999999992,
+        "start" : 74.320000000000007,
+        "word" : "flowers."
+      },
+      {
+        "end" : 75.359999999999999,
+        "start" : 75.040000000000006,
+        "word" : "Near"
+      },
+      {
+        "end" : 75.599999999999994,
+        "start" : 75.359999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 75.920000000000002,
+        "start" : 75.600000000000009,
+        "word" : "end,"
+      },
+      {
+        "end" : 76.079999999999998,
+        "start" : 75.920000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 76.399999999999991,
+        "start" : 76.079999999999998,
+        "word" : "team"
+      },
+      {
+        "end" : 76.719999999999999,
+        "start" : 76.400000000000006,
+        "word" : "reads"
+      },
+      {
+        "end" : 76.879999999999995,
+        "start" : 76.719999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 77.280000000000001,
+        "start" : 76.879999999999995,
+        "word" : "complete"
+      },
+      {
+        "end" : 77.679999999999993,
+        "start" : 77.280000000000001,
+        "word" : "report"
+      },
+      {
+        "end" : 77.920000000000002,
+        "start" : 77.680000000000007,
+        "word" : "one"
+      },
+      {
+        "end" : 78.159999999999997,
+        "start" : 77.920000000000002,
+        "word" : "more"
+      },
+      {
+        "end" : 78.719999999999999,
+        "start" : 78.159999999999997,
+        "word" : "time,"
+      },
+      {
+        "end" : 78.879999999999995,
+        "start" : 78.719999999999999,
+        "word" : "they"
+      },
+      {
+        "end" : 79.359999999999999,
+        "start" : 79.040000000000006,
+        "word" : "verify"
+      },
+      {
+        "end" : 79.280000000000001,
+        "start" : 79.200000000000003,
+        "word" : "vary"
+      },
+      {
+        "end" : 80.399999999999991,
+        "start" : 79.920000000000002,
+        "word" : "date,"
+      },
+      {
+        "end" : 80.719999999999999,
+        "start" : 80.400000000000006,
+        "word" : "every"
+      },
+      {
+        "end" : 81.200000000000003,
+        "start" : 80.719999999999999,
+        "word" : "number,"
+      },
+      {
+        "end" : 81.439999999999998,
+        "start" : 81.200000000000003,
+        "word" : "and"
+      },
+      {
+        "end" : 81.760000000000005,
+        "start" : 81.439999999999998,
+        "word" : "every"
+      },
+      {
+        "end" : 82.799999999999997,
+        "start" : 81.760000000000005,
+        "word" : "recommendation."
+      },
+      {
+        "end" : 83.039999999999992,
+        "start" : 82.799999999999997,
+        "word" : "The"
+      },
+      {
+        "end" : 83.359999999999999,
+        "start" : 83.040000000000006,
+        "word" : "final"
+      },
+      {
+        "end" : 83.920000000000002,
+        "start" : 83.359999999999999,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 84.319999999999993,
+        "start" : 83.920000000000002,
+        "word" : "phrase"
+      },
+      {
+        "end" : 84.480000000000004,
+        "start" : 84.320000000000007,
+        "word" : "is"
+      },
+      {
+        "end" : 84.879999999999995,
+        "start" : 84.480000000000004,
+        "word" : "silver"
+      },
+      {
+        "end" : 85.519999999999996,
+        "start" : 84.879999999999995,
+        "word" : "compass."
+      },
+      {
+        "end" : 85.760000000000005,
+        "start" : 85.519999999999996,
+        "word" : "If"
+      },
+      {
+        "end" : 85.920000000000002,
+        "start" : 85.760000000000005,
+        "word" : "this"
+      },
+      {
+        "end" : 86.319999999999993,
+        "start" : 85.920000000000002,
+        "word" : "phrase"
+      },
+      {
+        "end" : 86.480000000000004,
+        "start" : 86.320000000000007,
+        "word" : "is"
+      },
+      {
+        "end" : 87.039999999999992,
+        "start" : 86.480000000000004,
+        "word" : "present,"
+      },
+      {
+        "end" : 87.280000000000001,
+        "start" : 87.040000000000006,
+        "word" : "the"
+      },
+      {
+        "end" : 87.519999999999996,
+        "start" : 87.280000000000001,
+        "word" : "last"
+      },
+      {
+        "end" : 87.679999999999993,
+        "start" : 87.519999999999996,
+        "word" : "part"
+      },
+      {
+        "end" : 87.840000000000003,
+        "start" : 87.680000000000007,
+        "word" : "of"
+      },
+      {
+        "end" : 87.920000000000002,
+        "start" : 87.840000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 88.399999999999991,
+        "start" : 87.920000000000002,
+        "word" : "audio"
+      },
+      {
+        "end" : 88.560000000000002,
+        "start" : 88.400000000000006,
+        "word" : "was"
+      },
+      {
+        "end" : 88.799999999999997,
+        "start" : 88.560000000000002,
+        "word" : "not"
+      },
+      {
+        "end" : 89.200000000000003,
+        "start" : 88.799999999999997,
+        "word" : "clipped"
+      },
+      {
+        "end" : 89.439999999999998,
+        "start" : 89.200000000000003,
+        "word" : "during"
+      },
+      {
+        "end" : 90,
+        "start" : 89.439999999999998,
+        "word" : "conversion"
+      },
+      {
+        "end" : 90.159999999999997,
+        "start" : 90,
+        "word" : "or"
+      },
+      {
+        "end" : 90.959999999999994,
+        "start" : 90.159999999999997,
+        "word" : "decoding."
+      },
+      {
+        "end" : 91.120000000000005,
+        "start" : 90.960000000000008,
+        "word" : "This"
+      },
+      {
+        "end" : 91.519999999999996,
+        "start" : 91.120000000000005,
+        "word" : "concludes"
+      },
+      {
+        "end" : 91.679999999999993,
+        "start" : 91.519999999999996,
+        "word" : "the"
+      },
+      {
+        "end" : 91.840000000000003,
+        "start" : 91.680000000000007,
+        "word" : "long"
+      },
+      {
+        "end" : 92.560000000000002,
+        "start" : 92.079999999999998,
+        "word" : "English"
+      },
+      {
+        "end" : 93.199999999999989,
+        "start" : 92.560000000000002,
+        "word" : "dictation"
+      },
+      {
+        "end" : 93.439999999999998,
+        "start" : 93.200000000000003,
+        "word" : "test"
+      },
+      {
+        "end" : 93.599999999999994,
+        "start" : 93.439999999999998,
+        "word" : "with"
+      },
+      {
+        "end" : 93.840000000000003,
+        "start" : 93.600000000000009,
+        "word" : "one"
+      },
+      {
+        "end" : 94.480000000000004,
+        "start" : 93.840000000000003,
+        "word" : "continuous"
+      },
+      {
+        "end" : 94.879999999999995,
+        "start" : 94.480000000000004,
+        "word" : "passage"
+      },
+      {
+        "end" : 95.039999999999992,
+        "start" : 94.879999999999995,
+        "word" : "and"
+      },
+      {
+        "end" : 95.200000000000003,
+        "start" : 95.040000000000006,
+        "word" : "no"
+      },
+      {
+        "end" : 95.840000000000003,
+        "start" : 95.200000000000003,
+        "word" : "artificial"
+      },
+      {
+        "end" : 96.480000000000004,
+        "start" : 95.840000000000003,
+        "word" : "paragraph"
+      },
+      {
+        "end" : 96.879999999999995,
+        "start" : 96.480000000000004,
+        "word" : "breaks."
+      }
+    ],
+    "peak_resident_bytes" : 97027104,
+    "short_transcript" : "And so, my fellow Americans, ask not!",
+    "warm_short_wall_seconds" : 0.14942800998687744
+  },
+  "phonon" : {
+    "cold_prepare_wall_seconds" : 126.0345059633255,
+    "first_short_wall_seconds" : 0.26860296726226807,
+    "long_decode_seconds" : 4.0748410224914551,
+    "long_transcript" : "Today I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear. Calm and easy to read. The first checkpoint phrase is Amber Lighthouse. It appears before the middle of the recording and should survive transcription without losing the nearby context. The team notices that the northern path needs better lighting, while the southern garden needs more benches. They also decide that the playground should remain open during the repairs. Nobody wants the transcripts. to start a new paragraph merely because the speech model created another internal segment. Now the recording continues beyond a typical thirty second window. The same report is still being discussed. So the words that follow belong to the same dictation. The second checkpoint phrase is quiet river. It marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time. They verify every date, every number, and every recommendation. The final checkpoint phrase is silver compass. If this phrase is present, the last part of the audio was not clipped during conversion or decoding. This concludes the long English dictation test with one continuous passage and no artificial paragraph breaks.",
+    "long_wall_seconds" : 6.6478099822998047,
+    "long_word_timings" : [
+      {
+        "end" : 0.32000000000000001,
+        "start" : 0.16,
+        "word" : "Today"
+      },
+      {
+        "end" : 0.56000000000000005,
+        "start" : 0.40000000000000002,
+        "word" : "I"
+      },
+      {
+        "end" : 0.71999999999999997,
+        "start" : 0.56000000000000005,
+        "word" : "am"
+      },
+      {
+        "end" : 1.04,
+        "start" : 0.71999999999999997,
+        "word" : "testing"
+      },
+      {
+        "end" : 1.2,
+        "start" : 1.04,
+        "word" : "a"
+      },
+      {
+        "end" : 1.28,
+        "start" : 1.2,
+        "word" : "long"
+      },
+      {
+        "end" : 1.76,
+        "start" : 1.4399999999999999,
+        "word" : "English"
+      },
+      {
+        "end" : 2.3199999999999998,
+        "start" : 1.76,
+        "word" : "dictation"
+      },
+      {
+        "end" : 2.48,
+        "start" : 2.3199999999999998,
+        "word" : "in"
+      },
+      {
+        "end" : 2.7200000000000002,
+        "start" : 2.48,
+        "word" : "open"
+      },
+      {
+        "end" : 3.04,
+        "start" : 2.8799999999999999,
+        "word" : "super"
+      },
+      {
+        "end" : 3.9199999999999999,
+        "start" : 3.2000000000000002,
+        "word" : "whisper."
+      },
+      {
+        "end" : 4,
+        "start" : 3.9199999999999999,
+        "word" : "The"
+      },
+      {
+        "end" : 4.3200000000000003,
+        "start" : 4.0800000000000001,
+        "word" : "purpose"
+      },
+      {
+        "end" : 4.5599999999999996,
+        "start" : 4.4000000000000004,
+        "word" : "of"
+      },
+      {
+        "end" : 4.7199999999999998,
+        "start" : 4.5599999999999996,
+        "word" : "this"
+      },
+      {
+        "end" : 5.2000000000000002,
+        "start" : 4.7199999999999998,
+        "word" : "recording"
+      },
+      {
+        "end" : 5.3600000000000003,
+        "start" : 5.2000000000000002,
+        "word" : "is"
+      },
+      {
+        "end" : 5.5999999999999996,
+        "start" : 5.4400000000000004,
+        "word" : "to"
+      },
+      {
+        "end" : 5.7599999999999998,
+        "start" : 5.5999999999999996,
+        "word" : "make"
+      },
+      {
+        "end" : 6,
+        "start" : 5.7599999999999998,
+        "word" : "sure"
+      },
+      {
+        "end" : 6.1600000000000001,
+        "start" : 6,
+        "word" : "that"
+      },
+      {
+        "end" : 6.2400000000000002,
+        "start" : 6.1600000000000001,
+        "word" : "a"
+      },
+      {
+        "end" : 6.7999999999999998,
+        "start" : 6.3200000000000003,
+        "word" : "continuous"
+      },
+      {
+        "end" : 7.2800000000000002,
+        "start" : 6.96,
+        "word" : "thought"
+      },
+      {
+        "end" : 7.5199999999999996,
+        "start" : 7.2800000000000002,
+        "word" : "remains"
+      },
+      {
+        "end" : 8.3200000000000003,
+        "start" : 7.6799999999999997,
+        "word" : "continuous"
+      },
+      {
+        "end" : 8.7200000000000006,
+        "start" : 8.4000000000000004,
+        "word" : "after"
+      },
+      {
+        "end" : 8.8800000000000008,
+        "start" : 8.7200000000000006,
+        "word" : "more"
+      },
+      {
+        "end" : 9.0399999999999991,
+        "start" : 8.8800000000000008,
+        "word" : "than"
+      },
+      {
+        "end" : 9.1999999999999993,
+        "start" : 9.0399999999999991,
+        "word" : "one"
+      },
+      {
+        "end" : 9.5199999999999996,
+        "start" : 9.2799999999999994,
+        "word" : "minute"
+      },
+      {
+        "end" : 9.6799999999999997,
+        "start" : 9.5199999999999996,
+        "word" : "of"
+      },
+      {
+        "end" : 10.16,
+        "start" : 9.6799999999999997,
+        "word" : "speech."
+      },
+      {
+        "end" : 10.52,
+        "start" : 10.44,
+        "word" : "At"
+      },
+      {
+        "end" : 10.76,
+        "start" : 10.6,
+        "word" : "the"
+      },
+      {
+        "end" : 11.16,
+        "start" : 10.76,
+        "word" : "beginning"
+      },
+      {
+        "end" : 11.32,
+        "start" : 11.16,
+        "word" : "I"
+      },
+      {
+        "end" : 11.48,
+        "start" : 11.32,
+        "word" : "will"
+      },
+      {
+        "end" : 11.960000000000001,
+        "start" : 11.48,
+        "word" : "describe"
+      },
+      {
+        "end" : 12.119999999999999,
+        "start" : 11.960000000000001,
+        "word" : "a"
+      },
+      {
+        "end" : 12.44,
+        "start" : 12.119999999999999,
+        "word" : "simple"
+      },
+      {
+        "end" : 13.24,
+        "start" : 12.44,
+        "word" : "project."
+      },
+      {
+        "end" : 13.4,
+        "start" : 13.24,
+        "word" : "A"
+      },
+      {
+        "end" : 13.640000000000001,
+        "start" : 13.4,
+        "word" : "small"
+      },
+      {
+        "end" : 13.960000000000001,
+        "start" : 13.720000000000001,
+        "word" : "team"
+      },
+      {
+        "end" : 14.119999999999999,
+        "start" : 13.960000000000001,
+        "word" : "is"
+      },
+      {
+        "end" : 14.6,
+        "start" : 14.119999999999999,
+        "word" : "preparing"
+      },
+      {
+        "end" : 14.76,
+        "start" : 14.68,
+        "word" : "a"
+      },
+      {
+        "end" : 15.08,
+        "start" : 14.76,
+        "word" : "report"
+      },
+      {
+        "end" : 15.32,
+        "start" : 15.16,
+        "word" : "about"
+      },
+      {
+        "end" : 15.56,
+        "start" : 15.4,
+        "word" : "a"
+      },
+      {
+        "end" : 15.880000000000001,
+        "start" : 15.56,
+        "word" : "city"
+      },
+      {
+        "end" : 16.440000000000001,
+        "start" : 15.880000000000001,
+        "word" : "park."
+      },
+      {
+        "end" : 16.68,
+        "start" : 16.440000000000001,
+        "word" : "They"
+      },
+      {
+        "end" : 16.920000000000002,
+        "start" : 16.68,
+        "word" : "count"
+      },
+      {
+        "end" : 17.079999999999998,
+        "start" : 17,
+        "word" : "the"
+      },
+      {
+        "end" : 17.399999999999999,
+        "start" : 17.079999999999998,
+        "word" : "old"
+      },
+      {
+        "end" : 18.039999999999999,
+        "start" : 17.399999999999999,
+        "word" : "trees,"
+      },
+      {
+        "end" : 18.280000000000001,
+        "start" : 18.039999999999999,
+        "word" : "check"
+      },
+      {
+        "end" : 18.440000000000001,
+        "start" : 18.280000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 18.84,
+        "start" : 18.440000000000001,
+        "word" : "walking"
+      },
+      {
+        "end" : 19.48,
+        "start" : 18.84,
+        "word" : "paths,"
+      },
+      {
+        "end" : 19.559999999999999,
+        "start" : 19.48,
+        "word" : "and"
+      },
+      {
+        "end" : 19.960000000000001,
+        "start" : 19.719999999999999,
+        "word" : "speak"
+      },
+      {
+        "end" : 20.120000000000001,
+        "start" : 19.960000000000001,
+        "word" : "with"
+      },
+      {
+        "end" : 20.52,
+        "start" : 20.199999999999999,
+        "word" : "neighbors"
+      },
+      {
+        "end" : 20.760000000000002,
+        "start" : 20.600000000000001,
+        "word" : "who"
+      },
+      {
+        "end" : 21.079999999999998,
+        "start" : 20.760000000000002,
+        "word" : "visit"
+      },
+      {
+        "end" : 21.239999999999998,
+        "start" : 21.16,
+        "word" : "the"
+      },
+      {
+        "end" : 21.559999999999999,
+        "start" : 21.239999999999998,
+        "word" : "park"
+      },
+      {
+        "end" : 21.879999999999999,
+        "start" : 21.559999999999999,
+        "word" : "every"
+      },
+      {
+        "end" : 22.440000000000001,
+        "start" : 21.879999999999999,
+        "word" : "morning."
+      },
+      {
+        "end" : 22.600000000000001,
+        "start" : 22.440000000000001,
+        "word" : "The"
+      },
+      {
+        "end" : 22.920000000000002,
+        "start" : 22.600000000000001,
+        "word" : "report"
+      },
+      {
+        "end" : 23.239999999999998,
+        "start" : 23,
+        "word" : "should"
+      },
+      {
+        "end" : 23.399999999999999,
+        "start" : 23.239999999999998,
+        "word" : "be"
+      },
+      {
+        "end" : 23.719999999999999,
+        "start" : 23.399999999999999,
+        "word" : "clear."
+      },
+      {
+        "end" : 24.324999999999999,
+        "start" : 24.085000000000001,
+        "word" : "Calm"
+      },
+      {
+        "end" : 24.725000000000001,
+        "start" : 24.645,
+        "word" : "and"
+      },
+      {
+        "end" : 25.204999999999998,
+        "start" : 24.885000000000002,
+        "word" : "easy"
+      },
+      {
+        "end" : 25.364999999999998,
+        "start" : 25.204999999999998,
+        "word" : "to"
+      },
+      {
+        "end" : 25.925000000000001,
+        "start" : 25.364999999999998,
+        "word" : "read."
+      },
+      {
+        "end" : 26.085000000000001,
+        "start" : 25.925000000000001,
+        "word" : "The"
+      },
+      {
+        "end" : 26.164999999999999,
+        "start" : 26.085000000000001,
+        "word" : "first"
+      },
+      {
+        "end" : 26.885000000000002,
+        "start" : 26.324999999999999,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 27.204999999999998,
+        "start" : 26.885000000000002,
+        "word" : "phrase"
+      },
+      {
+        "end" : 27.285,
+        "start" : 27.204999999999998,
+        "word" : "is"
+      },
+      {
+        "end" : 27.684999999999999,
+        "start" : 27.364999999999998,
+        "word" : "Amber"
+      },
+      {
+        "end" : 28.565000000000001,
+        "start" : 27.765000000000001,
+        "word" : "Lighthouse."
+      },
+      {
+        "end" : 28.725000000000001,
+        "start" : 28.565000000000001,
+        "word" : "It"
+      },
+      {
+        "end" : 28.965,
+        "start" : 28.725000000000001,
+        "word" : "appears"
+      },
+      {
+        "end" : 29.445,
+        "start" : 29.125,
+        "word" : "before"
+      },
+      {
+        "end" : 29.605,
+        "start" : 29.445,
+        "word" : "the"
+      },
+      {
+        "end" : 29.844999999999999,
+        "start" : 29.605,
+        "word" : "middle"
+      },
+      {
+        "end" : 29.925000000000001,
+        "start" : 29.844999999999999,
+        "word" : "of"
+      },
+      {
+        "end" : 30.085000000000001,
+        "start" : 29.925000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 30.565000000000001,
+        "start" : 30.085000000000001,
+        "word" : "recording"
+      },
+      {
+        "end" : 30.725000000000001,
+        "start" : 30.565000000000001,
+        "word" : "and"
+      },
+      {
+        "end" : 30.965,
+        "start" : 30.725000000000001,
+        "word" : "should"
+      },
+      {
+        "end" : 31.364999999999998,
+        "start" : 30.965,
+        "word" : "survive"
+      },
+      {
+        "end" : 32.005000000000003,
+        "start" : 31.524999999999999,
+        "word" : "transcription"
+      },
+      {
+        "end" : 32.484999999999999,
+        "start" : 32.164999999999999,
+        "word" : "without"
+      },
+      {
+        "end" : 32.884999999999998,
+        "start" : 32.564999999999998,
+        "word" : "losing"
+      },
+      {
+        "end" : 33.045000000000002,
+        "start" : 32.884999999999998,
+        "word" : "the"
+      },
+      {
+        "end" : 33.445,
+        "start" : 33.045000000000002,
+        "word" : "nearby"
+      },
+      {
+        "end" : 34.085000000000001,
+        "start" : 33.604999999999997,
+        "word" : "context."
+      },
+      {
+        "end" : 34.625,
+        "start" : 34.465000000000003,
+        "word" : "The"
+      },
+      {
+        "end" : 34.945,
+        "start" : 34.625,
+        "word" : "team"
+      },
+      {
+        "end" : 35.265000000000001,
+        "start" : 34.945,
+        "word" : "notices"
+      },
+      {
+        "end" : 35.585000000000001,
+        "start" : 35.424999999999997,
+        "word" : "that"
+      },
+      {
+        "end" : 35.744999999999997,
+        "start" : 35.585000000000001,
+        "word" : "the"
+      },
+      {
+        "end" : 36.064999999999998,
+        "start" : 35.744999999999997,
+        "word" : "northern"
+      },
+      {
+        "end" : 36.305,
+        "start" : 36.064999999999998,
+        "word" : "path"
+      },
+      {
+        "end" : 36.625,
+        "start" : 36.465000000000003,
+        "word" : "needs"
+      },
+      {
+        "end" : 36.945,
+        "start" : 36.704999999999998,
+        "word" : "better"
+      },
+      {
+        "end" : 37.585000000000001,
+        "start" : 36.945,
+        "word" : "lighting,"
+      },
+      {
+        "end" : 37.825000000000003,
+        "start" : 37.585000000000001,
+        "word" : "while"
+      },
+      {
+        "end" : 37.984999999999999,
+        "start" : 37.825000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 38.305,
+        "start" : 37.984999999999999,
+        "word" : "southern"
+      },
+      {
+        "end" : 38.545000000000002,
+        "start" : 38.384999999999998,
+        "word" : "garden"
+      },
+      {
+        "end" : 38.945,
+        "start" : 38.784999999999997,
+        "word" : "needs"
+      },
+      {
+        "end" : 39.185000000000002,
+        "start" : 39.024999999999999,
+        "word" : "more"
+      },
+      {
+        "end" : 39.984999999999999,
+        "start" : 39.265000000000001,
+        "word" : "benches."
+      },
+      {
+        "end" : 40.145000000000003,
+        "start" : 39.984999999999999,
+        "word" : "They"
+      },
+      {
+        "end" : 40.384999999999998,
+        "start" : 40.225000000000001,
+        "word" : "also"
+      },
+      {
+        "end" : 40.784999999999997,
+        "start" : 40.465000000000003,
+        "word" : "decide"
+      },
+      {
+        "end" : 41.104999999999997,
+        "start" : 40.945,
+        "word" : "that"
+      },
+      {
+        "end" : 41.265000000000001,
+        "start" : 41.104999999999997,
+        "word" : "the"
+      },
+      {
+        "end" : 41.664999999999999,
+        "start" : 41.265000000000001,
+        "word" : "playground"
+      },
+      {
+        "end" : 42.064999999999998,
+        "start" : 41.825000000000003,
+        "word" : "should"
+      },
+      {
+        "end" : 42.384999999999998,
+        "start" : 42.064999999999998,
+        "word" : "remain"
+      },
+      {
+        "end" : 42.625,
+        "start" : 42.384999999999998,
+        "word" : "open"
+      },
+      {
+        "end" : 42.945,
+        "start" : 42.704999999999998,
+        "word" : "during"
+      },
+      {
+        "end" : 43.104999999999997,
+        "start" : 42.945,
+        "word" : "the"
+      },
+      {
+        "end" : 43.905000000000001,
+        "start" : 43.104999999999997,
+        "word" : "repairs."
+      },
+      {
+        "end" : 44.225000000000001,
+        "start" : 43.984999999999999,
+        "word" : "Nobody"
+      },
+      {
+        "end" : 44.625,
+        "start" : 44.384999999999998,
+        "word" : "wants"
+      },
+      {
+        "end" : 44.704999999999998,
+        "start" : 44.625,
+        "word" : "the"
+      },
+      {
+        "end" : 45.424999999999997,
+        "start" : 44.704999999999998,
+        "word" : "transcripts."
+      },
+      {
+        "end" : 45.664999999999999,
+        "start" : 45.585000000000001,
+        "word" : "to"
+      },
+      {
+        "end" : 45.984999999999999,
+        "start" : 45.744999999999997,
+        "word" : "start"
+      },
+      {
+        "end" : 46.064999999999998,
+        "start" : 45.984999999999999,
+        "word" : "a"
+      },
+      {
+        "end" : 46.225000000000001,
+        "start" : 46.064999999999998,
+        "word" : "new"
+      },
+      {
+        "end" : 46.625,
+        "start" : 46.225000000000001,
+        "word" : "paragraph"
+      },
+      {
+        "end" : 47.185000000000002,
+        "start" : 46.865000000000002,
+        "word" : "merely"
+      },
+      {
+        "end" : 47.344999999999999,
+        "start" : 47.185000000000002,
+        "word" : "because"
+      },
+      {
+        "end" : 47.664999999999999,
+        "start" : 47.505000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 48.064999999999998,
+        "start" : 47.664999999999999,
+        "word" : "speech"
+      },
+      {
+        "end" : 48.225000000000001,
+        "start" : 48.064999999999998,
+        "word" : "model"
+      },
+      {
+        "end" : 48.784999999999997,
+        "start" : 48.465000000000003,
+        "word" : "created"
+      },
+      {
+        "end" : 49.185000000000002,
+        "start" : 48.784999999999997,
+        "word" : "another"
+      },
+      {
+        "end" : 49.664999999999999,
+        "start" : 49.185000000000002,
+        "word" : "internal"
+      },
+      {
+        "end" : 50.145000000000003,
+        "start" : 49.664999999999999,
+        "word" : "segment."
+      },
+      {
+        "end" : 50.719999999999999,
+        "start" : 50.479999999999997,
+        "word" : "Now"
+      },
+      {
+        "end" : 50.880000000000003,
+        "start" : 50.719999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 51.359999999999999,
+        "start" : 50.880000000000003,
+        "word" : "recording"
+      },
+      {
+        "end" : 51.920000000000002,
+        "start" : 51.439999999999998,
+        "word" : "continues"
+      },
+      {
+        "end" : 52.32,
+        "start" : 51.920000000000002,
+        "word" : "beyond"
+      },
+      {
+        "end" : 52.560000000000002,
+        "start" : 52.399999999999999,
+        "word" : "a"
+      },
+      {
+        "end" : 52.719999999999999,
+        "start" : 52.560000000000002,
+        "word" : "typical"
+      },
+      {
+        "end" : 53.200000000000003,
+        "start" : 52.960000000000001,
+        "word" : "thirty"
+      },
+      {
+        "end" : 53.520000000000003,
+        "start" : 53.359999999999999,
+        "word" : "second"
+      },
+      {
+        "end" : 54.399999999999999,
+        "start" : 53.759999999999998,
+        "word" : "window."
+      },
+      {
+        "end" : 54.560000000000002,
+        "start" : 54.399999999999999,
+        "word" : "The"
+      },
+      {
+        "end" : 54.799999999999997,
+        "start" : 54.560000000000002,
+        "word" : "same"
+      },
+      {
+        "end" : 55.119999999999997,
+        "start" : 54.799999999999997,
+        "word" : "report"
+      },
+      {
+        "end" : 55.359999999999999,
+        "start" : 55.200000000000003,
+        "word" : "is"
+      },
+      {
+        "end" : 55.600000000000001,
+        "start" : 55.359999999999999,
+        "word" : "still"
+      },
+      {
+        "end" : 55.920000000000002,
+        "start" : 55.600000000000001,
+        "word" : "being"
+      },
+      {
+        "end" : 56.399999999999999,
+        "start" : 55.920000000000002,
+        "word" : "discussed."
+      },
+      {
+        "end" : 56.945,
+        "start" : 56.784999999999997,
+        "word" : "So"
+      },
+      {
+        "end" : 57.185000000000002,
+        "start" : 57.024999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 57.344999999999999,
+        "start" : 57.185000000000002,
+        "word" : "words"
+      },
+      {
+        "end" : 57.664999999999999,
+        "start" : 57.505000000000003,
+        "word" : "that"
+      },
+      {
+        "end" : 58.064999999999998,
+        "start" : 57.664999999999999,
+        "word" : "follow"
+      },
+      {
+        "end" : 58.384999999999998,
+        "start" : 58.064999999999998,
+        "word" : "belong"
+      },
+      {
+        "end" : 58.625,
+        "start" : 58.465000000000003,
+        "word" : "to"
+      },
+      {
+        "end" : 58.704999999999998,
+        "start" : 58.625,
+        "word" : "the"
+      },
+      {
+        "end" : 58.945,
+        "start" : 58.704999999999998,
+        "word" : "same"
+      },
+      {
+        "end" : 59.905000000000001,
+        "start" : 58.945,
+        "word" : "dictation."
+      },
+      {
+        "end" : 60.064999999999998,
+        "start" : 59.905000000000001,
+        "word" : "The"
+      },
+      {
+        "end" : 60.384999999999998,
+        "start" : 60.064999999999998,
+        "word" : "second"
+      },
+      {
+        "end" : 60.945,
+        "start" : 60.384999999999998,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 61.185000000000002,
+        "start" : 60.945,
+        "word" : "phrase"
+      },
+      {
+        "end" : 61.344999999999999,
+        "start" : 61.265000000000001,
+        "word" : "is"
+      },
+      {
+        "end" : 61.744999999999997,
+        "start" : 61.505000000000003,
+        "word" : "quiet"
+      },
+      {
+        "end" : 62.465000000000003,
+        "start" : 61.905000000000001,
+        "word" : "river."
+      },
+      {
+        "end" : 62.625,
+        "start" : 62.465000000000003,
+        "word" : "It"
+      },
+      {
+        "end" : 62.945,
+        "start" : 62.625,
+        "word" : "marks"
+      },
+      {
+        "end" : 63.024999999999999,
+        "start" : 62.945,
+        "word" : "the"
+      },
+      {
+        "end" : 63.265000000000001,
+        "start" : 63.024999999999999,
+        "word" : "middle"
+      },
+      {
+        "end" : 63.424999999999997,
+        "start" : 63.265000000000001,
+        "word" : "of"
+      },
+      {
+        "end" : 63.585000000000001,
+        "start" : 63.424999999999997,
+        "word" : "the"
+      },
+      {
+        "end" : 64.305000000000007,
+        "start" : 63.585000000000001,
+        "word" : "sample."
+      },
+      {
+        "end" : 64.465000000000003,
+        "start" : 64.305000000000007,
+        "word" : "After"
+      },
+      {
+        "end" : 65.105000000000004,
+        "start" : 64.625,
+        "word" : "reviewing"
+      },
+      {
+        "end" : 65.265000000000001,
+        "start" : 65.105000000000004,
+        "word" : "the"
+      },
+      {
+        "end" : 66.064999999999998,
+        "start" : 65.265000000000001,
+        "word" : "measurements,"
+      },
+      {
+        "end" : 66.224999999999994,
+        "start" : 66.064999999999998,
+        "word" : "the"
+      },
+      {
+        "end" : 66.465000000000003,
+        "start" : 66.224999999999994,
+        "word" : "team"
+      },
+      {
+        "end" : 66.864999999999995,
+        "start" : 66.465000000000003,
+        "word" : "estimates"
+      },
+      {
+        "end" : 67.185000000000002,
+        "start" : 67.025000000000006,
+        "word" : "that"
+      },
+      {
+        "end" : 67.265000000000001,
+        "start" : 67.185000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 67.424999999999997,
+        "start" : 67.265000000000001,
+        "word" : "work"
+      },
+      {
+        "end" : 67.665000000000006,
+        "start" : 67.504999999999995,
+        "word" : "can"
+      },
+      {
+        "end" : 67.905000000000001,
+        "start" : 67.745000000000005,
+        "word" : "be"
+      },
+      {
+        "end" : 68.385000000000005,
+        "start" : 67.905000000000001,
+        "word" : "completed"
+      },
+      {
+        "end" : 68.545000000000002,
+        "start" : 68.385000000000005,
+        "word" : "in"
+      },
+      {
+        "end" : 68.864999999999995,
+        "start" : 68.545000000000002,
+        "word" : "three"
+      },
+      {
+        "end" : 69.265000000000001,
+        "start" : 68.864999999999995,
+        "word" : "weeks."
+      },
+      {
+        "end" : 69.754999999999995,
+        "start" : 69.515000000000001,
+        "word" : "Rain"
+      },
+      {
+        "end" : 69.915000000000006,
+        "start" : 69.834999999999994,
+        "word" : "may"
+      },
+      {
+        "end" : 70.234999999999999,
+        "start" : 69.995000000000005,
+        "word" : "delay"
+      },
+      {
+        "end" : 70.474999999999994,
+        "start" : 70.394999999999996,
+        "word" : "the"
+      },
+      {
+        "end" : 71.114999999999995,
+        "start" : 70.474999999999994,
+        "word" : "painting,"
+      },
+      {
+        "end" : 71.275000000000006,
+        "start" : 71.114999999999995,
+        "word" : "but"
+      },
+      {
+        "end" : 71.435000000000002,
+        "start" : 71.275000000000006,
+        "word" : "it"
+      },
+      {
+        "end" : 71.674999999999997,
+        "start" : 71.435000000000002,
+        "word" : "should"
+      },
+      {
+        "end" : 71.754999999999995,
+        "start" : 71.674999999999997,
+        "word" : "not"
+      },
+      {
+        "end" : 72.155000000000001,
+        "start" : 71.834999999999994,
+        "word" : "affect"
+      },
+      {
+        "end" : 72.394999999999996,
+        "start" : 72.234999999999999,
+        "word" : "the"
+      },
+      {
+        "end" : 72.875,
+        "start" : 72.394999999999996,
+        "word" : "replacement"
+      },
+      {
+        "end" : 72.954999999999998,
+        "start" : 72.875,
+        "word" : "of"
+      },
+      {
+        "end" : 73.355000000000004,
+        "start" : 73.114999999999995,
+        "word" : "signs"
+      },
+      {
+        "end" : 73.674999999999997,
+        "start" : 73.515000000000001,
+        "word" : "or"
+      },
+      {
+        "end" : 73.834999999999994,
+        "start" : 73.674999999999997,
+        "word" : "the"
+      },
+      {
+        "end" : 74.155000000000001,
+        "start" : 73.834999999999994,
+        "word" : "planting"
+      },
+      {
+        "end" : 74.314999999999998,
+        "start" : 74.155000000000001,
+        "word" : "of"
+      },
+      {
+        "end" : 75.114999999999995,
+        "start" : 74.314999999999998,
+        "word" : "flowers."
+      },
+      {
+        "end" : 75.435000000000002,
+        "start" : 75.114999999999995,
+        "word" : "Near"
+      },
+      {
+        "end" : 75.594999999999999,
+        "start" : 75.435000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 75.995000000000005,
+        "start" : 75.594999999999999,
+        "word" : "end,"
+      },
+      {
+        "end" : 76.155000000000001,
+        "start" : 75.995000000000005,
+        "word" : "the"
+      },
+      {
+        "end" : 76.474999999999994,
+        "start" : 76.155000000000001,
+        "word" : "team"
+      },
+      {
+        "end" : 76.795000000000002,
+        "start" : 76.474999999999994,
+        "word" : "reads"
+      },
+      {
+        "end" : 76.875,
+        "start" : 76.795000000000002,
+        "word" : "the"
+      },
+      {
+        "end" : 77.194999999999993,
+        "start" : 76.875,
+        "word" : "complete"
+      },
+      {
+        "end" : 77.674999999999997,
+        "start" : 77.355000000000004,
+        "word" : "report"
+      },
+      {
+        "end" : 77.915000000000006,
+        "start" : 77.754999999999995,
+        "word" : "one"
+      },
+      {
+        "end" : 78.155000000000001,
+        "start" : 77.995000000000005,
+        "word" : "more"
+      },
+      {
+        "end" : 78.795000000000002,
+        "start" : 78.314999999999998,
+        "word" : "time."
+      },
+      {
+        "end" : 79.034999999999997,
+        "start" : 78.795000000000002,
+        "word" : "They"
+      },
+      {
+        "end" : 79.594999999999999,
+        "start" : 79.034999999999997,
+        "word" : "verify"
+      },
+      {
+        "end" : 79.915000000000006,
+        "start" : 79.594999999999999,
+        "word" : "every"
+      },
+      {
+        "end" : 80.474999999999994,
+        "start" : 79.915000000000006,
+        "word" : "date,"
+      },
+      {
+        "end" : 80.795000000000002,
+        "start" : 80.474999999999994,
+        "word" : "every"
+      },
+      {
+        "end" : 81.275000000000006,
+        "start" : 80.795000000000002,
+        "word" : "number,"
+      },
+      {
+        "end" : 81.355000000000004,
+        "start" : 81.275000000000006,
+        "word" : "and"
+      },
+      {
+        "end" : 81.754999999999995,
+        "start" : 81.515000000000001,
+        "word" : "every"
+      },
+      {
+        "end" : 82.555000000000007,
+        "start" : 81.754999999999995,
+        "word" : "recommendation."
+      },
+      {
+        "end" : 83.040000000000006,
+        "start" : 82.879999999999995,
+        "word" : "The"
+      },
+      {
+        "end" : 83.200000000000003,
+        "start" : 83.040000000000006,
+        "word" : "final"
+      },
+      {
+        "end" : 84,
+        "start" : 83.439999999999998,
+        "word" : "checkpoint"
+      },
+      {
+        "end" : 84.319999999999993,
+        "start" : 84,
+        "word" : "phrase"
+      },
+      {
+        "end" : 84.400000000000006,
+        "start" : 84.319999999999993,
+        "word" : "is"
+      },
+      {
+        "end" : 84.879999999999995,
+        "start" : 84.480000000000004,
+        "word" : "silver"
+      },
+      {
+        "end" : 85.599999999999994,
+        "start" : 84.879999999999995,
+        "word" : "compass."
+      },
+      {
+        "end" : 85.760000000000005,
+        "start" : 85.599999999999994,
+        "word" : "If"
+      },
+      {
+        "end" : 85.920000000000002,
+        "start" : 85.760000000000005,
+        "word" : "this"
+      },
+      {
+        "end" : 86.319999999999993,
+        "start" : 86,
+        "word" : "phrase"
+      },
+      {
+        "end" : 86.480000000000004,
+        "start" : 86.319999999999993,
+        "word" : "is"
+      },
+      {
+        "end" : 87.040000000000006,
+        "start" : 86.480000000000004,
+        "word" : "present,"
+      },
+      {
+        "end" : 87.200000000000003,
+        "start" : 87.040000000000006,
+        "word" : "the"
+      },
+      {
+        "end" : 87.519999999999996,
+        "start" : 87.200000000000003,
+        "word" : "last"
+      },
+      {
+        "end" : 87.680000000000007,
+        "start" : 87.519999999999996,
+        "word" : "part"
+      },
+      {
+        "end" : 87.840000000000003,
+        "start" : 87.680000000000007,
+        "word" : "of"
+      },
+      {
+        "end" : 88,
+        "start" : 87.840000000000003,
+        "word" : "the"
+      },
+      {
+        "end" : 88.400000000000006,
+        "start" : 88,
+        "word" : "audio"
+      },
+      {
+        "end" : 88.560000000000002,
+        "start" : 88.400000000000006,
+        "word" : "was"
+      },
+      {
+        "end" : 88.719999999999999,
+        "start" : 88.560000000000002,
+        "word" : "not"
+      },
+      {
+        "end" : 89.120000000000005,
+        "start" : 88.799999999999997,
+        "word" : "clipped"
+      },
+      {
+        "end" : 89.519999999999996,
+        "start" : 89.280000000000001,
+        "word" : "during"
+      },
+      {
+        "end" : 90,
+        "start" : 89.519999999999996,
+        "word" : "conversion"
+      },
+      {
+        "end" : 90.159999999999997,
+        "start" : 90,
+        "word" : "or"
+      },
+      {
+        "end" : 91.040000000000006,
+        "start" : 90.239999999999995,
+        "word" : "decoding."
+      },
+      {
+        "end" : 91.200000000000003,
+        "start" : 91.040000000000006,
+        "word" : "This"
+      },
+      {
+        "end" : 91.680000000000007,
+        "start" : 91.280000000000001,
+        "word" : "concludes"
+      },
+      {
+        "end" : 91.920000000000002,
+        "start" : 91.760000000000005,
+        "word" : "the"
+      },
+      {
+        "end" : 92.079999999999998,
+        "start" : 91.920000000000002,
+        "word" : "long"
+      },
+      {
+        "end" : 92.560000000000002,
+        "start" : 92.239999999999995,
+        "word" : "English"
+      },
+      {
+        "end" : 93.120000000000005,
+        "start" : 92.560000000000002,
+        "word" : "dictation"
+      },
+      {
+        "end" : 93.359999999999999,
+        "start" : 93.200000000000003,
+        "word" : "test"
+      },
+      {
+        "end" : 93.680000000000007,
+        "start" : 93.519999999999996,
+        "word" : "with"
+      },
+      {
+        "end" : 93.760000000000005,
+        "start" : 93.680000000000007,
+        "word" : "one"
+      },
+      {
+        "end" : 94.560000000000002,
+        "start" : 93.920000000000002,
+        "word" : "continuous"
+      },
+      {
+        "end" : 94.799999999999997,
+        "start" : 94.560000000000002,
+        "word" : "passage"
+      },
+      {
+        "end" : 95.120000000000005,
+        "start" : 94.959999999999994,
+        "word" : "and"
+      },
+      {
+        "end" : 95.280000000000001,
+        "start" : 95.120000000000005,
+        "word" : "no"
+      },
+      {
+        "end" : 95.920000000000002,
+        "start" : 95.359999999999999,
+        "word" : "artificial"
+      },
+      {
+        "end" : 96.319999999999993,
+        "start" : 95.920000000000002,
+        "word" : "paragraph"
+      },
+      {
+        "end" : 97.040000000000006,
+        "start" : 96.560000000000002,
+        "word" : "breaks."
+      }
+    ],
+    "peak_resident_bytes" : 141886352,
+    "runtime_compile_seconds" : 2.09808349609375e-05,
+    "runtime_load_seconds" : 124.63127505779266,
+    "short_transcript" : "And so, my fellow Americans, ask not",
+    "warm_short_decode_seconds" : 0.23975801467895508,
+    "warm_short_wall_seconds" : 0.24066495895385742
+  },
+  "phonon_download_seconds_this_run" : 0.0017969608306884766,
+  "phonon_on_disk_bytes_including_compiled_cache" : 676914435,
+  "phonon_pinned_download_bytes" : 345012107,
+  "short_clip_seconds" : 5,
+  "whisper_large_v3_turbo" : {
+    "cold_load_seconds" : 13.122022986412048,
+    "long_segment_end_times_seconds" : [
+      30,
+      60,
+      90,
+      120
+    ],
+    "long_transcript" : "Today I am testing a long English dictation in open super whisper. The purpose of this recording is to make sure that a continuous thought remains continuous after more than one minute of speech. At the beginning I will describe a simple project. A small team is preparing a report about a city park. They count the old trees, check the walking paths, and speak with neighbors who visit the park every morning. The report should be clear, calm, and easy to read. The first checkpoint phrase is Amber Lighthouse. The report is still being discussed. So the words that follow belong to the same dictation. The second checkpoint phrase is quiet river. It marks the middle of the sample. After reviewing the measurements, the team estimates that the work can be completed in three weeks. Rain may delay the painting, but it should not affect the replacement of signs or the planting of flowers. Near the end, the team reads the complete report one more time. They verify every date, every number, and every recommendation. The final checkpoint phrase is silver compass. This concludes the Long English dictation test with one continuous passage and no artificial paragraph breaks.",
+    "long_wall_seconds" : 14.911535978317261,
+    "peak_resident_bytes" : 2070694480,
+    "short_transcript" : "and so my fellow Americans, ask not",
+    "warm_short_wall_seconds" : 1.8984229564666748
+  }
+}

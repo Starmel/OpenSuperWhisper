@@ -656,9 +656,12 @@ struct ContentView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                        Text("Loading Whisper Model...")
+                        Text(AppPreferences.shared.selectedEngine == "phonon"
+                             ? "Preparing Phonon-2 on the Neural Engine…\nFirst preparation can take one or two minutes."
+                             : "Loading transcription model…")
                             .foregroundColor(.white)
                             .font(.headline)
+                            .multilineTextAlignment(.center)
                     }
                 }
                 .ignoresSafeArea()
@@ -675,6 +678,9 @@ struct ContentView: View {
         }
         .onReceive(viewModel.transcriptionService.$loadingError.compactMap { $0 }) { message in
             errors.report("Model could not be loaded", message: message)
+        }
+        .onReceive(viewModel.transcriptionService.$loadingWarning.compactMap { $0 }) { message in
+            errors.report("Phonon-2 fallback", message: message)
         }
         .fileDropHandler()
         .sheet(isPresented: $isSettingsPresented) {

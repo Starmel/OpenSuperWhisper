@@ -41,7 +41,7 @@ private final class AbortFlag: @unchecked Sendable {
     }
 }
 
-class WhisperEngine: TranscriptionEngine {
+class WhisperEngine: PCMTranscriptionEngine, ProgressReportingTranscriptionEngine {
     private enum AudioInput {
         case file(URL)
         case pcm([Float])

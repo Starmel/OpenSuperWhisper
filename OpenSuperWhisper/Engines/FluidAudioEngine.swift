@@ -2,7 +2,7 @@ import Foundation
 import AVFoundation
 import FluidAudio
 
-class FluidAudioEngine: TranscriptionEngine {
+class FluidAudioEngine: ProgressReportingTranscriptionEngine {
     var engineName: String { "FluidAudio" }
     
     private var asrManager: AsrManager?
@@ -10,6 +10,7 @@ class FluidAudioEngine: TranscriptionEngine {
     private var isCancelled = false
     private var transcriptionTask: Task<String, Error>?
     private var progressTask: Task<Void, Never>?
+    private(set) var lastResult: ASRResult?
     
     var onProgressUpdate: ((Float) -> Void)?
     
@@ -82,6 +83,7 @@ class FluidAudioEngine: TranscriptionEngine {
         // FluidAudio 0.15.x requires an explicit decoder state per transcription.
         var decoderState = try TdtDecoderState(decoderLayers: await asrManager.decoderLayerCount)
         let result = try await asrManager.transcribe(url, decoderState: &decoderState)
+        lastResult = result
         
         guard !isCancelled else {
             throw CancellationError()

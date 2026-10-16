@@ -128,15 +128,15 @@ class IndicatorViewModel: ObservableObject {
     }
 
     func startRecording() {
-        if isTranscriptionBusy {
-            showBusyMessage()
-            return
-        }
-
         // getActiveMicrophone() only reads the cached currentMicrophone, so
         // this guard costs no CoreAudio HAL round-trip on the main thread.
         guard MicrophoneService.shared.getActiveMicrophone() != nil else {
             showAutoDismissingMessage(.noMicrophone)
+            return
+        }
+
+        if isTranscriptionBusy {
+            showBusyMessage()
             return
         }
         

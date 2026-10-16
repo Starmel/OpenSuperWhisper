@@ -52,12 +52,13 @@ class LanguageUtil {
     ]
 
     static func supportedLanguages(engine: String, fluidAudioModelVersion: String) -> [String] {
+        if engine == "phonon" { return ["en"] }
         guard engine == "fluidaudio" else { return availableLanguages }
         return fluidAudioModelVersion == "v2" ? parakeetV2Languages : parakeetV3Languages
     }
 
     static func fallbackLanguage(engine: String) -> String {
-        engine == "fluidaudio" ? "en" : "auto"
+        (engine == "fluidaudio" || engine == "phonon") ? "en" : "auto"
     }
 
     static func getSystemLanguage() -> String {
