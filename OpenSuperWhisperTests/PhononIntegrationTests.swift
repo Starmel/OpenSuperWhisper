@@ -1,4 +1,5 @@
 import CryptoKit
+import PhononCoreML
 import XCTest
 @testable import OpenSuperWhisper
 
@@ -124,6 +125,50 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertEqual(release.downloadSize, 345_012_107)
         XCTAssertTrue(PhononPlatform.isSupported)
         XCTAssertEqual(LanguageUtil.supportedLanguages(engine: "phonon", fluidAudioModelVersion: "v3"), ["en"])
+    }
+
+    func testProgressReceiverForwardsWithoutRetainingClient() {
+        var events: [(String, Double)] = []
+        var receiver: PhononXPCProgressReceiver?
+        weak var releasedClient: PhononXPCClient?
+
+        autoreleasepool {
+            let client = PhononXPCClient()
+            client.onPreparationProgress = { events.append(($0, $1)) }
+            receiver = PhononXPCProgressReceiver(delegate: client)
+            releasedClient = client
+            receiver?.phononProgress(phase: "compiling", seconds: 1.25)
+            XCTAssertNotNil(releasedClient)
+        }
+
+        XCTAssertEqual(events.map(\.0), ["compiling"])
+        XCTAssertEqual(events.map(\.1), [1.25])
+        XCTAssertNil(releasedClient)
+        receiver?.phononProgress(phase: "compiled", seconds: 2)
+        XCTAssertEqual(events.count, 1)
+    }
+
+    func testFifteenSecondPCMUsesOnlySupportedFunctionWindows() {
+        let capacity = Transcriber.supportedSingleShotSeconds(functions: [15], requested: 15)
+        XCTAssertEqual(capacity, 14.975, accuracy: 0.000_001)
+
+        let maximumSamples = Windower.maximumWindowSamples(forFunctionSeconds: 15)
+        XCTAssertEqual(maximumSamples, 239_600)
+        XCTAssertEqual(
+            Windower.plan([Float](repeating: 0, count: maximumSamples), singleShotMaxS: capacity),
+            [Window(start: 0, end: maximumSamples, overlapFromPrevious: false, splitSample: nil)]
+        )
+
+        for sampleCount in [maximumSamples + 1, 240_000] {
+            let windows = Windower.plan(
+                [Float](repeating: 0, count: sampleCount),
+                singleShotMaxS: capacity
+            )
+            XCTAssertGreaterThan(windows.count, 1)
+            XCTAssertEqual(windows.first?.start, 0)
+            XCTAssertEqual(windows.last?.end, sampleCount)
+            XCTAssertTrue(windows.allSatisfy { $0.end - $0.start <= maximumSamples })
+        }
     }
 
     func testInstalledMarkerIsVersionGated() throws {

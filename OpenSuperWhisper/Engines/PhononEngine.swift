@@ -35,6 +35,18 @@ protocol PhononXPCProgressProtocol {
     func phononProgress(phase: String, seconds: Double)
 }
 
+final class PhononXPCProgressReceiver: NSObject, PhononXPCProgressProtocol {
+    private weak var delegate: PhononXPCProgressProtocol?
+
+    init(delegate: PhononXPCProgressProtocol) {
+        self.delegate = delegate
+    }
+
+    func phononProgress(phase: String, seconds: Double) {
+        delegate?.phononProgress(phase: phase, seconds: seconds)
+    }
+}
+
 protocol PhononTranscribing: AnyObject {
     var onPreparationProgress: ((String, Double) -> Void)? { get set }
     var isPrepared: Bool { get }
@@ -55,6 +67,7 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
     private var preparedConnectionID: UInt64?
     private var pendingReplies: [ObjectIdentifier: ReplyGate] = [:]
     private var cancellationInProgress = false
+    private lazy var progressReceiver = PhononXPCProgressReceiver(delegate: self)
 
     private struct ConnectionHandle {
         let connection: NSXPCConnection
@@ -374,7 +387,7 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         let newConnectionID = nextConnectionID
         newConnection.remoteObjectInterface = NSXPCInterface(with: PhononXPCProtocol.self)
         newConnection.exportedInterface = NSXPCInterface(with: PhononXPCProgressProtocol.self)
-        newConnection.exportedObject = self
+        newConnection.exportedObject = progressReceiver
         newConnection.interruptionHandler = { [weak self, weak newConnection] in
             guard let self, let newConnection else { return }
             self.failConnection(newConnection, with: ClientError.connectionInvalidated)

@@ -59,7 +59,15 @@ public enum Windower {
         return out
     }
     public struct State: Equatable { public var start = 0, overlapped = false; public var split: Int? = nil; public init() {} }
-    static func windowSamples(_ windowS: Double) -> Int { Int(windowS * Double(sampleRate)) - 400 }   // keep the last STFT frame inside the program (T = n/160 <= 1501)
+    public static func maximumWindowSamples(forFunctionSeconds seconds: Double) -> Int {
+        Int(seconds * Double(sampleRate)) - 400
+    }
+
+    public static func maximumWindowSeconds(forFunctionSeconds seconds: Double) -> Double {
+        Double(maximumWindowSamples(forFunctionSeconds: seconds)) / Double(sampleRate)
+    }
+
+    static func windowSamples(_ windowS: Double) -> Int { maximumWindowSamples(forFunctionSeconds: windowS) }
     /// One cut of the long-audio rule from `state.start` (the loop body of `plan`).
     static func step(rms: [Float], state st: inout State, windowS: Double, bandMinS: Double, overlapS: Double) -> Window {
         let sr = sampleRate, block = Int(blockS * Double(sr)), W = windowSamples(windowS), overlap = Int(overlapS * Double(sr))

@@ -74,7 +74,20 @@ public final class Transcriber {
     public static func subLen(_ n: Int) -> Int { var m = n; for _ in 0..<3 { m = (m - 1) / 2 + 1 }; return m }
     public var framesRule: String { manifest.frames_rule ?? "hf" }
     public var functionSeconds: [Double] { (options.functions ?? manifest.functions_s).sorted() }
-    var singleShotMax: Double { options.singleShotMaxSeconds ?? min(manifest.single_shot_max_s ?? .infinity, functionSeconds.last!) }
+    public static func supportedSingleShotSeconds(functions: [Double], requested: Double?) -> Double {
+        guard let largestFunction = functions.max() else { return 0 }
+        return min(
+            requested ?? .infinity,
+            Windower.maximumWindowSeconds(forFunctionSeconds: largestFunction)
+        )
+    }
+
+    var singleShotMax: Double {
+        Self.supportedSingleShotSeconds(
+            functions: functionSeconds,
+            requested: options.singleShotMaxSeconds ?? manifest.single_shot_max_s
+        )
+    }
     var longAudioMode: String { options.longAudio ?? manifest.long_audio ?? "windows15" }
 
     public init(bundle: URL, options: Options = Options()) throws {

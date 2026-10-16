@@ -35,6 +35,7 @@
 		CEAC00042D82F10000000000 /* libautocorrect_swift.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00012D82F00000000000 /* libautocorrect_swift.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		CEAC00082D82F50000000000 /* libomp.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = CEAC00072D82F40000000000 /* libomp.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		A10000000000000000000003 /* PhononCoreML in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000002 /* PhononCoreML */; };
+		A10000000000000000000012 /* PhononCoreML in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000002 /* PhononCoreML */; };
 		A1000000000000000000000B /* PhononService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* PhononService.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -263,6 +264,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000012 /* PhononCoreML in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,6 +502,7 @@
 			);
 			name = OpenSuperWhisperTests;
 			packageProductDependencies = (
+				A10000000000000000000002 /* PhononCoreML */,
 			);
 			productName = OpenSuperWhisperTests;
 			productReference = CE57B0392D52C7BC00929AF3 /* OpenSuperWhisperTests.xctest */;
