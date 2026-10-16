@@ -85,6 +85,7 @@ enum PhononModelError: LocalizedError, Equatable {
     case invalidSize(path: String, expected: Int64, actual: Int64)
     case checksumMismatch(path: String, expected: String, actual: String)
     case invalidManifestVersion(expected: String, actual: String)
+    case activationRecoveryRequired(String)
 
     var errorDescription: String? {
         switch self {
@@ -98,6 +99,8 @@ enum PhononModelError: LocalizedError, Equatable {
             return "The Phonon-2 checksum failed for \(path) (expected \(expected), got \(actual))."
         case let .invalidManifestVersion(expected, actual):
             return "Unsupported Phonon-2 manifest version \(actual) (expected \(expected))."
+        case .activationRecoveryRequired(let reason):
+            return "Phonon-2 model activation needs repair: \(reason)"
         }
     }
 }
@@ -206,6 +209,13 @@ final class URLSessionPhononDownloader: NSObject, PhononDownloading, @unchecked 
 }
 
 final class PhononModelManager: @unchecked Sendable {
+    struct ActivationTransaction: Codable, Equatable {
+        let activePath: String
+        let stagingPath: String
+        let backupPath: String
+        let expectedRelease: PhononModelRelease
+    }
+
     static let shared = PhononModelManager()
 
     let release: PhononModelRelease
@@ -213,6 +223,7 @@ final class PhononModelManager: @unchecked Sendable {
     private let downloader: PhononDownloading
     private let fileManager: FileManager
     private let activationMove: (URL, URL) throws -> Void
+    private let activationLock = NSLock()
 
     init(
         release: PhononModelRelease = .pinned,
@@ -235,12 +246,21 @@ final class PhononModelManager: @unchecked Sendable {
                 .appendingPathComponent("ru.starmel.OpenSuperWhisper", isDirectory: true)
                 .appendingPathComponent("phonon-models", isDirectory: true)
         }
+        _ = try? reconcileActivationTransaction()
     }
 
     var modelDirectory: URL { modelsDirectory.appendingPathComponent(release.versionDirectoryName, isDirectory: true) }
     var activationMarkerURL: URL { modelDirectory.appendingPathComponent("installed.json") }
+    var activationJournalURL: URL {
+        modelsDirectory.appendingPathComponent(".\(release.versionDirectoryName).activation.json")
+    }
 
     var isModelInstalled: Bool {
+        do {
+            try reconcileActivationTransaction()
+        } catch {
+            return false
+        }
         guard let marker = try? Data(contentsOf: activationMarkerURL),
               (try? JSONDecoder().decode(PhononModelRelease.self, from: marker)) == release else { return false }
         return release.files.allSatisfy { file in
@@ -254,10 +274,15 @@ final class PhononModelManager: @unchecked Sendable {
     func downloadModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard PhononPlatform.isSupported else { throw PhononModelError.unsupportedPlatform }
         try Task.checkCancellation()
+        try reconcileActivationTransaction()
 
         let staging = modelsDirectory.appendingPathComponent(".\(release.versionDirectoryName)-\(UUID().uuidString).download", isDirectory: true)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? fileManager.removeItem(at: staging) }
+        defer {
+            if !fileManager.fileExists(atPath: activationJournalURL.path) {
+                try? fileManager.removeItem(at: staging)
+            }
+        }
 
         var completedBytes: Int64 = 0
         for file in release.files {
@@ -283,6 +308,7 @@ final class PhononModelManager: @unchecked Sendable {
     }
 
     func verifyInstalledModel() async throws -> URL {
+        try reconcileActivationTransaction()
         let directory = modelDirectory
         let release = release
         let fileManager = fileManager
@@ -307,6 +333,7 @@ final class PhononModelManager: @unchecked Sendable {
     }
 
     func deleteModel() throws {
+        try reconcileActivationTransaction()
         let cache = compiledCacheDirectoryURL
         if fileManager.fileExists(atPath: modelDirectory.path) {
             try fileManager.removeItem(at: modelDirectory)
@@ -317,8 +344,15 @@ final class PhononModelManager: @unchecked Sendable {
     }
 
     func storageBytes() -> Int64 {
-        Self.directorySize(modelDirectory, fileManager: fileManager)
-            + Self.directorySize(compiledCacheDirectoryURL, fileManager: fileManager)
+        try? reconcileActivationTransaction()
+        var paths = Set([modelDirectory.standardizedFileURL.path, compiledCacheDirectoryURL.standardizedFileURL.path])
+        for candidate in activationCandidateDirectories() {
+            paths.insert(candidate.standardizedFileURL.path)
+        }
+        let journalBytes = ((try? fileManager.attributesOfItem(atPath: activationJournalURL.path)[.size] as? NSNumber)?.int64Value) ?? 0
+        return paths.reduce(journalBytes) { total, path in
+            total + Self.directorySize(URL(fileURLWithPath: path), fileManager: fileManager)
+        }
     }
 
     private func validateManifest(in directory: URL) throws {
@@ -330,24 +364,30 @@ final class PhononModelManager: @unchecked Sendable {
         }
     }
 
+    @discardableResult
+    func beginActivationTransaction(staging: URL, backup: URL) throws -> ActivationTransaction {
+        activationLock.lock()
+        defer { activationLock.unlock() }
+        return try writeActivationTransaction(staging: staging, backup: backup)
+    }
+
     private func activate(staging: URL) throws {
+        activationLock.lock()
+        defer { activationLock.unlock() }
         let active = modelDirectory
         let backup = modelsDirectory.appendingPathComponent(
             ".\(release.versionDirectoryName)-\(UUID().uuidString).backup",
             isDirectory: true
         )
-        var hasBackup = false
+        _ = try writeActivationTransaction(staging: staging, backup: backup)
 
         if fileManager.fileExists(atPath: active.path) {
             do {
                 try activationMove(active, backup)
-                hasBackup = true
             } catch {
-                if fileManager.fileExists(atPath: backup.path),
-                   !fileManager.fileExists(atPath: active.path) {
-                    try activationMove(backup, active)
-                }
-                throw error
+                let activationError = error
+                try reconcileActivationTransactionLocked()
+                throw activationError
             }
         }
 
@@ -355,17 +395,128 @@ final class PhononModelManager: @unchecked Sendable {
             try activationMove(staging, active)
         } catch {
             let activationError = error
-            if hasBackup {
-                if fileManager.fileExists(atPath: active.path) {
-                    try fileManager.removeItem(at: active)
-                }
-                try activationMove(backup, active)
-            }
+            try reconcileActivationTransactionLocked()
             throw activationError
         }
 
-        if hasBackup {
-            try fileManager.removeItem(at: backup)
+        try reconcileActivationTransactionLocked()
+    }
+
+    private func writeActivationTransaction(staging: URL, backup: URL) throws -> ActivationTransaction {
+        let transaction = ActivationTransaction(
+            activePath: modelDirectory.standardizedFileURL.path,
+            stagingPath: staging.standardizedFileURL.path,
+            backupPath: backup.standardizedFileURL.path,
+            expectedRelease: release
+        )
+        try validate(transaction)
+        let data = try JSONEncoder().encode(transaction)
+        try data.write(to: activationJournalURL, options: .atomic)
+        return transaction
+    }
+
+    private func reconcileActivationTransaction() throws {
+        activationLock.lock()
+        defer { activationLock.unlock() }
+        try reconcileActivationTransactionLocked()
+    }
+
+    private func reconcileActivationTransactionLocked() throws {
+        guard fileManager.fileExists(atPath: activationJournalURL.path) else {
+            if activationCandidateDirectories().contains(where: { $0.pathExtension == "backup" }) {
+                throw PhononModelError.activationRecoveryRequired("an activation backup exists without its transaction record")
+            }
+            return
+        }
+
+        let transaction: ActivationTransaction
+        do {
+            let data = try Data(contentsOf: activationJournalURL)
+            transaction = try JSONDecoder().decode(ActivationTransaction.self, from: data)
+            try validate(transaction)
+        } catch let error as PhononModelError {
+            throw error
+        } catch {
+            throw PhononModelError.activationRecoveryRequired("the activation transaction record is corrupt")
+        }
+
+        let active = URL(fileURLWithPath: transaction.activePath, isDirectory: true)
+        let staging = URL(fileURLWithPath: transaction.stagingPath, isDirectory: true)
+        let backup = URL(fileURLWithPath: transaction.backupPath, isDirectory: true)
+
+        if isValidInstalledModel(at: active) {
+            try removeIfPresent(backup)
+            try removeIfPresent(staging)
+            try removeIfPresent(activationJournalURL)
+            return
+        }
+
+        guard !fileManager.fileExists(atPath: active.path) else {
+            throw PhononModelError.activationRecoveryRequired("the active model is present but invalid; all activation candidates were preserved")
+        }
+        guard isValidInstalledModel(at: backup) else {
+            throw PhononModelError.activationRecoveryRequired("the active model is missing and its recorded backup is invalid; all activation candidates were preserved")
+        }
+
+        try fileManager.moveItem(at: backup, to: active)
+        guard isValidInstalledModel(at: active) else {
+            throw PhononModelError.activationRecoveryRequired("the restored model did not validate; all activation candidates were preserved")
+        }
+        try removeIfPresent(staging)
+        try removeIfPresent(activationJournalURL)
+    }
+
+    private func validate(_ transaction: ActivationTransaction) throws {
+        let root = modelsDirectory.standardizedFileURL
+        let active = URL(fileURLWithPath: transaction.activePath, isDirectory: true).standardizedFileURL
+        let staging = URL(fileURLWithPath: transaction.stagingPath, isDirectory: true).standardizedFileURL
+        let backup = URL(fileURLWithPath: transaction.backupPath, isDirectory: true).standardizedFileURL
+        let expectedPrefix = ".\(release.versionDirectoryName)-"
+        guard transaction.expectedRelease == release,
+              active.path == modelDirectory.standardizedFileURL.path,
+              staging.deletingLastPathComponent().path == root.path,
+              backup.deletingLastPathComponent().path == root.path,
+              staging.lastPathComponent.hasPrefix(expectedPrefix),
+              staging.pathExtension == "download",
+              backup.lastPathComponent.hasPrefix(expectedPrefix),
+              backup.pathExtension == "backup",
+              staging.path != backup.path,
+              staging.path != active.path,
+              backup.path != active.path else {
+            throw PhononModelError.activationRecoveryRequired("the activation transaction record does not match the pinned model or storage paths")
+        }
+    }
+
+    private func isValidInstalledModel(at directory: URL) -> Bool {
+        do {
+            let marker = try Data(contentsOf: directory.appendingPathComponent("installed.json"))
+            guard try JSONDecoder().decode(PhononModelRelease.self, from: marker) == release else { return false }
+            for file in release.files {
+                try Self.verify(file: file, at: directory.appendingPathComponent(file.path), fileManager: fileManager)
+            }
+            try validateManifest(in: directory)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func activationCandidateDirectories() -> [URL] {
+        let prefix = ".\(release.versionDirectoryName)-"
+        let contents = (try? fileManager.contentsOfDirectory(
+            at: modelsDirectory,
+            includingPropertiesForKeys: nil,
+            options: []
+        )) ?? []
+        return contents.filter {
+            $0.lastPathComponent.hasPrefix(prefix)
+                && ($0.pathExtension == "backup" || $0.pathExtension == "download")
+        }
+    }
+
+    private func removeIfPresent(_ url: URL) throws {
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
         }
     }
 

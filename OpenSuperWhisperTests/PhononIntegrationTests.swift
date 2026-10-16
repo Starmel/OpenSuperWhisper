@@ -268,6 +268,111 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.hasSuffix(".backup") || $0.hasSuffix(".download") })
     }
 
+    func testInterruptedActivationRestoresRecordedBackupOnRelaunch() async throws {
+        let fixture = try makeFixture()
+        try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
+        let sentinel = fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
+        try Data("old-active".utf8).write(to: sentinel)
+        let staging = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-interrupted.download",
+            isDirectory: true
+        )
+        let backup = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-interrupted.backup",
+            isDirectory: true
+        )
+        try install(release: fixture.release, into: staging, payload: fixture.payload)
+        try fixture.manager.beginActivationTransaction(staging: staging, backup: backup)
+        try FileManager.default.moveItem(at: fixture.manager.modelDirectory, to: backup)
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        let sentinelData = try Data(contentsOf: relaunched.modelDirectory.appendingPathComponent("active-sentinel"))
+        let verifiedDirectory = try await relaunched.verifyInstalledModel()
+        XCTAssertTrue(relaunched.isModelInstalled)
+        XCTAssertEqual(sentinelData, Data("old-active".utf8))
+        XCTAssertEqual(verifiedDirectory, relaunched.modelDirectory)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: backup.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
+    }
+
+    func testRelaunchFinishesCommittedActivationCleanup() async throws {
+        let fixture = try makeFixture()
+        try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
+        try Data("old-active".utf8).write(
+            to: fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
+        )
+        let staging = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-committed.download",
+            isDirectory: true
+        )
+        let backup = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-committed.backup",
+            isDirectory: true
+        )
+        try install(release: fixture.release, into: staging, payload: fixture.payload)
+        try Data("new-active".utf8).write(to: staging.appendingPathComponent("active-sentinel"))
+        try fixture.manager.beginActivationTransaction(staging: staging, backup: backup)
+        try FileManager.default.moveItem(at: fixture.manager.modelDirectory, to: backup)
+        try FileManager.default.moveItem(at: staging, to: fixture.manager.modelDirectory)
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        let sentinelData = try Data(contentsOf: relaunched.modelDirectory.appendingPathComponent("active-sentinel"))
+        let verifiedDirectory = try await relaunched.verifyInstalledModel()
+        XCTAssertTrue(relaunched.isModelInstalled)
+        XCTAssertEqual(sentinelData, Data("new-active".utf8))
+        XCTAssertEqual(verifiedDirectory, relaunched.modelDirectory)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: backup.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
+    }
+
+    func testCorruptActivationJournalFailsClosedAndPreservesCandidates() async throws {
+        let fixture = try makeFixture()
+        try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
+        let staging = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-corrupt.download",
+            isDirectory: true
+        )
+        let backup = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-corrupt.backup",
+            isDirectory: true
+        )
+        try install(release: fixture.release, into: staging, payload: fixture.payload)
+        try fixture.manager.beginActivationTransaction(staging: staging, backup: backup)
+        try FileManager.default.moveItem(at: fixture.manager.modelDirectory, to: backup)
+        try Data("corrupt journal".utf8).write(to: fixture.manager.activationJournalURL, options: .atomic)
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        XCTAssertFalse(relaunched.isModelInstalled)
+        do {
+            _ = try await relaunched.verifyInstalledModel()
+            XCTFail("Corrupt activation journal recovered ambiguously")
+        } catch let error as PhononModelError {
+            guard case .activationRecoveryRequired = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backup.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
+        XCTAssertGreaterThan(relaunched.storageBytes(), 0)
+    }
+
     func testPhononUsesPCMForLiveAndURLForQueuedAudio() async throws {
         let fixture = try makeFixture()
         try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
