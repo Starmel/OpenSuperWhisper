@@ -242,7 +242,7 @@ class TranscriptionService: ObservableObject {
 
         // Keep the task registered, and keep isTranscribing true, until the
         // engine's native call has actually returned. Clearing either here lets
-        // a new recording enter the same engine while whisper.cpp is aborting.
+        // a new recording enter the same engine while its native work is aborting.
         cancellationRequestedFor = activeTask.id
         activeTask.engine.cancelTranscription()
         activeTask.task.cancel()
@@ -383,7 +383,7 @@ class TranscriptionService: ObservableObject {
     ) async throws -> String {
         try Task.checkCancellation()
 
-        // Serialize access to the engine: a whisper context must not process
+        // Serialize access to the engine: one engine instance must not process
         // two transcriptions concurrently (indicator flow and queue flow can
         // both reach this point due to async busy checks).
         while true {

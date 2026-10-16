@@ -1,6 +1,6 @@
 # OpenSuperWhisper
 
-OpenSuperWhisper is a macOS application that provides real-time audio transcription using the Whisper model. It offers a seamless way to record and transcribe audio with customizable settings and keyboard shortcuts.
+OpenSuperWhisper is a macOS application that provides real-time, on-device audio transcription with selectable transcription engines. It offers a seamless way to record and transcribe audio with customizable settings and keyboard shortcuts.
 
 <p align="center">
 <img src="docs/image.png" width="400" /> <img src="docs/image_indicator.png" width="400" />
@@ -9,7 +9,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 ## Features
 
 - 🎙️ Real-time audio recording and transcription
-- 🧠 Two transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp) and [Parakeet](https://github.com/AntinomyCollective/FluidAudio) — download models directly from the app
+- 🧠 Three transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp), [Parakeet](https://github.com/AntinomyCollective/FluidAudio), and [Phonon-2](docs/phonon-2.md) (English-only on macOS 15 or later) — download models directly from the app
 - ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
 - 🖱️ Mouse button trigger — bind the middle or an extra (thumb) mouse button to start/stop recording
 - ✊ Hold-to-record mode — hold the shortcut, modifier key or mouse button to record, release to stop
@@ -29,7 +29,7 @@ Or from [GitHub releases page](https://github.com/Starmel/OpenSuperWhisper/relea
 
 ## Requirements
 
-- macOS (Apple Silicon/ARM64)
+- macOS 14 or later (Apple Silicon/ARM64); Phonon-2 requires macOS 15 or later
 
 ## Support
 
