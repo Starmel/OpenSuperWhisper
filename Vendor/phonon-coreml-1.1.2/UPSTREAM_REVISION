@@ -1,9 +1,36 @@
 Release: 1.1.2
 Commit: bf59e574639b060e30ee1a3f9c0e003fed5744c8
 Source: https://github.com/fermionresearch/phonon-coreml/tree/1.1.2
-Archive: Binaries/PhononTDT.xcframework/macos-arm64_x86_64/libPhononTDT.a
-Archive SHA-256: 22fe6f7b949a4a56b4538f418b9b6142d6488e903a79eee9ad6bd8aca62930e5
+Upstream archive: Binaries/PhononTDT.xcframework/macos-arm64_x86_64/libPhononTDT.a
+Upstream archive SHA-256: 22fe6f7b949a4a56b4538f418b9b6142d6488e903a79eee9ad6bd8aca62930e5
+Vendored archive: Binaries/libPhononTDT.a
+Vendored archive SHA-256: 22fe6f7b949a4a56b4538f418b9b6142d6488e903a79eee9ad6bd8aca62930e5
 
-The Swift sources and macOS universal PhononTDT archive in this directory are
-unmodified from that release. The packaging is local only to avoid an Xcode
-static-XCFramework module-map output collision with FluidAudio.
+The macOS universal PhononTDT archive is unmodified from that release. Its local
+packaging avoids an Xcode static-XCFramework module-map output collision with
+FluidAudio.
+
+Downstream Swift patches:
+
+- Sources/PhononCoreML/Transcriber.swift
+  Upstream SHA-256: 49cbbf14d5117335c2e252c7bb23cf7a225bb613a61c559b0c0bb1f331a3caa9
+  Vendored SHA-256: 96f9cd1d5e8bfabddb689929c306299b10a551ef3b0e1d23d4e2a02f8e56fb91
+- Sources/PhononCoreML/Windower.swift
+  Upstream SHA-256: adc22442f3b43db81d875038073dcffa241987d5f9622099fff9e90a610ec2ea
+  Vendored SHA-256: d025d94ac0a5024e2cb1d73a907caef84b73a449eeaa975cdd252a8c1366c1f8
+
+Rationale: release 1.1.2 treats a function's nominal duration as its maximum
+single-shot audio duration. Feature extraction adds 0.02 seconds, so exact
+15.000-second PCM requests a 15.02-second encoder input and cannot use the only
+configured 15-second Core ML function. The downstream patches expose the
+existing 239,600-sample (14.975-second) usable window capacity and cap
+single-shot planning to that capacity, routing longer inputs through the
+existing windower without changing decoding or word-timing behavior.
+
+Reproduce the recorded hashes from this directory with:
+
+  shasum -a 256 Sources/PhononCoreML/Transcriber.swift \
+    Sources/PhononCoreML/Windower.swift Binaries/libPhononTDT.a
+
+Reproduce upstream source hashes by replacing each vendored Swift path with the
+corresponding file from the pinned release and commit above.
