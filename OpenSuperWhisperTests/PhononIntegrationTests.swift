@@ -273,10 +273,7 @@ final class PhononIntegrationTests: XCTestCase {
         try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
         let sentinel = fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
         try Data("old-active".utf8).write(to: sentinel)
-        let staging = fixture.root.appendingPathComponent(
-            ".\(fixture.release.versionDirectoryName)-interrupted.download",
-            isDirectory: true
-        )
+        let staging = fixture.manager.downloadWorkingDirectory
         let backup = fixture.root.appendingPathComponent(
             ".\(fixture.release.versionDirectoryName)-interrupted.backup",
             isDirectory: true
@@ -307,10 +304,7 @@ final class PhononIntegrationTests: XCTestCase {
         try Data("old-active".utf8).write(
             to: fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
         )
-        let staging = fixture.root.appendingPathComponent(
-            ".\(fixture.release.versionDirectoryName)-committed.download",
-            isDirectory: true
-        )
+        let staging = fixture.manager.downloadWorkingDirectory
         let backup = fixture.root.appendingPathComponent(
             ".\(fixture.release.versionDirectoryName)-committed.backup",
             isDirectory: true
@@ -336,13 +330,87 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
     }
 
+    func testInterruptedFirstInstallCommitsValidatedStagingOnRelaunch() async throws {
+        let fixture = try makeFixture()
+        let staging = fixture.manager.downloadWorkingDirectory
+        let backup = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-first-install.backup",
+            isDirectory: true
+        )
+        try install(release: fixture.release, into: staging, payload: fixture.payload)
+        let transaction = try fixture.manager.beginActivationTransaction(staging: staging, backup: backup)
+        XCTAssertFalse(transaction.hadValidActiveModel)
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        XCTAssertTrue(relaunched.isModelInstalled)
+        XCTAssertEqual(try await relaunched.verifyInstalledModel(), relaunched.modelDirectory)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
+    }
+
+    func testInterruptedInvalidFirstInstallAbortsAndAllowsFreshDownload() async throws {
+        let fixture = try makeFixture()
+        let staging = fixture.manager.downloadWorkingDirectory
+        let backup = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-first-install.backup",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data("incomplete".utf8).write(to: staging.appendingPathComponent("manifest.json"))
+        let transaction = try fixture.manager.beginActivationTransaction(staging: staging, backup: backup)
+        XCTAssertFalse(transaction.hadValidActiveModel)
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: relaunched.activationJournalURL.path))
+        try await relaunched.downloadModel { _ in }
+        XCTAssertTrue(relaunched.isModelInstalled)
+    }
+
+    func testRelaunchAndDeleteCleanOnlyExactIncompleteDownloadWorkspace() throws {
+        let fixture = try makeFixture()
+        let incomplete = fixture.manager.downloadWorkingDirectory
+        let unrelated = fixture.root.appendingPathComponent(
+            ".\(fixture.release.versionDirectoryName)-unowned.download",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: incomplete, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: unrelated, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 31).write(to: incomplete.appendingPathComponent("partial"))
+        try Data(repeating: 2, count: 17).write(to: unrelated.appendingPathComponent("preserved"))
+
+        let relaunched = PhononModelManager(
+            release: fixture.release,
+            modelsDirectory: fixture.root,
+            downloader: TestPhononDownloader(.data(fixture.payload))
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: incomplete.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
+        XCTAssertEqual(relaunched.storageBytes(), 17)
+
+        try FileManager.default.createDirectory(at: incomplete, withIntermediateDirectories: true)
+        try Data(repeating: 3, count: 23).write(to: incomplete.appendingPathComponent("partial"))
+        try relaunched.deleteModel()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: incomplete.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
+        XCTAssertEqual(relaunched.storageBytes(), 17)
+    }
+
     func testCorruptActivationJournalFailsClosedAndPreservesCandidates() async throws {
         let fixture = try makeFixture()
         try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
-        let staging = fixture.root.appendingPathComponent(
-            ".\(fixture.release.versionDirectoryName)-corrupt.download",
-            isDirectory: true
-        )
+        let staging = fixture.manager.downloadWorkingDirectory
         let backup = fixture.root.appendingPathComponent(
             ".\(fixture.release.versionDirectoryName)-corrupt.backup",
             isDirectory: true

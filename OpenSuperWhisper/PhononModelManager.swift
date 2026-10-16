@@ -214,6 +214,7 @@ final class PhononModelManager: @unchecked Sendable {
         let stagingPath: String
         let backupPath: String
         let expectedRelease: PhononModelRelease
+        let hadValidActiveModel: Bool
     }
 
     static let shared = PhononModelManager()
@@ -224,6 +225,7 @@ final class PhononModelManager: @unchecked Sendable {
     private let fileManager: FileManager
     private let activationMove: (URL, URL) throws -> Void
     private let activationLock = NSLock()
+    private var downloadInProgress = false
 
     init(
         release: PhononModelRelease = .pinned,
@@ -254,6 +256,9 @@ final class PhononModelManager: @unchecked Sendable {
     var activationJournalURL: URL {
         modelsDirectory.appendingPathComponent(".\(release.versionDirectoryName).activation.json")
     }
+    var downloadWorkingDirectory: URL {
+        modelsDirectory.appendingPathComponent(".\(release.versionDirectoryName).download", isDirectory: true)
+    }
 
     var isModelInstalled: Bool {
         do {
@@ -274,15 +279,8 @@ final class PhononModelManager: @unchecked Sendable {
     func downloadModel(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard PhononPlatform.isSupported else { throw PhononModelError.unsupportedPlatform }
         try Task.checkCancellation()
-        try reconcileActivationTransaction()
-
-        let staging = modelsDirectory.appendingPathComponent(".\(release.versionDirectoryName)-\(UUID().uuidString).download", isDirectory: true)
-        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer {
-            if !fileManager.fileExists(atPath: activationJournalURL.path) {
-                try? fileManager.removeItem(at: staging)
-            }
-        }
+        let staging = try beginDownload()
+        defer { finishDownload(staging: staging) }
 
         var completedBytes: Int64 = 0
         for file in release.files {
@@ -333,7 +331,12 @@ final class PhononModelManager: @unchecked Sendable {
     }
 
     func deleteModel() throws {
-        try reconcileActivationTransaction()
+        activationLock.lock()
+        defer { activationLock.unlock() }
+        guard !downloadInProgress else {
+            throw PhononModelError.activationRecoveryRequired("a model download is still in progress")
+        }
+        try reconcileActivationTransactionLocked()
         let cache = compiledCacheDirectoryURL
         if fileManager.fileExists(atPath: modelDirectory.path) {
             try fileManager.removeItem(at: modelDirectory)
@@ -341,11 +344,16 @@ final class PhononModelManager: @unchecked Sendable {
         if fileManager.fileExists(atPath: cache.path) {
             try fileManager.removeItem(at: cache)
         }
+        try removeIfPresent(downloadWorkingDirectory)
     }
 
     func storageBytes() -> Int64 {
         try? reconcileActivationTransaction()
-        var paths = Set([modelDirectory.standardizedFileURL.path, compiledCacheDirectoryURL.standardizedFileURL.path])
+        var paths = Set([
+            modelDirectory.standardizedFileURL.path,
+            compiledCacheDirectoryURL.standardizedFileURL.path,
+            downloadWorkingDirectory.standardizedFileURL.path,
+        ])
         for candidate in activationCandidateDirectories() {
             paths.insert(candidate.standardizedFileURL.path)
         }
@@ -407,7 +415,8 @@ final class PhononModelManager: @unchecked Sendable {
             activePath: modelDirectory.standardizedFileURL.path,
             stagingPath: staging.standardizedFileURL.path,
             backupPath: backup.standardizedFileURL.path,
-            expectedRelease: release
+            expectedRelease: release,
+            hadValidActiveModel: isValidInstalledModel(at: modelDirectory)
         )
         try validate(transaction)
         let data = try JSONEncoder().encode(transaction)
@@ -423,6 +432,9 @@ final class PhononModelManager: @unchecked Sendable {
 
     private func reconcileActivationTransactionLocked() throws {
         guard fileManager.fileExists(atPath: activationJournalURL.path) else {
+            if !downloadInProgress {
+                try removeIfPresent(downloadWorkingDirectory)
+            }
             if activationCandidateDirectories().contains(where: { $0.pathExtension == "backup" }) {
                 throw PhononModelError.activationRecoveryRequired("an activation backup exists without its transaction record")
             }
@@ -454,6 +466,23 @@ final class PhononModelManager: @unchecked Sendable {
         guard !fileManager.fileExists(atPath: active.path) else {
             throw PhononModelError.activationRecoveryRequired("the active model is present but invalid; all activation candidates were preserved")
         }
+
+        if !transaction.hadValidActiveModel {
+            guard !fileManager.fileExists(atPath: backup.path) else {
+                throw PhononModelError.activationRecoveryRequired("a first-install activation unexpectedly has a backup; all activation candidates were preserved")
+            }
+            if isValidInstalledModel(at: staging) {
+                try activationMove(staging, active)
+                guard isValidInstalledModel(at: active) else {
+                    throw PhononModelError.activationRecoveryRequired("the activated first-install model did not validate; all activation candidates were preserved")
+                }
+            } else {
+                try removeIfPresent(staging)
+            }
+            try removeIfPresent(activationJournalURL)
+            return
+        }
+
         guard isValidInstalledModel(at: backup) else {
             throw PhononModelError.activationRecoveryRequired("the active model is missing and its recorded backup is invalid; all activation candidates were preserved")
         }
@@ -474,16 +503,41 @@ final class PhononModelManager: @unchecked Sendable {
         let expectedPrefix = ".\(release.versionDirectoryName)-"
         guard transaction.expectedRelease == release,
               active.path == modelDirectory.standardizedFileURL.path,
-              staging.deletingLastPathComponent().path == root.path,
+              staging.path == downloadWorkingDirectory.standardizedFileURL.path,
               backup.deletingLastPathComponent().path == root.path,
-              staging.lastPathComponent.hasPrefix(expectedPrefix),
-              staging.pathExtension == "download",
               backup.lastPathComponent.hasPrefix(expectedPrefix),
               backup.pathExtension == "backup",
               staging.path != backup.path,
               staging.path != active.path,
               backup.path != active.path else {
             throw PhononModelError.activationRecoveryRequired("the activation transaction record does not match the pinned model or storage paths")
+        }
+    }
+
+    private func beginDownload() throws -> URL {
+        activationLock.lock()
+        defer { activationLock.unlock() }
+        try reconcileActivationTransactionLocked()
+        guard !downloadInProgress else {
+            throw PhononModelError.activationRecoveryRequired("a model download is already in progress")
+        }
+        let staging = downloadWorkingDirectory
+        downloadInProgress = true
+        do {
+            try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+            return staging
+        } catch {
+            downloadInProgress = false
+            throw error
+        }
+    }
+
+    private func finishDownload(staging: URL) {
+        activationLock.lock()
+        defer { activationLock.unlock() }
+        downloadInProgress = false
+        if !fileManager.fileExists(atPath: activationJournalURL.path) {
+            try? removeIfPresent(staging)
         }
     }
 
