@@ -171,21 +171,38 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         }
         let connection = connection
         let pendingReplies = Array(self.pendingReplies.values)
+        let preservePreparedConnection = connection != nil
+            && connectionID != nil
+            && preparedConnectionID == connectionID
         cancellationInProgress = connection != nil
-        preparedConnectionID = nil
+        if !preservePreparedConnection {
+            preparedConnectionID = nil
+        }
         pendingReplies.forEach { $0.requestCancellation() }
         lock.unlock()
 
         guard let connection else {
-            completeCancellation(for: nil, pendingReplies: pendingReplies)
+            completeCancellation(
+                for: nil,
+                pendingReplies: pendingReplies,
+                preservePreparedConnection: false
+            )
             return
         }
 
-        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self, weak connection] _ in
-            self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
+        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
+            self?.completeCancellation(
+                for: connection,
+                pendingReplies: pendingReplies,
+                preservePreparedConnection: false
+            )
         } as! PhononXPCProtocol
-        proxy.cancel { [weak self, weak connection] in
-            self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
+        proxy.cancel { [weak self] in
+            self?.completeCancellation(
+                for: connection,
+                pendingReplies: pendingReplies,
+                preservePreparedConnection: preservePreparedConnection
+            )
         }
     }
 
@@ -275,19 +292,34 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         lock.unlock()
     }
 
-    private func completeCancellation(for connection: NSXPCConnection?, pendingReplies: [ReplyGate]) {
+    private func completeCancellation(
+        for connection: NSXPCConnection?,
+        pendingReplies: [ReplyGate],
+        preservePreparedConnection: Bool
+    ) {
         lock.lock()
         for gate in pendingReplies {
             self.pendingReplies.removeValue(forKey: ObjectIdentifier(gate))
         }
-        if connection == nil || self.connection == nil || self.connection === connection {
+        let canPreserveConnection = preservePreparedConnection
+            && connection != nil
+            && self.connection === connection
+            && connectionID != nil
+            && preparedConnectionID == connectionID
+        if canPreserveConnection {
+            cancellationInProgress = false
+        } else if connection == nil {
+            cancellationInProgress = false
+        } else if self.connection == nil || self.connection === connection {
             self.connection = nil
             connectionID = nil
             preparedConnectionID = nil
             cancellationInProgress = false
         }
         lock.unlock()
-        connection?.invalidate()
+        if !canPreserveConnection {
+            connection?.invalidate()
+        }
         pendingReplies.forEach { $0.resumeCancellation() }
     }
 

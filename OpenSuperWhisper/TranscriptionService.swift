@@ -126,6 +126,8 @@ class TranscriptionService: ObservableObject {
     private var engineLoadTask: Task<TranscriptionEngine, Error>?
     private var engineLoadID: UUID?
     private var engineSelection: EngineSelection?
+    private var phononLoadTask: Task<TranscriptionEngine, Error>?
+    private var phononLoadID: UUID?
 
     init(
         selection: EngineSelection = .current,
@@ -207,8 +209,8 @@ class TranscriptionService: ObservableObject {
     func loadEngine(selection: EngineSelection) {
         guard !isShuttingDown else { return }
         guard selection != engineSelection || (!isLoading && currentEngine == nil) else { return }
-        let previousTask = engineLoadTask
-        previousTask?.cancel()
+        engineLoadTask?.cancel()
+        let pendingPhononLoad = phononLoadTask
         engineSelection = selection
         let id = UUID()
         engineLoadID = id
@@ -219,8 +221,8 @@ class TranscriptionService: ObservableObject {
         isLoading = true
         let loader = engineLoader
         let task = Task.detached(priority: .userInitiated) {
-            if let previousTask {
-                _ = await previousTask.result
+            if let pendingPhononLoad {
+                _ = await pendingPhononLoad.result
                 try Task.checkCancellation()
             }
             let engine = try await loader(selection)
@@ -228,6 +230,10 @@ class TranscriptionService: ObservableObject {
             return engine
         }
         engineLoadTask = task
+        if selection.engine == "phonon" {
+            phononLoadTask = task
+            phononLoadID = id
+        }
         backgroundOperations[id] = Task { [weak self] in
             let result = await task.result
             self?.finishEngineLoad(id: id, result: result)
@@ -236,6 +242,10 @@ class TranscriptionService: ObservableObject {
     }
 
     private func finishEngineLoad(id: UUID, result: Result<TranscriptionEngine, Error>) {
+        if phononLoadID == id {
+            phononLoadTask = nil
+            phononLoadID = nil
+        }
         guard !isShuttingDown else {
             if case .success(let engine as WhisperEngine) = result {
                 shutdownEngines.append(engine)

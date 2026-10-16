@@ -57,7 +57,6 @@ private final class TestPhononClient: PhononTranscribing {
 
     func cancel() {
         cancelled = true
-        isPrepared = false
     }
 
     func simulateInvalidation() {
@@ -201,7 +200,7 @@ final class PhononIntegrationTests: XCTestCase {
 
         let retriedText = try await engine.transcribeSamples([0.2], settings: settings)
         XCTAssertEqual(retriedText, "direct pcm")
-        XCTAssertEqual(client.prepareCalls, 3)
+        XCTAssertEqual(client.prepareCalls, 2)
         XCTAssertEqual(client.sampleCalls, 3)
     }
 
