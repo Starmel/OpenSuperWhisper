@@ -131,7 +131,7 @@ class TranscriptionService: ObservableObject {
     private var recordingPreparation: RecordingPreparation?
     private var backgroundOperations: [UUID: Task<Void, Never>] = [:]
     private var shutdownTask: Task<Void, Never>?
-    private var shutdownEngines: [WhisperEngine] = []
+    private var shutdownEngines: [TranscriptionEngine] = []
     private(set) var isShuttingDown = false
 
     func shutdown() async {
@@ -156,9 +156,9 @@ class TranscriptionService: ObservableObject {
                 engine.unload()
             }
             shutdownEngines.removeAll()
-            (activeTask?.engine as? WhisperEngine)?.unload()
+            activeTask?.engine.unload()
             preparation?.engine.unload()
-            (engine as? WhisperEngine)?.unload()
+            engine?.unload()
             currentEngine = nil
             recordingPreparation = nil
             transcriptionTask = nil
@@ -193,8 +193,24 @@ class TranscriptionService: ObservableObject {
         static var current: Self {
             let prefs = AppPreferences.shared
             return Self(engine: prefs.selectedEngine,
-                        modelPath: resolvedWhisperModelPath(),
+                        modelPath: modelPath(forEngine: prefs.selectedEngine),
                         modelVersion: prefs.fluidAudioModelVersion)
+        }
+
+        /// The weights the selected engine will load, as the service's own idea
+        /// of "the same selection".
+        ///
+        /// It is what makes a download or a removal visible to `loadEngine`: the
+        /// Qwen3-ASR engine's two files are not a preference, so their presence
+        /// is what stands in for one — nil while either half is missing, which
+        /// reloads the engine with the weights that are now there, and empties
+        /// the selection when they are deleted, so a loaded model cannot keep
+        /// transcribing after its files are gone.
+        private static func modelPath(forEngine engine: String) -> String? {
+            if engine == Qwen3ASREngine.engineID {
+                return Qwen3ASRModelManager.shared.installedPaths?.model
+            }
+            return resolvedWhisperModelPath()
         }
     }
 
@@ -239,6 +255,9 @@ class TranscriptionService: ObservableObject {
     }
 
     @Published private(set) var loadingError: String?
+    /// The same failure as an `Error`, so a dictation can report the engine's
+    /// own reason rather than the generic "the model could not be loaded".
+    private var loadingFailure: Error?
     private let engineLoader: (EngineSelection) async throws -> TranscriptionEngine
     private var engineLoadTask: Task<TranscriptionEngine, Error>?
     private var engineLoadID: UUID?
@@ -255,15 +274,32 @@ class TranscriptionService: ObservableObject {
     }
 
     private static func makeEngine(_ selection: EngineSelection) async throws -> TranscriptionEngine {
-        let engine: TranscriptionEngine
-        if selection.engine == "fluidaudio" {
-            engine = FluidAudioEngine(modelVersion: selection.modelVersion)
-        } else {
-            guard let path = selection.modelPath else { throw TranscriptionError.contextInitializationFailed }
-            engine = WhisperEngine(modelPath: path)
-        }
+        let engine = self.engine(for: selection)
         try await engine.initialize()
         return engine
+    }
+
+    /// The engine a selection names, before it is initialized.
+    ///
+    /// Split out from the load so the mapping from the preference value to an
+    /// engine can be read — and tested — without loading gigabytes of weights.
+    /// An unknown engine value runs whisper, which is the preference's own
+    /// default; a Qwen3-ASR selection whose two files are missing fails in
+    /// `initialize()` with the download to make, and never lands here on
+    /// whisper's model.
+    static func engine(for selection: EngineSelection) -> TranscriptionEngine {
+        switch selection.engine {
+        case "fluidaudio":
+            return FluidAudioEngine(modelVersion: selection.modelVersion)
+        case Qwen3ASREngine.engineID:
+            // The weights are this engine's own two files, and it resolves them
+            // from the model manager: an engine preference carries no path for
+            // them, and a missing download is a load failure — never a silent
+            // switch to the whisper model below.
+            return Qwen3ASREngine()
+        default:
+            return WhisperEngine(modelPath: selection.modelPath)
+        }
     }
 
     func cancelTranscription() {
@@ -303,6 +339,7 @@ class TranscriptionService: ObservableObject {
         currentEngine = nil
         recordingPreparation = nil
         loadingError = nil
+        loadingFailure = nil
         isLoading = true
         let loader = engineLoader
         let task = Task.detached(priority: .userInitiated) {
@@ -320,7 +357,7 @@ class TranscriptionService: ObservableObject {
 
     private func finishEngineLoad(id: UUID, result: Result<TranscriptionEngine, Error>) {
         guard !isShuttingDown else {
-            if case .success(let engine as WhisperEngine) = result {
+            if case .success(let engine) = result {
                 shutdownEngines.append(engine)
             }
             return
@@ -330,8 +367,16 @@ class TranscriptionService: ObservableObject {
         engineLoadID = nil
         isLoading = false
         switch result {
-        case .success(let engine): currentEngine = engine
-        case .failure(let error): loadingError = error.localizedDescription
+        case .success(let engine):
+            currentEngine = engine
+            loadingFailure = nil
+        case .failure(let error):
+            loadingError = error.localizedDescription
+            // Kept as the error itself, not only as the localized sentence the
+            // alert shows: a dictation that arrives before the engine loads must
+            // fail with the engine's own reason (a Qwen3-ASR download that is
+            // missing names the file to fetch) instead of a generic refusal.
+            loadingFailure = error
         }
     }
 
@@ -345,7 +390,9 @@ class TranscriptionService: ObservableObject {
         }
         try Task.checkCancellation()
         guard !isShuttingDown else { throw CancellationError() }
-        guard currentEngine != nil else { throw TranscriptionError.contextInitializationFailed }
+        guard currentEngine != nil else {
+            throw loadingFailure ?? TranscriptionError.contextInitializationFailed
+        }
     }
 
     func reloadEngine() {
@@ -428,6 +475,15 @@ class TranscriptionService: ObservableObject {
             }
         } else if let fluidEngine = engine as? FluidAudioEngine {
             fluidEngine.onProgressUpdate = { [weak self] newProgress in
+                Task { @MainActor in
+                    guard let self,
+                          self.transcriptionTask?.id == operationID,
+                          self.cancellationRequestedFor != operationID else { return }
+                    self.progress = newProgress
+                }
+            }
+        } else if let qwenEngine = engine as? Qwen3ASREngine {
+            qwenEngine.onProgressUpdate = { [weak self] newProgress in
                 Task { @MainActor in
                     guard let self,
                           self.transcriptionTask?.id == operationID,

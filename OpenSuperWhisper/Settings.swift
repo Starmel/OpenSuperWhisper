@@ -13,6 +13,8 @@ class SettingsViewModel: ObservableObject {
             AppPreferences.shared.selectedEngine = selectedEngine
             if selectedEngine == "whisper" {
                 loadAvailableModels()
+            } else if selectedEngine == Qwen3ASREngine.engineID {
+                initializeQwen3ASRModels()
             } else {
                 initializeFluidAudioModels()
             }
@@ -460,8 +462,10 @@ class SettingsViewModel: ObservableObject {
         try await WhisperModelManager.shared.downloadModel(url: $0, name: $1, progressCallback: $2)
     }, downloadFluid: @escaping (AsrModelVersion, ProgressHandler?) async throws -> AsrModels = {
         try await AsrModels.downloadAndLoad(version: $0, progressHandler: $1)
-    }, transformModelManager: TransformModelManager = .shared) {
+    }, transformModelManager: TransformModelManager = .shared,
+       qwen3ASRModelManager: Qwen3ASRModelManager = .shared) {
         self.transformModelManager = transformModelManager
+        self.qwen3ASRModelManager = qwen3ASRModelManager
         self.downloadFluid = downloadFluid
         self.downloadWhisper = downloadWhisper
         let prefs = AppPreferences.shared
@@ -500,6 +504,7 @@ class SettingsViewModel: ObservableObject {
         loadAvailableModels()
         initializeDownloadableModels()
         initializeFluidAudioModels()
+        initializeQwen3ASRModels()
         refreshTransformModelState()
     }
     
@@ -838,6 +843,10 @@ class SettingsViewModel: ObservableObject {
             if let index = downloadableFluidAudioModels.firstIndex(where: { $0.name == modelName }) {
                 downloadableFluidAudioModels[index].downloadProgress = 0.0
             }
+            if let index = downloadableQwen3ASRModels.firstIndex(where: { $0.name == modelName }) {
+                downloadableQwen3ASRModels[index].downloadProgress = 0.0
+                qwen3ASRModelManager.cancelDownload(fileID: downloadableQwen3ASRModels[index].id)
+            }
         }
         isDownloading = false
         downloadingModelName = nil
@@ -992,6 +1001,125 @@ class SettingsViewModel: ObservableObject {
         let versionString = AppPreferences.shared.fluidAudioModelVersion
         if let model = downloadableFluidAudioModels.first(where: { $0.version == versionString }) {
             try await downloadFluidAudioModel(model)
+        }
+    }
+
+    // MARK: - Qwen3-ASR models
+
+    /// The manager the Qwen3-ASR card downloads through and reads installed state
+    /// from. Injecting it is how a test proves the card's words against a real
+    /// directory layout — the app's own, or one a test stages — instead of the
+    /// user's Application Support.
+    let qwen3ASRModelManager: Qwen3ASRModelManager
+
+    /// The two GGUF files as rows. Both are needed for the engine to start, so
+    /// each row is a file to fetch rather than a model to choose.
+    @Published var downloadableQwen3ASRModels: [SettingsQwen3ASRModel] = []
+
+    func initializeQwen3ASRModels() {
+        downloadableQwen3ASRModels = SettingsQwen3ASRModels.rows(for: qwen3ASRModelManager)
+    }
+
+    /// Whether both halves of the engine are on disk at their published size.
+    var isQwen3ASRDownloaded: Bool {
+        qwen3ASRModelManager.installedPaths != nil
+    }
+
+    /// Fetches one of the two files. The engine is reloaded when the last one
+    /// lands, because until then it has nothing to load — and the selection is
+    /// the weights themselves, so that reload is not a no-op.
+    @MainActor
+    func downloadQwen3ASRModel(_ model: SettingsQwen3ASRModel) async throws {
+        guard !isDownloading else { return }
+        guard let file = qwen3ASRModelManager.file(forID: model.id) else { return }
+        try DiskSpaceUtil.ensureEnoughFreeSpaceForModelDownload()
+
+        isDownloading = true
+        downloadingModelName = model.name
+        downloadProgress = 0.0
+
+        let id = UUID()
+        downloadID = id
+        downloadTask = Task {
+            defer {
+                if downloadID == id { downloadTask = nil; downloadID = nil }
+            }
+            do {
+                try await qwen3ASRModelManager.download(file) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self, self.downloadID == id, !Task.isCancelled else { return }
+                        guard let task = self.downloadTask, !task.isCancelled else { return }
+
+                        self.downloadProgress = progress
+                        if let index = self.downloadableQwen3ASRModels.firstIndex(where: { $0.id == file.id }) {
+                            self.downloadableQwen3ASRModels[index].downloadProgress = progress
+                        }
+                    }
+                }
+
+                await MainActor.run {
+                    guard self.downloadID == id else { return }
+                    self.resetQwen3ASRDownloadState(of: file.id)
+                    self.initializeQwen3ASRModels()
+                    if self.selectedEngine == Qwen3ASREngine.engineID {
+                        TranscriptionService.shared.reloadEngine()
+                    }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    guard self.downloadID == id else { return }
+                    self.resetQwen3ASRDownloadState(of: file.id)
+                }
+            } catch {
+                await MainActor.run {
+                    guard self.downloadID == id else { return }
+                    self.resetQwen3ASRDownloadState(of: file.id)
+                }
+                throw error
+            }
+        }
+
+        try await downloadTask?.value
+    }
+
+    /// Removes one of the two files. The engine is reloaded either way: with a
+    /// half removed it must stop transcribing rather than run on weights the
+    /// Model tab says are gone, and the selection is the pair, so a loaded engine
+    /// is unloaded and the load fails with the file to download.
+    @MainActor
+    func removeQwen3ASRModel(_ model: SettingsQwen3ASRModel) {
+        guard let file = qwen3ASRModelManager.file(forID: model.id) else { return }
+        let url = qwen3ASRModelManager.fileURL(for: file)
+        do {
+            try qwen3ASRModelManager.remove(file)
+        } catch {
+            verificationError = error.localizedDescription
+            return
+        }
+        verificationResults[url.path] = nil
+        checkSummaries[url.path] = nil
+        checkProblems.remove(url.path)
+        modelStorageNotice = .removed(name: model.name, bytesFreed: model.sizeBytes)
+        initializeQwen3ASRModels()
+        if selectedEngine == Qwen3ASREngine.engineID {
+            TranscriptionService.shared.reloadEngine()
+        }
+        refreshInstalledModels()
+    }
+
+    /// Checks one of the two files against the digest the catalogue pins, through
+    /// the same check the whisper rows use.
+    func verifyQwen3ASRModel(_ model: SettingsQwen3ASRModel) {
+        guard let file = qwen3ASRModelManager.file(forID: model.id) else { return }
+        verifyModel(at: qwen3ASRModelManager.fileURL(for: file), pinnedSHA256: file.sha256)
+    }
+
+    private func resetQwen3ASRDownloadState(of fileID: String) {
+        isDownloading = false
+        downloadingModelName = nil
+        downloadProgress = 0.0
+        if let index = downloadableQwen3ASRModels.firstIndex(where: { $0.id == fileID }) {
+            downloadableQwen3ASRModels[index].downloadProgress = 0.0
         }
     }
 }
@@ -1331,11 +1459,15 @@ struct SettingsView: View {
             previousModelURL = viewModel.selectedModelURL
             if viewModel.selectedEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
+            } else if viewModel.selectedEngine == Qwen3ASREngine.engineID {
+                viewModel.initializeQwen3ASRModels()
             }
         }
         .onChange(of: viewModel.selectedEngine) { _, newEngine in
             if newEngine == "fluidaudio" {
                 viewModel.initializeFluidAudioModels()
+            } else if newEngine == Qwen3ASREngine.engineID {
+                viewModel.initializeQwen3ASRModels()
             }
         }
         .onChange(of: viewModel.selectedModelURL) { _, newURL in
@@ -1417,6 +1549,7 @@ struct SettingsView: View {
                 Picker("Engine", selection: $viewModel.selectedEngine) {
                     Text("Parakeet").tag("fluidaudio")
                     Text("Whisper").tag("whisper")
+                    Text("Qwen3-ASR").tag(Qwen3ASREngine.engineID)
                 }
                 .pickerStyle(.segmented)
                 .padding(.bottom, 8)
@@ -1501,6 +1634,71 @@ struct SettingsView: View {
                                 .help("Open models directory")
                             }
                             Text(WhisperModelManager.shared.modelsDirectory.path)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(6)
+                        }
+                        .padding(.top, 8)
+                    }
+                } else if viewModel.selectedEngine == Qwen3ASREngine.engineID {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Qwen3-ASR Model")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        Text("Download Models")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.top, 8)
+
+                        Text("Both files are needed: the speech model and the audio encoder it is prompted with. The engine fetches them the first time it runs — they are listed here so the download can be seen, verified and the files removed.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        VStack(spacing: 12) {
+                            ForEach($viewModel.downloadableQwen3ASRModels) { $model in
+                                Qwen3ASRModelDownloadItemView(model: $model, viewModel: viewModel)
+                            }
+                        }
+
+                        if !viewModel.isQwen3ASRDownloaded {
+                            Text("Neither file is on disk yet. The engine downloads both the first time it runs, and dictation with it works once they are verified — the app never switches to another engine on its own.")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if let notice = viewModel.modelStorageNotice {
+                            Text(notice.message)
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if let error = viewModel.verificationError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Models Directory:")
+                                    .font(.subheadline)
+                                Button(action: {
+                                    NSWorkspace.shared.open(viewModel.qwen3ASRModelManager.directory)
+                                }) {
+                                    Label("Open Folder", systemImage: "folder")
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Open models directory")
+                            }
+                            Text(viewModel.qwen3ASRModelManager.directory.path)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .textSelection(.enabled)
@@ -2636,6 +2834,51 @@ struct SettingsFluidAudioModels {
     ]
 }
 
+/// One Qwen3-ASR GGUF file as the Model tab shows it.
+///
+/// The two files are one download from the user's point of view but two rows on
+/// disk: each has its own URL, digest and size, and the engine starts only when
+/// both are there.
+struct SettingsQwen3ASRModel: Identifiable {
+    let id: String
+    let name: String
+    let fileName: String
+    let url: URL
+    let sizeBytes: Int64
+    let description: String
+    let sha256: String
+    var isDownloaded: Bool
+    var downloadProgress: Double = 0.0
+
+    var sizeString: String {
+        ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
+    }
+
+    var huggingFacePageURL: URL? {
+        makeHuggingFacePageURL(fromDownloadURL: url)
+    }
+}
+
+struct SettingsQwen3ASRModels {
+    /// The rows, with what is on disk read from the manager that owns it.
+    static func rows(for manager: Qwen3ASRModelManager) -> [SettingsQwen3ASRModel] {
+        manager.files.map { file in
+            SettingsQwen3ASRModel(
+                id: file.id,
+                name: file.displayName,
+                fileName: file.fileName,
+                url: file.downloadURL,
+                sizeBytes: file.sizeBytes,
+                description: file.id == Qwen3ASRModelManager.projectorFileID
+                    ? "The audio encoder — the text model cannot hear without it"
+                    : "The speech model — the transcript comes from here",
+                sha256: file.sha256,
+                isDownloaded: manager.hasInstalledFile(file)
+            )
+        }
+    }
+}
+
 enum OnboardingModelType {
     case whisper(url: URL, size: Int)
     case parakeet(version: String)
@@ -3078,12 +3321,122 @@ struct InstalledWhisperModelView: View {
     }
 }
 
+/// One Qwen3-ASR file: the same shape as the whisper download row, without the
+/// selection — the engine runs on the pair, so neither file is chosen by itself.
+struct Qwen3ASRModelDownloadItemView: View {
+    @Binding var model: SettingsQwen3ASRModel
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private var filePath: String {
+        viewModel.qwen3ASRModelManager.directory.appendingPathComponent(model.fileName).path
+    }
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(model.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    if let pageURL = model.huggingFacePageURL,
+                       let owner = huggingFaceOwner(fromPageURL: pageURL) {
+                        Link(owner, destination: pageURL)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("View on Hugging Face")
+                    }
+                }
+
+                Text(model.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Text(model.fileName)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+
+                if model.isDownloaded {
+                    Text("Downloaded — \(model.sizeString) on disk")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                }
+            }
+
+            Spacer()
+
+            if viewModel.isDownloading && viewModel.downloadingModelName == model.name {
+                Button("Cancel") {
+                    viewModel.cancelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else if model.isDownloaded {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Button("Remove") {
+                        viewModel.removeQwen3ASRModel(model)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Delete this file and free \(model.sizeString)")
+
+                    ModelVerificationView(path: filePath,
+                                          pinnedSHA256: model.sha256,
+                                          viewModel: viewModel)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Text(model.sizeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Button(action: {
+                        Task {
+                            do {
+                                try await viewModel.downloadQwen3ASRModel(model)
+                            } catch is CancellationError {
+                                // A cancelled download is not an error to report.
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                showError = true
+                            }
+                        }
+                    }) {
+                        Label("Download", systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(viewModel.isDownloading)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .alert("Download Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+}
+
 struct ModelDownloadItemView: View {
     @Binding var model: SettingsDownloadableModel
     @ObservedObject var viewModel: SettingsViewModel
     @State private var showError = false
     @State private var errorMessage = ""
-    
+
     var isSelected: Bool {
         if let selectedURL = viewModel.selectedModelURL {
             let filename = model.filename

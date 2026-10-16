@@ -240,6 +240,7 @@ final class UninstallServiceTests: XCTestCase {
             shippedModels(in: root),
             supportDirectory(in: root).appendingPathComponent("whisper-models"),
             supportDirectory(in: root).appendingPathComponent("transform-models"),
+            supportDirectory(in: root).appendingPathComponent("qwen3-asr-models"),
             root.appendingPathComponent("Users/tester/Library/Caches/ru.starmel.OpenSuperWhisper")
         ]
     }
@@ -268,6 +269,7 @@ final class UninstallServiceTests: XCTestCase {
             support.appendingPathComponent("recordings"),
             support.appendingPathComponent("whisper-models"),
             support.appendingPathComponent("transform-models"),
+            support.appendingPathComponent("qwen3-asr-models"),
             caches,
             preferences,
             shipped.appendingPathComponent("whisper-models"),
@@ -294,6 +296,9 @@ final class UninstallServiceTests: XCTestCase {
         )
         try Data("downloaded".utf8).write(
             to: support.appendingPathComponent("transform-models/s1-mini-q4_k_m.gguf")
+        )
+        try Data("downloaded".utf8).write(
+            to: support.appendingPathComponent("qwen3-asr-models/Qwen3-ASR-1.7B-Q8_0.gguf")
         )
         // The user's own data.
         try Data("db".utf8).write(to: support.appendingPathComponent("recordings.sqlite"))

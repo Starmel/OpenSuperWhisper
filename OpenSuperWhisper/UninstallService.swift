@@ -70,7 +70,7 @@ enum UninstallService {
             ),
             RemovedItem(
                 title: "Downloaded models",
-                detail: "the speech and transform models the app fetched for itself",
+                detail: "the speech, Qwen3-ASR and transform models the app fetched for itself",
                 scriptMarker: "$SUPPORT_DIR/whisper-models"
             ),
             RemovedItem(

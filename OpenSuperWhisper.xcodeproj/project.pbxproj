@@ -21,6 +21,8 @@
 		36EBCE4EA0197EA30ECFA1F7 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		840156D02D79ED9900FB5FFE /* libwhisper.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 840156CF2D79ED9900FB5FFE /* libwhisper.a */; };
 		CEAC00152D82F60000000000 /* libllama.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00142D82F60000000000 /* libllama.a */; };
+		CEAC00222D82F70000000000 /* libmtmd.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00242D82F70000000000 /* libmtmd.a */; };
+		CEAC00232D82F70000000000 /* libvendor-hash.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CEAC00252D82F70000000000 /* libvendor-hash.a */; };
 		CEAC00172D82F60000000000 /* uninstall.sh in Resources */ = {isa = PBXBuildFile; fileRef = CEAC00162D82F60000000000 /* uninstall.sh */; };
 		840156D12D79EDA900FB5FFE /* libggml.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 840156C52D79ED9900FB5FFE /* libggml.a */; };
 		840156D22D79EDB500FB5FFE /* libggml-base.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 840156C72D79ED9900FB5FFE /* libggml-base.a */; };
@@ -56,49 +58,63 @@
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = 063B82A6437547229B9541B5;
+			remoteGlobalIDString = FAFEAC75D9EA4D5E98D0F8DB;
 			remoteInfo = llama;
+		};
+		CEAC00202D82F70000000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 2E8DBBCFF344435D86621346;
+			remoteInfo = mtmd;
+		};
+		CEAC00212D82F70000000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 8AF198546ECD419FA7A8FFE3;
+			remoteInfo = "vendor-hash";
 		};
 		840156C42D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = 9C1CEDEE28F94B0EB8ECD409;
+			remoteGlobalIDString = 23530946365943A69282431A;
 			remoteInfo = ggml;
 		};
 		840156C62D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = F4A8408B831A4BDD81AAE528;
+			remoteGlobalIDString = 2A41B77F85BC4C838FBBED74;
 			remoteInfo = "ggml-base";
 		};
 		840156C82D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = AF04635BF5BF4E85918E3762;
+			remoteGlobalIDString = 039B719584C14D9299AECA03;
 			remoteInfo = "ggml-blas";
 		};
 		840156CA2D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = D55AE7FBFC454142AD021CFB;
+			remoteGlobalIDString = C6470A1BE43644749E08DEDE;
 			remoteInfo = "ggml-cpu";
 		};
 		840156CC2D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CEAC00132D82F60000000000 /* libllama.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = B8EC1CF4C56C472FBAAE514A;
+			remoteGlobalIDString = 0E1AB557CCDA45D29AE96891;
 			remoteInfo = "ggml-metal";
 		};
 		840156CE2D79ED9900FB5FFE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 840156402D79E87600FB5FFE /* libwhisper.xcodeproj */;
 			proxyType = 2;
-			remoteGlobalIDString = 6FD40E1C7D224B77B43662D2;
+			remoteGlobalIDString = 2B64B1ED08A944E8A608E97D;
 			remoteInfo = whisper;
 		};
 		CE57B03A2D52C7BC00929AF3 /* PBXContainerItemProxy */ = {
@@ -224,6 +240,8 @@
 				CE84DF722D55778000C54EA6 /* MetalKit.framework in Frameworks */,
 				840156D02D79ED9900FB5FFE /* libwhisper.a in Frameworks */,
 				CEAC00152D82F60000000000 /* libllama.a in Frameworks */,
+				CEAC00222D82F70000000000 /* libmtmd.a in Frameworks */,
+				CEAC00232D82F70000000000 /* libvendor-hash.a in Frameworks */,
 				CE84DF6E2D55777800C54EA6 /* libc++.tbd in Frameworks */,
 				840156D12D79EDA900FB5FFE /* libggml.a in Frameworks */,
 				CE84E17D2D56550B00C54EA6 /* KeyboardShortcuts in Frameworks */,
@@ -265,6 +283,8 @@
 				840156CB2D79ED9900FB5FFE /* libggml-cpu.a */,
 				840156CD2D79ED9900FB5FFE /* libggml-metal.a */,
 				CEAC00142D82F60000000000 /* libllama.a */,
+				CEAC00242D82F70000000000 /* libmtmd.a */,
+				CEAC00252D82F70000000000 /* libvendor-hash.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -563,6 +583,20 @@
 			remoteRef = CEAC00112D82F60000000000 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		CEAC00242D82F70000000000 /* libmtmd.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libmtmd.a;
+			remoteRef = CEAC00202D82F70000000000 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		CEAC00252D82F70000000000 /* libvendor-hash.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libvendor-hash.a";
+			remoteRef = CEAC00212D82F70000000000 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		840156C52D79ED9900FB5FFE /* libggml.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -834,6 +868,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/libwhisper/**",
 					"$(PROJECT_DIR)/libllama/llama.cpp/include",
+					"$(PROJECT_DIR)/libllama/llama.cpp/tools/mtmd",
 				);
 				INFOPLIST_FILE = "OpenSuperWhisper/OpenSuperWhisper-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -896,6 +931,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/libwhisper/**",
 					"$(PROJECT_DIR)/libllama/llama.cpp/include",
+					"$(PROJECT_DIR)/libllama/llama.cpp/tools/mtmd",
 				);
 				INFOPLIST_FILE = "OpenSuperWhisper/OpenSuperWhisper-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -940,6 +976,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/libwhisper/**",
 					"$(PROJECT_DIR)/libllama/llama.cpp/include",
+					"$(PROJECT_DIR)/libllama/llama.cpp/tools/mtmd",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MARKETING_VERSION = 0.1.0;
@@ -965,6 +1002,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/libwhisper/**",
 					"$(PROJECT_DIR)/libllama/llama.cpp/include",
+					"$(PROJECT_DIR)/libllama/llama.cpp/tools/mtmd",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MARKETING_VERSION = 0.1.0;

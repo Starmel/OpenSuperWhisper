@@ -33,7 +33,12 @@ set(LLAMA_BUILD_TOOLS    OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_APP      OFF CACHE BOOL "" FORCE)
-set(LLAMA_BUILD_MTMD     OFF CACHE BOOL "" FORCE)
+# mtmd is the multimodal library next to libllama, and it carries the audio
+# encoder the Qwen3-ASR engine runs ("qwen3a" projector). It links ggml and
+# llama publicly from this same project, so the app still holds exactly one
+# ggml. The tools that would use it stay off with LLAMA_BUILD_TOOLS above:
+# this option builds the library, not llama-mtmd-cli.
+set(LLAMA_BUILD_MTMD     ON  CACHE BOOL "" FORCE)
 set(LLAMA_CURL           OFF CACHE BOOL "" FORCE)
 set(LLAMA_OPENSSL        OFF CACHE BOOL "" FORCE)
 

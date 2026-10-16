@@ -54,8 +54,17 @@ floor every English transform falls back to while it is absent
 `~/Library/Application Support/ru.starmel.OpenSuperWhisper/`. There is nothing to place before a
 build, and a release ships no weights that the next release would ship again.
 
+The third engine's weights are a download of their own, in `Qwen3ASRModelManager.swift`: Qwen3-ASR
+is two GGUF files that the engine needs together (`Qwen3-ASR-1.7B-Q8_0.gguf`, 2.17 GB,
+`sha256 58e22d05…`, and its audio projector `mmproj-Qwen3-ASR-1.7B-Q8_0.gguf`, 356 MB,
+`sha256 46c1d533…`), which the Model tab shows, downloads, verifies and removes like any other row.
+They land in the app's own directory next to the others
+(`~/Library/Application Support/ru.starmel.OpenSuperWhisper/qwen3-asr-models/`), and an uninstall
+that lists the downloaded models removes them too. Selecting the engine without them fails the
+load with the file to fetch; nothing falls back to whisper.
+
 Because the app verifies what it downloads against those digests (`TransformRuntime` refuses a
-transform model whose digest does not match), the digests in the two Swift files are the whole
+transform model whose digest does not match), the digests in the Swift files are the whole
 contract: a file of the right name and the wrong bytes is not usable, and no model may be taken
 from another application's data directory.
 

@@ -24,7 +24,7 @@ OpenSuperWhisper is a macOS application that provides real-time audio transcript
 ## Features
 
 - 🎙️ Real-time audio recording and transcription
-- 🧠 Two transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp) and [Parakeet](https://github.com/AntinomyCollective/FluidAudio) — download models directly from the app (Parakeet: v3 and v2, plus **Redux**, moondream's 219 MB ternary re-training of v3)
+- 🧠 Three transcription engines: [Whisper](https://github.com/ggerganov/whisper.cpp), [Parakeet](https://github.com/AntinomyCollective/FluidAudio) and [Qwen3-ASR 1.7B](https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF) (the vendored llama.cpp's own audio encoder) — download models directly from the app (Parakeet: v3 and v2, plus **Redux**, moondream's 219 MB ternary re-training of v3)
 - ⌨️ Global keyboard shortcuts — key combination or single modifier key (e.g. Left ⌘, Right ⌥, Fn)
 - 🖱️ Mouse button trigger — bind the middle or an extra (thumb) mouse button to start/stop recording
 - ✊ Hold-to-record mode — hold the shortcut, modifier key or mouse button to record, release to stop

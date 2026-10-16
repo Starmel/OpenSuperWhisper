@@ -141,6 +141,7 @@ SHIPPED_MODELS_DIR="$ROOT/Library/Application Support/$BUNDLE_ID/Models"
 SHIPPED_SUPPORT_DIR="$ROOT/Library/Application Support/$BUNDLE_ID"
 DOWNLOADED_WHISPER_DIR="$SUPPORT_DIR/whisper-models"
 DOWNLOADED_TRANSFORM_DIR="$SUPPORT_DIR/transform-models"
+DOWNLOADED_QWEN3ASR_DIR="$SUPPORT_DIR/qwen3-asr-models"
 CACHES_DIR="$ROOT$HOME/Library/Caches/$BUNDLE_ID"
 HTTP_STORAGES_DIR="$ROOT$HOME/Library/HTTPStorages/$BUNDLE_ID"
 SAVED_STATE_DIR="$ROOT$HOME/Library/Saved Application State/$BUNDLE_ID.savedState"
@@ -190,9 +191,10 @@ fi
 
 # 4. The models the app downloaded for itself, next to the user's own files.
 #    The shipped copies are read-only to the app and live under /Library (step
-#    3), so these two directories only ever hold downloads.
+#    3), so these directories only ever hold downloads.
 rm -rf "$DOWNLOADED_WHISPER_DIR"
 rm -rf "$DOWNLOADED_TRANSFORM_DIR"
+rm -rf "$DOWNLOADED_QWEN3ASR_DIR"
 
 # 5. Caches, HTTP storage, saved window state and the app's own scripts: all of
 #    it is rebuilt on the next launch, none of it is the user's data.
@@ -241,7 +243,7 @@ fi
 say "OpenSuperWhisper has been removed."
 say "Removed: $APP"
 say "Removed: $SHIPPED_MODELS_DIR (model copies an earlier package installed for the app, if any)"
-say "Removed: $DOWNLOADED_WHISPER_DIR and $DOWNLOADED_TRANSFORM_DIR (downloaded models)"
+say "Removed: $DOWNLOADED_WHISPER_DIR, $DOWNLOADED_TRANSFORM_DIR and $DOWNLOADED_QWEN3ASR_DIR (downloaded models)"
 say "Removed: caches, HTTP storage, saved state and the installer receipt"
 if [ "$REMOVE_USER_DATA" -eq 1 ]; then
     say "Removed: $SUPPORT_DIR (recordings, transcriptions and settings)"
