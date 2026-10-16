@@ -76,11 +76,21 @@ private final class FailingPhononEngine: TranscriptionEngine {
     func getSupportedLanguages() -> [String] { ["en"] }
 }
 
+private final class CancelledPhononEngine: TranscriptionEngine {
+    var isModelLoaded: Bool { false }
+    var engineName: String { "cancelled" }
+    func initialize() async throws { throw CancellationError() }
+    func transcribeAudio(url: URL, settings: Settings) async throws -> String { "unexpected" }
+    func cancelTranscription() {}
+    func getSupportedLanguages() -> [String] { ["en"] }
+}
+
 private final class FallbackProbeEngine: PCMTranscriptionEngine, ProgressReportingTranscriptionEngine {
     var isModelLoaded = true
     var engineName: String { "fallback probe" }
     var onProgressUpdate: ((Float) -> Void)?
-    func initialize() async throws {}
+    private(set) var initializeCalls = 0
+    func initialize() async throws { initializeCalls += 1 }
     func transcribeAudio(url: URL, settings: Settings) async throws -> String { "url" }
     func transcribeSamples(_ samples: [Float], settings: Settings) async throws -> String { "pcm" }
     func cancelTranscription() {}
@@ -102,6 +112,7 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertEqual(release.runtimeVersion, "1.1.2")
         XCTAssertEqual(release.repositoryRevision, "1143812fd4236522232a8c33e3115f0577e3cd7d")
         XCTAssertEqual(release.manifestVersion, "3.0")
+        XCTAssertEqual(release.compiledCacheKey, "4b6bfa3a12cc3c4e-0f6c074cb6fd1c3b")
         XCTAssertEqual(release.downloadSize, 345_012_107)
         XCTAssertTrue(PhononPlatform.isSupported)
         XCTAssertEqual(LanguageUtil.supportedLanguages(engine: "phonon", fluidAudioModelVersion: "v3"), ["en"])
@@ -113,6 +124,7 @@ final class PhononIntegrationTests: XCTestCase {
             runtimeVersion: fixture.release.runtimeVersion,
             repositoryRevision: "different-revision",
             manifestVersion: fixture.release.manifestVersion,
+            compiledCacheKey: fixture.release.compiledCacheKey,
             files: fixture.release.files
         )
         try install(release: wrongRelease, into: fixture.manager.modelDirectory, payload: fixture.payload)
@@ -190,9 +202,12 @@ final class PhononIntegrationTests: XCTestCase {
 
         let cache = fixture.manager.compiledCacheDirectoryURL
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: cache) }
         try Data(repeating: 7, count: 32).write(to: cache.appendingPathComponent("compiled.bin"))
+        try FileManager.default.removeItem(at: fixture.manager.modelDirectory.appendingPathComponent("manifest.json"))
 
-        XCTAssertGreaterThanOrEqual(fixture.manager.storageBytes(), Int64(fixture.payload.count + 32))
+        XCTAssertEqual(fixture.manager.compiledCacheDirectoryURL, cache)
+        XCTAssertGreaterThanOrEqual(fixture.manager.storageBytes(), 32)
         try fixture.manager.deleteModel()
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.manager.modelDirectory.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
@@ -235,6 +250,26 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertEqual(output, "pcm")
     }
 
+    func testCancelledPhononLoadDoesNotInitializeWhisperFallback() async {
+        let fallback = FallbackProbeEngine()
+        let factories = TranscriptionService.EngineFactories(
+            makeWhisper: { _ in fallback },
+            makeFluidAudio: { _ in NamedTestEngine("fluid") },
+            makePhonon: { CancelledPhononEngine() }
+        )
+
+        do {
+            _ = try await TranscriptionService.makeEngine(
+                .init(engine: "phonon", modelPath: "/fallback.bin", modelVersion: "v3"),
+                factories: factories
+            )
+            XCTFail("Cancelled Phonon load initialized a fallback")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(fallback.initializeCalls, 0)
+    }
+
     func testUnknownEngineDoesNotMasqueradeAsWhisper() async {
         do {
             _ = try await TranscriptionService.makeEngine(
@@ -260,6 +295,7 @@ final class PhononIntegrationTests: XCTestCase {
             runtimeVersion: "1.1.2",
             repositoryRevision: "test-revision",
             manifestVersion: "3.0",
+            compiledCacheKey: "test-cache-key-\(UUID().uuidString)",
             files: [.init(path: "manifest.json", byteCount: Int64(payload.count), sha256: digest)]
         )
         let manager = PhononModelManager(

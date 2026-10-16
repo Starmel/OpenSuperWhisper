@@ -11,12 +11,14 @@ struct PhononModelRelease: Codable, Equatable, Sendable {
     let runtimeVersion: String
     let repositoryRevision: String
     let manifestVersion: String
+    let compiledCacheKey: String
     let files: [PhononModelFile]
 
     static let pinned = PhononModelRelease(
         runtimeVersion: "1.1.2",
         repositoryRevision: "1143812fd4236522232a8c33e3115f0577e3cd7d",
         manifestVersion: "3.0",
+        compiledCacheKey: "4b6bfa3a12cc3c4e-0f6c074cb6fd1c3b",
         files: [
             .init(path: "decoder.bin", byteCount: 13_301_279, sha256: "36fa7202dda85c603af60d930ab88d7e9f0d2a619490aff46f5384db924cfa70"),
             .init(path: "manifest.json", byteCount: 1_428, sha256: "ab3fb5dfd3fc07b1d8a24379d04418f458d0443ba6359d3a5ab2f098a7d64089"),
@@ -38,6 +40,42 @@ struct PhononModelRelease: Codable, Equatable, Sendable {
         components.path = "/FermionResearch/Phonon-2-CoreML/resolve/\(repositoryRevision)/\(file.path)"
         components.queryItems = [URLQueryItem(name: "download", value: "true")]
         return components.url!
+    }
+}
+
+extension PhononModelRelease {
+    private enum CodingKeys: String, CodingKey {
+        case runtimeVersion
+        case repositoryRevision
+        case manifestVersion
+        case compiledCacheKey
+        case files
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        runtimeVersion = try container.decode(String.self, forKey: .runtimeVersion)
+        repositoryRevision = try container.decode(String.self, forKey: .repositoryRevision)
+        manifestVersion = try container.decode(String.self, forKey: .manifestVersion)
+        files = try container.decode([PhononModelFile].self, forKey: .files)
+        compiledCacheKey = try container.decodeIfPresent(String.self, forKey: .compiledCacheKey)
+            ?? Self.legacyCompiledCacheKey(runtimeVersion: runtimeVersion, repositoryRevision: repositoryRevision)
+            ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(runtimeVersion, forKey: .runtimeVersion)
+        try container.encode(repositoryRevision, forKey: .repositoryRevision)
+        try container.encode(manifestVersion, forKey: .manifestVersion)
+        try container.encode(compiledCacheKey, forKey: .compiledCacheKey)
+        try container.encode(files, forKey: .files)
+    }
+
+    private static func legacyCompiledCacheKey(runtimeVersion: String, repositoryRevision: String) -> String? {
+        guard runtimeVersion == "1.1.2",
+              repositoryRevision == "1143812fd4236522232a8c33e3115f0577e3cd7d" else { return nil }
+        return "4b6bfa3a12cc3c4e-0f6c074cb6fd1c3b"
     }
 }
 
@@ -316,24 +354,9 @@ final class PhononModelManager: @unchecked Sendable {
     }
 
     var compiledCacheDirectoryURL: URL {
-        let cacheRoot = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("phonon-coreml", isDirectory: true)
-        let manifestURL = modelDirectory.appendingPathComponent("manifest.json")
-        let programURL = modelDirectory.appendingPathComponent("Phonon-2.mlpackage/Data/com.apple.CoreML/model.mlmodel")
-        let weightsURL = modelDirectory.appendingPathComponent("Phonon-2.mlpackage/Data/com.apple.CoreML/weights/weight.bin")
-        guard let manifestData = try? Data(contentsOf: manifestURL),
-              let manifest = try? JSONSerialization.jsonObject(with: manifestData) as? [String: Any],
-              let container = manifest["container_sha256"] as? String,
-              let program = try? Data(contentsOf: programURL),
-              let weightSize = (try? fileManager.attributesOfItem(atPath: weightsURL.path)[.size] as? NSNumber)?.int64Value else {
-            return cacheRoot.appendingPathComponent("missing-model")
-        }
-        var value: UInt64 = 0xcbf29ce484222325
-        for byte in program { value ^= UInt64(byte); value = value &* 0x100000001b3 }
-        withUnsafeBytes(of: weightSize.littleEndian) { bytes in
-            for byte in bytes { value ^= UInt64(byte); value = value &* 0x100000001b3 }
-        }
-        return cacheRoot.appendingPathComponent("\(container.prefix(16))-\(String(format: "%016llx", value))", isDirectory: true)
+            .appendingPathComponent(release.compiledCacheKey, isDirectory: true)
     }
 
     private static func directorySize(_ url: URL, fileManager: FileManager) -> Int64 {

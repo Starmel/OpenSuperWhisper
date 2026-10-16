@@ -162,6 +162,8 @@ class TranscriptionService: ObservableObject {
                 try await engine.initialize()
                 return engine
             } catch {
+                if error is CancellationError { throw CancellationError() }
+                try Task.checkCancellation()
                 guard let path = selection.modelPath else { throw error }
                 let whisper = factories.makeWhisper(path)
                 try await whisper.initialize()

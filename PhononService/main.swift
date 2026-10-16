@@ -28,6 +28,7 @@ private protocol PhononXPCProtocol {
     func prepare(modelDirectory: String, withReply reply: @escaping (Data?, String?) -> Void)
     func transcribe(samples: Data, withReply reply: @escaping (Data?, String?) -> Void)
     func transcribe(filePath: String, withReply reply: @escaping (Data?, String?) -> Void)
+    func cancel(withReply reply: @escaping () -> Void)
 }
 
 @objc(PhononXPCProgressProtocol)
@@ -109,6 +110,12 @@ private final class PhononService: NSObject, PhononXPCProtocol {
             } catch {
                 reply(nil, error.localizedDescription)
             }
+        }
+    }
+
+    func cancel(withReply reply: @escaping () -> Void) {
+        queue.async {
+            reply()
         }
     }
 

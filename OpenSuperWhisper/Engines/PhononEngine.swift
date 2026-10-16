@@ -27,6 +27,7 @@ protocol PhononXPCProtocol {
     func prepare(modelDirectory: String, withReply reply: @escaping (Data?, String?) -> Void)
     func transcribe(samples: Data, withReply reply: @escaping (Data?, String?) -> Void)
     func transcribe(filePath: String, withReply reply: @escaping (Data?, String?) -> Void)
+    func cancel(withReply reply: @escaping () -> Void)
 }
 
 @objc(PhononXPCProgressProtocol)
@@ -49,25 +50,51 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
     private let lock = NSLock()
     private var connection: NSXPCConnection?
     private var pendingReplies: [ObjectIdentifier: ReplyGate] = [:]
+    private var cancellationInProgress = false
 
     private final class ReplyGate: @unchecked Sendable {
         private let lock = NSLock()
         private var continuation: CheckedContinuation<Data, Error>?
+        private var cancellationRequested = false
 
         init(_ continuation: CheckedContinuation<Data, Error>) {
             self.continuation = continuation
         }
 
-        func resume(with result: Result<Data, Error>) {
+        func requestCancellation() {
+            lock.lock()
+            cancellationRequested = true
+            lock.unlock()
+        }
+
+        var canSubmit: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return continuation != nil && !cancellationRequested
+        }
+
+        func resume(with result: Result<Data, Error>) -> Bool {
+            lock.lock()
+            guard !cancellationRequested, let continuation else {
+                lock.unlock()
+                return false
+            }
+            self.continuation = nil
+            lock.unlock()
+            continuation.resume(with: result)
+            return true
+        }
+
+        func resumeCancellation() {
             lock.lock()
             let continuation = continuation
             self.continuation = nil
             lock.unlock()
-            continuation?.resume(with: result)
+            continuation?.resume(throwing: CancellationError())
         }
     }
 
-    deinit { cancel() }
+    deinit { connection?.invalidate() }
 
     func prepare(modelDirectory: URL) async throws -> PhononPreparationResult {
         let data = try await call { proxy, reply in
@@ -94,12 +121,22 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
     func cancel() {
         lock.lock()
         let connection = connection
-        self.connection = nil
         let pendingReplies = Array(self.pendingReplies.values)
-        self.pendingReplies.removeAll()
+        cancellationInProgress = connection != nil
+        pendingReplies.forEach { $0.requestCancellation() }
         lock.unlock()
-        connection?.invalidate()
-        pendingReplies.forEach { $0.resume(with: .failure(CancellationError())) }
+
+        guard let connection else {
+            completeCancellation(for: nil, pendingReplies: pendingReplies)
+            return
+        }
+
+        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self, weak connection] _ in
+            self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
+        } as! PhononXPCProtocol
+        proxy.cancel { [weak self, weak connection] in
+            self?.completeCancellation(for: connection, pendingReplies: pendingReplies)
+        }
     }
 
     func phononProgress(phase: String, seconds: Double) {
@@ -108,7 +145,7 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
 
     private func call(_ body: @escaping (PhononXPCProtocol, @escaping (Data?, String?) -> Void) -> Void) async throws -> Data {
         try Task.checkCancellation()
-        let connection = currentConnection()
+        let connection = try currentConnection()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let gate = ReplyGate(continuation)
@@ -117,20 +154,7 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
                     cancel()
                     return
                 }
-                let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-                    self.finish(gate, with: .failure(error))
-                } as! PhononXPCProtocol
-                body(proxy) { data, errorMessage in
-                    if let data {
-                        self.finish(gate, with: .success(data))
-                    } else {
-                        self.finish(gate, with: .failure(NSError(
-                            domain: "PhononXPC",
-                            code: 1,
-                            userInfo: [NSLocalizedDescriptionKey: errorMessage ?? "The Phonon service returned no result."]
-                        )))
-                    }
-                }
+                submit(gate, on: connection, body: body)
             }
         } onCancel: { [weak self] in
             self?.cancel()
@@ -143,16 +167,58 @@ final class PhononXPCClient: NSObject, PhononTranscribing, PhononXPCProgressProt
         lock.unlock()
     }
 
+    private func submit(
+        _ gate: ReplyGate,
+        on connection: NSXPCConnection,
+        body: (PhononXPCProtocol, @escaping (Data?, String?) -> Void) -> Void
+    ) {
+        lock.lock()
+        guard gate.canSubmit else {
+            lock.unlock()
+            return
+        }
+        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+            self.finish(gate, with: .failure(error))
+        } as! PhononXPCProtocol
+        body(proxy) { data, errorMessage in
+            if let data {
+                self.finish(gate, with: .success(data))
+            } else {
+                self.finish(gate, with: .failure(NSError(
+                    domain: "PhononXPC",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: errorMessage ?? "The Phonon service returned no result."]
+                )))
+            }
+        }
+        lock.unlock()
+    }
+
     private func finish(_ gate: ReplyGate, with result: Result<Data, Error>) {
+        guard gate.resume(with: result) else { return }
         lock.lock()
         pendingReplies.removeValue(forKey: ObjectIdentifier(gate))
         lock.unlock()
-        gate.resume(with: result)
     }
 
-    private func currentConnection() -> NSXPCConnection {
+    private func completeCancellation(for connection: NSXPCConnection?, pendingReplies: [ReplyGate]) {
+        lock.lock()
+        for gate in pendingReplies {
+            self.pendingReplies.removeValue(forKey: ObjectIdentifier(gate))
+        }
+        if connection == nil || self.connection === connection {
+            self.connection = nil
+            cancellationInProgress = false
+        }
+        lock.unlock()
+        connection?.invalidate()
+        pendingReplies.forEach { $0.resumeCancellation() }
+    }
+
+    private func currentConnection() throws -> NSXPCConnection {
         lock.lock()
         defer { lock.unlock() }
+        if cancellationInProgress { throw CancellationError() }
         if let connection { return connection }
 
         let newConnection = NSXPCConnection(serviceName: Self.serviceName)
