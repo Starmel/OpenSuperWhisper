@@ -214,6 +214,60 @@ final class PhononIntegrationTests: XCTestCase {
         XCTAssertFalse(fixture.manager.isModelInstalled)
     }
 
+    func testFailedReplacementCommitRestoresValidActiveModel() async throws {
+        let fixture = try makeFixture { source, destination in
+            if source.pathExtension == "download" {
+                throw NSError(domain: "TestActivation", code: 1)
+            }
+            try FileManager.default.moveItem(at: source, to: destination)
+        }
+        try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
+        let sentinel = fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
+        try Data("active".utf8).write(to: sentinel)
+
+        do {
+            try await fixture.manager.downloadModel { _ in }
+            XCTFail("Failed replacement commit succeeded")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "TestActivation")
+        }
+
+        XCTAssertTrue(fixture.manager.isModelInstalled)
+        let sentinelData = try Data(contentsOf: sentinel)
+        let verifiedDirectory = try await fixture.manager.verifyInstalledModel()
+        XCTAssertEqual(sentinelData, Data("active".utf8))
+        XCTAssertEqual(verifiedDirectory, fixture.manager.modelDirectory)
+        let entries = try FileManager.default.contentsOfDirectory(atPath: fixture.root.path)
+        XCTAssertFalse(entries.contains { $0.hasSuffix(".backup") || $0.hasSuffix(".download") })
+    }
+
+    func testFailedBackupMoveLeavesValidActiveModelUntouched() async throws {
+        let fixture = try makeFixture { source, destination in
+            if destination.pathExtension == "backup" {
+                throw NSError(domain: "TestBackup", code: 2)
+            }
+            try FileManager.default.moveItem(at: source, to: destination)
+        }
+        try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
+        let sentinel = fixture.manager.modelDirectory.appendingPathComponent("active-sentinel")
+        try Data("active".utf8).write(to: sentinel)
+
+        do {
+            try await fixture.manager.downloadModel { _ in }
+            XCTFail("Failed backup move succeeded")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "TestBackup")
+        }
+
+        XCTAssertTrue(fixture.manager.isModelInstalled)
+        let sentinelData = try Data(contentsOf: sentinel)
+        let verifiedDirectory = try await fixture.manager.verifyInstalledModel()
+        XCTAssertEqual(sentinelData, Data("active".utf8))
+        XCTAssertEqual(verifiedDirectory, fixture.manager.modelDirectory)
+        let entries = try FileManager.default.contentsOfDirectory(atPath: fixture.root.path)
+        XCTAssertFalse(entries.contains { $0.hasSuffix(".backup") || $0.hasSuffix(".download") })
+    }
+
     func testPhononUsesPCMForLiveAndURLForQueuedAudio() async throws {
         let fixture = try makeFixture()
         try install(release: fixture.release, into: fixture.manager.modelDirectory, payload: fixture.payload)
@@ -345,7 +399,8 @@ final class PhononIntegrationTests: XCTestCase {
 
     private func makeFixture(
         payload: Data = Data("{\"version\":\"3.0\"}".utf8),
-        downloader: PhononDownloading? = nil
+        downloader: PhononDownloading? = nil,
+        activationMove: ((URL, URL) throws -> Void)? = nil
     ) throws -> (root: URL, release: PhononModelRelease, manager: PhononModelManager, payload: Data) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("phonon-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -361,7 +416,8 @@ final class PhononIntegrationTests: XCTestCase {
         let manager = PhononModelManager(
             release: release,
             modelsDirectory: root,
-            downloader: downloader ?? TestPhononDownloader(.data(payload))
+            downloader: downloader ?? TestPhononDownloader(.data(payload)),
+            activationMove: activationMove
         )
         return (root, release, manager, payload)
     }

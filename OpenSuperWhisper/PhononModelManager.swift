@@ -212,16 +212,21 @@ final class PhononModelManager: @unchecked Sendable {
     let modelsDirectory: URL
     private let downloader: PhononDownloading
     private let fileManager: FileManager
+    private let activationMove: (URL, URL) throws -> Void
 
     init(
         release: PhononModelRelease = .pinned,
         modelsDirectory: URL? = nil,
         downloader: PhononDownloading = URLSessionPhononDownloader(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        activationMove: ((URL, URL) throws -> Void)? = nil
     ) {
         self.release = release
         self.fileManager = fileManager
         self.downloader = downloader
+        self.activationMove = activationMove ?? { source, destination in
+            try fileManager.moveItem(at: source, to: destination)
+        }
         if let modelsDirectory {
             self.modelsDirectory = modelsDirectory
         } else {
@@ -273,10 +278,7 @@ final class PhononModelManager: @unchecked Sendable {
         try Task.checkCancellation()
 
         try fileManager.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: modelDirectory.path) {
-            try fileManager.removeItem(at: modelDirectory)
-        }
-        try fileManager.moveItem(at: staging, to: modelDirectory)
+        try activate(staging: staging)
         progress(1)
     }
 
@@ -325,6 +327,45 @@ final class PhononModelManager: @unchecked Sendable {
         let actual = manifest?["version"] as? String ?? "missing"
         guard actual == release.manifestVersion else {
             throw PhononModelError.invalidManifestVersion(expected: release.manifestVersion, actual: actual)
+        }
+    }
+
+    private func activate(staging: URL) throws {
+        let active = modelDirectory
+        let backup = modelsDirectory.appendingPathComponent(
+            ".\(release.versionDirectoryName)-\(UUID().uuidString).backup",
+            isDirectory: true
+        )
+        var hasBackup = false
+
+        if fileManager.fileExists(atPath: active.path) {
+            do {
+                try activationMove(active, backup)
+                hasBackup = true
+            } catch {
+                if fileManager.fileExists(atPath: backup.path),
+                   !fileManager.fileExists(atPath: active.path) {
+                    try activationMove(backup, active)
+                }
+                throw error
+            }
+        }
+
+        do {
+            try activationMove(staging, active)
+        } catch {
+            let activationError = error
+            if hasBackup {
+                if fileManager.fileExists(atPath: active.path) {
+                    try fileManager.removeItem(at: active)
+                }
+                try activationMove(backup, active)
+            }
+            throw activationError
+        }
+
+        if hasBackup {
+            try fileManager.removeItem(at: backup)
         }
     }
 
