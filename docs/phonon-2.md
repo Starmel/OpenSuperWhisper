@@ -19,8 +19,11 @@ NOTICE text are also copied into the app as `Phonon2-NOTICE.txt`.
 The Swift runtime sources and universal macOS decoder archive are vendored at
 the exact 1.1.2 release because Xcode cannot build the upstream binary target
 alongside FluidAudio: both binary XCFrameworks emit the same generic
-`include/module.modulemap` output. `Vendor/phonon-coreml-1.1.2/UPSTREAM_REVISION`
-records the source and archive hashes.
+`include/module.modulemap` output. The vendored `libPhononTDT.a` was verified
+byte-for-byte against the macOS universal archive in the primary 1.1.2 tag; its
+SHA-256 is `22fe6f7b949a4a56b4538f418b9b6142d6488e903a79eee9ad6bd8aca62930e5`.
+`Vendor/phonon-coreml-1.1.2/UPSTREAM_REVISION` records the tagged source commit,
+upstream archive path, and digest.
 
 ## Runtime architecture
 

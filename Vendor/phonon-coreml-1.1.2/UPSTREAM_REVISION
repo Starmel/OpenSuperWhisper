@@ -1,6 +1,8 @@
 Release: 1.1.2
 Commit: bf59e574639b060e30ee1a3f9c0e003fed5744c8
 Source: https://github.com/fermionresearch/phonon-coreml/tree/1.1.2
+Archive: Binaries/PhononTDT.xcframework/macos-arm64_x86_64/libPhononTDT.a
+Archive SHA-256: 22fe6f7b949a4a56b4538f418b9b6142d6488e903a79eee9ad6bd8aca62930e5
 
 The Swift sources and macOS universal PhononTDT archive in this directory are
 unmodified from that release. The packaging is local only to avoid an Xcode
