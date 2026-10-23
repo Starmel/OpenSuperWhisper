@@ -51,6 +51,13 @@ class ShortcutManager {
             name: .indicatorWindowDidHide,
             object: nil
         )
+
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(externalToggleRequested(_:)),
+            name: Notification.Name("com.haelyra.ecc-focus-queue.osw.toggleRecord"),
+            object: nil
+        )
     }
     
     func observeTriggerPermissions(_ publisher: AnyPublisher<Int, Never>, reconfigure: @escaping () -> Void) {
@@ -67,6 +74,12 @@ class ShortcutManager {
     
     @objc private func hotkeySettingsChanged() {
         setupRecordingTrigger()
+    }
+
+    /// Lets companion apps (e.g. ECC Focus Queue) toggle recording without
+    /// simulating keystrokes. Runs the same path as the hotkey.
+    @objc private func externalToggleRequested(_ notification: Notification) {
+        Task { @MainActor in self.handleKeyDown() }
     }
     
     private func setupKeyboardShortcuts() {

@@ -206,6 +206,10 @@ class AudioRecorder: NSObject, ObservableObject {
             print("Recording started successfully")
         } catch {
             print("Failed to start recording: \(error)")
+            // A session whose start() threw still has the tap installed from
+            // init: stop it explicitly before releasing, so the engine is not
+            // deallocated mid device-change notification.
+            recordingSession?.cancel()
             recordingSession = nil
             currentRecordingURL = nil
             restoreSystemDefaultInputIfNeeded()

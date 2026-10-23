@@ -14,6 +14,7 @@ final class RecordingSessionController {
         currentID = id
         isCapturing = true
         stopAction = stop
+        postRecordingStateChanged(true)
         return id
     }
 
@@ -30,5 +31,18 @@ final class RecordingSessionController {
         currentID = nil
         isCapturing = false
         stopAction = nil
+        postRecordingStateChanged(false)
+    }
+
+    /// Broadcasts capture state so companion apps (e.g. ECC Focus Queue) can
+    /// mirror it without polling. Posted once per session transition, which
+    /// covers both the global hotkey indicator and the in-window recording.
+    private func postRecordingStateChanged(_ recording: Bool) {
+        DistributedNotificationCenter.default().postNotificationName(
+            Notification.Name("com.haelyra.ecc-focus-queue.osw.recordingStateChanged"),
+            object: nil,
+            userInfo: ["recording": recording],
+            deliverImmediately: true
+        )
     }
 }
