@@ -156,6 +156,16 @@ final class PCMRecordingSession {
         engine.prepare()
     }
 
+    // Releasing a session whose engine is still running or still has the tap
+    // installed lets the IO unit's HAL property listener fire into the
+    // deallocated engine (AVAudioIOUnit::IOUnitPropertyListener crash), so
+    // tear the engine down deterministically before it is released. Both
+    // calls are no-ops when cancel()/finish() already ran.
+    deinit {
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+    }
+
     private func recordFailure(_ error: Error) {
         guard failure == nil else { return }
         failure = error
