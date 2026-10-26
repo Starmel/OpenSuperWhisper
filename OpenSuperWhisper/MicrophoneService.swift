@@ -407,6 +407,18 @@ class MicrophoneService: ObservableObject {
         selectedMicrophone = nil
         AppPreferences.shared.selectedMicrophoneData = nil
         updateCurrentMicrophone()
+
+        NotificationCenter.default.post(
+            name: .microphoneDidChange,
+            object: nil,
+            userInfo: currentMicrophone.map { ["device": $0] }
+        )
+    }
+
+    /// Menu title for the "no explicit selection" entry, naming the device it resolves to.
+    static func automaticTitle(resolved: AudioDevice?) -> String {
+        guard let resolved else { return "Automatic" }
+        return "Automatic (\(resolved.displayName))"
     }
     
     #if os(macOS)

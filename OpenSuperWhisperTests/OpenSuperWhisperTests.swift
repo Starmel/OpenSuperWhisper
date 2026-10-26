@@ -695,6 +695,11 @@ final class MicrophoneServiceDefaultResolutionTests: XCTestCase {
         ))
     }
 
+    func testAutomaticTitleNamesResolvedDevice() {
+        XCTAssertEqual(MicrophoneService.automaticTitle(resolved: nil), "Automatic")
+        XCTAssertEqual(MicrophoneService.automaticTitle(resolved: interface), "Automatic (Scarlett 2i2)")
+    }
+
     func testHasSameDetailsDetectsRename() {
         let renamed = MicrophoneService.AudioDevice(
             id: interface.id,

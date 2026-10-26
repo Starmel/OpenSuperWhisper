@@ -1212,6 +1212,10 @@ struct MicrophonePickerIconView: View {
         microphoneService.availableMicrophones.filter { !$0.isBuiltIn }
     }
     
+    private var isAutomatic: Bool {
+        microphoneService.selectedMicrophone == nil
+    }
+    
     var body: some View {
         Button(action: {
             showMenu.toggle()
@@ -1236,6 +1240,28 @@ struct MicrophonePickerIconView: View {
                         .foregroundColor(.secondary)
                         .padding()
                 } else {
+                    Button(action: {
+                        microphoneService.resetToDefault()
+                        showMenu = false
+                    }) {
+                        HStack {
+                            Text(MicrophoneService.automaticTitle(
+                                resolved: isAutomatic ? microphoneService.currentMicrophone : nil
+                            ))
+                            Spacer()
+                            if isAutomatic {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Divider()
+                        .padding(.vertical, 4)
+                    
                     ForEach(builtInMicrophones) { microphone in
                         Button(action: {
                             microphoneService.selectMicrophone(microphone)
@@ -1244,7 +1270,8 @@ struct MicrophonePickerIconView: View {
                             HStack {
                                 Text(microphone.displayName)
                                 Spacer()
-                                if let current = microphoneService.currentMicrophone,
+                                if !isAutomatic,
+                                   let current = microphoneService.currentMicrophone,
                                    current.id == microphone.id {
                                     Image(systemName: "checkmark")
                                 }
@@ -1269,7 +1296,8 @@ struct MicrophonePickerIconView: View {
                             HStack {
                                 Text(microphone.displayName)
                                 Spacer()
-                                if let current = microphoneService.currentMicrophone,
+                                if !isAutomatic,
+                                   let current = microphoneService.currentMicrophone,
                                    current.id == microphone.id {
                                     Image(systemName: "checkmark")
                                 }
