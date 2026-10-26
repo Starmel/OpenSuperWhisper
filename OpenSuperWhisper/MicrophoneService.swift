@@ -12,6 +12,7 @@ class MicrophoneService: ObservableObject {
     
     private var deviceChangeObserver: Any?
     private var timer: Timer?
+    private var deviceListListener: AudioObjectPropertyListenerBlock?
     
     struct AudioDevice: Identifiable, Equatable, Codable {
         let id: String
@@ -32,6 +33,7 @@ class MicrophoneService: ObservableObject {
         loadSavedMicrophone()
         refreshAvailableMicrophones()
         setupDeviceMonitoring()
+        setupDeviceListMonitoring()
         updateCurrentMicrophone()
     }
     
@@ -40,6 +42,7 @@ class MicrophoneService: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         timer?.invalidate()
+        removeDeviceListMonitoring()
     }
     
     private func setupDeviceMonitoring() {
@@ -61,6 +64,53 @@ class MicrophoneService: ObservableObject {
             self?.updateCurrentMicrophone()
         }
     }
+
+    #if os(macOS)
+    private func setupDeviceListMonitoring() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.refreshAvailableMicrophones()
+            self?.updateCurrentMicrophone()
+        }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+
+        if status == noErr {
+            deviceListListener = listener
+        }
+    }
+
+    private func removeDeviceListMonitoring() {
+        guard let listener = deviceListListener else { return }
+        deviceListListener = nil
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+    }
+    #else
+    private func setupDeviceListMonitoring() {}
+    private func removeDeviceListMonitoring() {}
+    #endif
     
     func refreshAvailableMicrophones() {
         let deviceTypes: [AVCaptureDevice.DeviceType]
@@ -76,7 +126,7 @@ class MicrophoneService: ObservableObject {
             position: .unspecified
         )
         
-        availableMicrophones = discoverySession.devices
+        let devices = discoverySession.devices
             .filter { device in
                 !device.uniqueID.contains("CADefaultDeviceAggregate")
             }
@@ -90,8 +140,11 @@ class MicrophoneService: ObservableObject {
                 )
             }
         
+        if devices != availableMicrophones {
+            availableMicrophones = devices
+        }
+        
         if availableMicrophones.isEmpty {
-            selectedMicrophone = nil
             currentMicrophone = nil
         }
     }
@@ -157,6 +210,15 @@ class MicrophoneService: ObservableObject {
         if let builtIn = availableMicrophones.first(where: { $0.isBuiltIn }) {
             return builtIn
         }
+        #if os(macOS)
+        if let defaultDeviceID = getCurrentSystemDefaultInputDevice() {
+            if let matched = availableMicrophones.first(where: { device in
+                getCoreAudioDeviceID(for: device) == defaultDeviceID
+            }) {
+                return matched
+            }
+        }
+        #endif
         return availableMicrophones.first
     }
     
