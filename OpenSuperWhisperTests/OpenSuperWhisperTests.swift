@@ -641,6 +641,78 @@ final class MicrophoneServiceBluetoothTests: XCTestCase {
     }
 }
 
+final class MicrophoneServiceDefaultResolutionTests: XCTestCase {
+
+    private let builtIn = MicrophoneService.AudioDevice(
+        id: "BuiltInMicrophoneDevice",
+        name: "MacBook Pro Microphone",
+        manufacturer: "Apple Inc.",
+        isBuiltIn: true
+    )
+    private let interface = MicrophoneService.AudioDevice(
+        id: "AppleUSBAudioEngine:Focusrite:Scarlett 2i2:1",
+        name: "Scarlett 2i2",
+        manufacturer: "Focusrite",
+        isBuiltIn: false
+    )
+    private let capture = MicrophoneService.AudioDevice(
+        id: "AppleUSBAudioEngine:Elgato:Cam Link 4K:2",
+        name: "Cam Link 4K",
+        manufacturer: "Elgato",
+        isBuiltIn: false
+    )
+
+    func testBuiltInWinsOverSystemDefault() {
+        let resolved = MicrophoneService.resolveDefaultMicrophone(
+            from: [interface, builtIn],
+            systemDefaultUID: { self.interface.id }
+        )
+        XCTAssertEqual(resolved?.id, builtIn.id)
+    }
+
+    func testSystemDefaultUsedWithoutBuiltIn() {
+        let resolved = MicrophoneService.resolveDefaultMicrophone(
+            from: [capture, interface],
+            systemDefaultUID: { self.interface.id }
+        )
+        XCTAssertEqual(resolved?.id, interface.id)
+    }
+
+    func testFallsBackToFirstWhenSystemDefaultUnavailable() {
+        for uid in [nil, "SomeOutputOnlyDevice"] as [String?] {
+            let resolved = MicrophoneService.resolveDefaultMicrophone(
+                from: [capture, interface],
+                systemDefaultUID: { uid }
+            )
+            XCTAssertEqual(resolved?.id, capture.id)
+        }
+    }
+
+    func testEmptyInventoryResolvesToNil() {
+        XCTAssertNil(MicrophoneService.resolveDefaultMicrophone(
+            from: [],
+            systemDefaultUID: { self.interface.id }
+        ))
+    }
+
+    func testAutomaticTitleNamesResolvedDevice() {
+        XCTAssertEqual(MicrophoneService.automaticTitle(resolved: nil), "Automatic")
+        XCTAssertEqual(MicrophoneService.automaticTitle(resolved: interface), "Automatic (Scarlett 2i2)")
+    }
+
+    func testHasSameDetailsDetectsRename() {
+        let renamed = MicrophoneService.AudioDevice(
+            id: interface.id,
+            name: "Studio Interface",
+            manufacturer: interface.manufacturer,
+            isBuiltIn: interface.isBuiltIn
+        )
+        XCTAssertEqual(renamed, interface, "== stays identity-based")
+        XCTAssertFalse(renamed.hasSameDetails(as: interface))
+        XCTAssertTrue(interface.hasSameDetails(as: interface))
+    }
+}
+
 final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
     
     func testRequiresConnection_iPhone() {

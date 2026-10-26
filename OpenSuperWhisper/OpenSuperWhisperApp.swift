@@ -217,7 +217,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     }
     
     private func observeMicrophoneChanges() {
+        // @Published emits before the new value is stored, and updateStatusBarMenu
+        // reads the service directly, so hop to the next main-queue turn first.
         microphoneObserver = microphoneService.$availableMicrophones
+            .combineLatest(microphoneService.$currentMicrophone, microphoneService.$selectedMicrophone)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.updateStatusBarMenu()
             }
@@ -279,12 +283,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         
         let microphones = microphoneService.availableMicrophones
         let currentMic = microphoneService.currentMicrophone
-        
+        let isAutomatic = microphoneService.selectedMicrophone == nil
+
         if microphones.isEmpty {
             let noDeviceItem = NSMenuItem(title: "No microphones available", action: nil, keyEquivalent: "")
             noDeviceItem.isEnabled = false
             submenu.addItem(noDeviceItem)
         } else {
+            let automaticItem = NSMenuItem(
+                title: MicrophoneService.automaticTitle(resolved: isAutomatic ? currentMic : nil),
+                action: #selector(selectAutomaticMicrophone),
+                keyEquivalent: ""
+            )
+            automaticItem.target = self
+            automaticItem.state = isAutomatic ? .on : .off
+            submenu.addItem(automaticItem)
+            submenu.addItem(NSMenuItem.separator())
+
             let builtInMicrophones = microphones.filter { $0.isBuiltIn }
             let externalMicrophones = microphones.filter { !$0.isBuiltIn }
             
@@ -297,7 +312,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
                 item.target = self
                 item.representedObject = microphone
                 
-                if let current = currentMic, current.id == microphone.id {
+                if !isAutomatic, let current = currentMic, current.id == microphone.id {
                     item.state = .on
                 }
                 
@@ -317,7 +332,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
                 item.target = self
                 item.representedObject = microphone
                 
-                if let current = currentMic, current.id == microphone.id {
+                if !isAutomatic, let current = currentMic, current.id == microphone.id {
                     item.state = .on
                 }
                 
@@ -365,6 +380,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     @objc private func selectMicrophone(_ sender: NSMenuItem) {
         guard let device = sender.representedObject as? MicrophoneService.AudioDevice else { return }
         microphoneService.selectMicrophone(device)
+        updateStatusBarMenu()
+    }
+    
+    @objc private func selectAutomaticMicrophone() {
+        microphoneService.resetToDefault()
         updateStatusBarMenu()
     }
     

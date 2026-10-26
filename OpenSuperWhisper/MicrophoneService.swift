@@ -12,17 +12,31 @@ class MicrophoneService: ObservableObject {
     
     private var deviceChangeObserver: Any?
     private var timer: Timer?
-    
+    private var systemListeners: [(AudioObjectPropertySelector, AudioObjectPropertyListenerBlock)] = []
+    private var pendingDeviceRefresh: DispatchWorkItem?
+
+    // AVFoundation's device list can lag behind the CoreAudio HAL, so a refresh
+    // triggered by a HAL event waits briefly and coalesces bursts of events.
+    private static let deviceRefreshDelay: TimeInterval = 0.3
+
     struct AudioDevice: Identifiable, Equatable, Codable {
         let id: String
         let name: String
         let manufacturer: String?
         let isBuiltIn: Bool
-        
+
         static func == (lhs: AudioDevice, rhs: AudioDevice) -> Bool {
             return lhs.id == rhs.id
         }
-        
+
+        /// `==` compares identity only; this also catches renames and reclassification.
+        func hasSameDetails(as other: AudioDevice) -> Bool {
+            return id == other.id &&
+                name == other.name &&
+                manufacturer == other.manufacturer &&
+                isBuiltIn == other.isBuiltIn
+        }
+
         var displayName: String {
             return name
         }
@@ -32,6 +46,7 @@ class MicrophoneService: ObservableObject {
         loadSavedMicrophone()
         refreshAvailableMicrophones()
         setupDeviceMonitoring()
+        setupDeviceListMonitoring()
         updateCurrentMicrophone()
     }
     
@@ -40,6 +55,7 @@ class MicrophoneService: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         timer?.invalidate()
+        removeDeviceListMonitoring()
     }
     
     private func setupDeviceMonitoring() {
@@ -61,6 +77,74 @@ class MicrophoneService: ObservableObject {
             self?.updateCurrentMicrophone()
         }
     }
+
+    #if os(macOS)
+    private func setupDeviceListMonitoring() {
+        addSystemListener(kAudioHardwarePropertyDevices) { [weak self] in
+            self?.scheduleDeviceRefresh()
+        }
+        // The fallback follows the macOS default input, so re-resolve when the
+        // user changes it in System Settings.
+        addSystemListener(kAudioHardwarePropertyDefaultInputDevice) { [weak self] in
+            self?.updateCurrentMicrophone()
+        }
+    }
+
+    private func addSystemListener(_ selector: AudioObjectPropertySelector, handler: @escaping () -> Void) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in handler() }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            listener
+        )
+
+        if status == noErr {
+            systemListeners.append((selector, listener))
+        }
+    }
+
+    private func removeDeviceListMonitoring() {
+        pendingDeviceRefresh?.cancel()
+        pendingDeviceRefresh = nil
+
+        for (selector, listener) in systemListeners {
+            var address = AudioObjectPropertyAddress(
+                mSelector: selector,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                DispatchQueue.main,
+                listener
+            )
+        }
+        systemListeners.removeAll()
+    }
+
+    private func scheduleDeviceRefresh() {
+        pendingDeviceRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.refreshAvailableMicrophones()
+            self?.updateCurrentMicrophone()
+        }
+        pendingDeviceRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deviceRefreshDelay, execute: work)
+    }
+    #else
+    private func setupDeviceListMonitoring() {}
+    private func removeDeviceListMonitoring() {}
+    #endif
     
     func refreshAvailableMicrophones() {
         let deviceTypes: [AVCaptureDevice.DeviceType]
@@ -76,7 +160,7 @@ class MicrophoneService: ObservableObject {
             position: .unspecified
         )
         
-        availableMicrophones = discoverySession.devices
+        let devices = discoverySession.devices
             .filter { device in
                 !device.uniqueID.contains("CADefaultDeviceAggregate")
             }
@@ -90,14 +174,26 @@ class MicrophoneService: ObservableObject {
                 )
             }
         
-        if availableMicrophones.isEmpty {
-            selectedMicrophone = nil
-            currentMicrophone = nil
+        if !devices.elementsEqual(availableMicrophones, by: { $0.hasSameDetails(as: $1) }) {
+            availableMicrophones = devices
         }
     }
-    
+
     private func isBuiltInDevice(_ device: AVCaptureDevice) -> Bool {
         #if os(macOS)
+        // Transport type is authoritative when it is known; the heuristics below
+        // treat Apple-branded Bluetooth headsets (AirPods) as built-in.
+        switch device.transportType {
+        case Int32(kAudioDeviceTransportTypeBuiltIn):
+            return true
+        case Int32(kAudioDeviceTransportTypeBluetooth),
+             Int32(kAudioDeviceTransportTypeBluetoothLE),
+             Int32(kAudioDeviceTransportTypeUSB):
+            return false
+        default:
+            break
+        }
+
         if #available(macOS 14.0, *) {
             if device.deviceType == .microphone {
                 let uniqueID = device.uniqueID.lowercased()
@@ -137,27 +233,54 @@ class MicrophoneService: ObservableObject {
     }
     
     private func updateCurrentMicrophone() {
-        guard let selected = selectedMicrophone else {
-            currentMicrophone = getDefaultMicrophone()
-            return
-        }
-        
-        if isDeviceAvailable(selected) {
-            currentMicrophone = selected
+        let resolved: AudioDevice?
+        if let selected = selectedMicrophone, isDeviceAvailable(selected) {
+            resolved = selected
         } else {
-            currentMicrophone = getDefaultMicrophone()
+            resolved = getDefaultMicrophone()
+        }
+
+        // Republishing an unchanged device rebuilds the status menu for nothing.
+        switch (currentMicrophone, resolved) {
+        case (nil, nil):
+            return
+        case let (current?, new?) where current.hasSameDetails(as: new):
+            return
+        default:
+            currentMicrophone = resolved
         }
     }
-    
+
     func isDeviceAvailable(_ device: AudioDevice) -> Bool {
         return availableMicrophones.contains(where: { $0.id == device.id })
     }
-    
+
     func getDefaultMicrophone() -> AudioDevice? {
-        if let builtIn = availableMicrophones.first(where: { $0.isBuiltIn }) {
+        Self.resolveDefaultMicrophone(
+            from: availableMicrophones,
+            systemDefaultUID: {
+                #if os(macOS)
+                return self.getCurrentSystemDefaultInputDeviceUID()
+                #else
+                return nil
+                #endif
+            }
+        )
+    }
+
+    /// Built-in mic first, then the macOS default input, then whatever is left.
+    static func resolveDefaultMicrophone(
+        from devices: [AudioDevice],
+        systemDefaultUID: () -> String?
+    ) -> AudioDevice? {
+        if let builtIn = devices.first(where: { $0.isBuiltIn }) {
             return builtIn
         }
-        return availableMicrophones.first
+        if let uid = systemDefaultUID(),
+           let matched = devices.first(where: { $0.id == uid }) {
+            return matched
+        }
+        return devices.first
     }
     
     func selectMicrophone(_ device: AudioDevice) {
@@ -284,6 +407,18 @@ class MicrophoneService: ObservableObject {
         selectedMicrophone = nil
         AppPreferences.shared.selectedMicrophoneData = nil
         updateCurrentMicrophone()
+
+        NotificationCenter.default.post(
+            name: .microphoneDidChange,
+            object: nil,
+            userInfo: currentMicrophone.map { ["device": $0] }
+        )
+    }
+
+    /// Menu title for the "no explicit selection" entry, naming the device it resolves to.
+    static func automaticTitle(resolved: AudioDevice?) -> String {
+        guard let resolved else { return "Automatic" }
+        return "Automatic (\(resolved.displayName))"
     }
     
     #if os(macOS)
@@ -315,8 +450,9 @@ class MicrophoneService: ObservableObject {
             &propertySize,
             &translation
         )
-        
-        return status == noErr ? audioDeviceID : nil
+
+        // An unknown UID translates successfully to kAudioObjectUnknown.
+        return status == noErr && audioDeviceID != kAudioObjectUnknown ? audioDeviceID : nil
     }
     
     func setAsSystemDefaultInput(_ device: AudioDevice) -> Bool {
@@ -364,10 +500,35 @@ class MicrophoneService: ObservableObject {
             &propertySize,
             &deviceID
         )
-        
-        return status == noErr ? deviceID : nil
+
+        return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
     }
-    
+
+    func getCurrentSystemDefaultInputDeviceUID() -> String? {
+        guard let deviceID = getCurrentSystemDefaultInputDevice() else { return nil }
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var uid: Unmanaged<CFString>?
+        var propertySize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+
+        let status = AudioObjectGetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &uid
+        )
+
+        guard status == noErr, let uid else { return nil }
+        return uid.takeRetainedValue() as String
+    }
+
     func getInputVolume(for deviceID: AudioDeviceID) -> Float? {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
