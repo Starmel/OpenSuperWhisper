@@ -217,7 +217,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     }
     
     private func observeMicrophoneChanges() {
+        // @Published emits before the new value is stored, and updateStatusBarMenu
+        // reads the service directly, so hop to the next main-queue turn first.
         microphoneObserver = microphoneService.$availableMicrophones
+            .combineLatest(microphoneService.$currentMicrophone)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.updateStatusBarMenu()
             }
