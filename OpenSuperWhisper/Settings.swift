@@ -1009,12 +1009,13 @@ struct SettingsView: View {
 
                 // Initial Prompt
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Initial Prompt")
+                    Text("Whisper Initial Prompt")
                         .font(.headline)
                         .foregroundColor(.primary)
                     
                     VStack(alignment: .leading, spacing: 8) {
                         TextEditor(text: $viewModel.initialPrompt)
+                            .disabled(viewModel.selectedEngine != "whisper")
                             .frame(height: 60)
                             .padding(6)
                             .background(Color(.textBackgroundColor))
@@ -1024,7 +1025,9 @@ struct SettingsView: View {
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
                         
-                        Text("Optional text to guide the model's transcription")
+                        Text(viewModel.selectedEngine == "whisper"
+                             ? "Optional context to guide Whisper transcription. This is not a text cleanup instruction."
+                             : "Parakeet does not use this prompt. Switch to Whisper to use it.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
