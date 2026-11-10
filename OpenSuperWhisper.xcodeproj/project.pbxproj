@@ -1034,7 +1034,7 @@
 			repositoryURL = "https://github.com/groue/GRDB.swift.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 7.11.1;
+				minimumVersion = 7.12.0;
 			};
 		};
 		CE84E17B2D56550B00C54EA6 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
