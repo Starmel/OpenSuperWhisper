@@ -325,6 +325,8 @@ struct ContentView: View {
         let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         if modifierKey != .none {
             return modifierKey.shortSymbol
+        } else if AppPreferences.shared.singleKeyHotkey >= 0 {
+            return SingleKeyMonitor.displayName(for: AppPreferences.shared.singleKeyHotkey)
         } else if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecord) {
             return shortcut.description
         }

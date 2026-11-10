@@ -161,6 +161,13 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
+    @Published var singleKeyHotkey: Int {
+        didSet {
+            AppPreferences.shared.singleKeyHotkey = singleKeyHotkey
+            NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+        }
+    }
+
     @Published var holdToRecord: Bool {
         didSet {
             AppPreferences.shared.holdToRecord = holdToRecord
@@ -224,6 +231,7 @@ class SettingsViewModel: ObservableObject {
         self.useAsianAutocorrect = prefs.useAsianAutocorrect
         self.modifierOnlyHotkey = ModifierKey(rawValue: prefs.modifierOnlyHotkey) ?? .none
         self.mouseButtonHotkey = MouseButton(rawValue: prefs.mouseButtonHotkey) ?? .none
+        self.singleKeyHotkey = prefs.singleKeyHotkey
         self.holdToRecord = prefs.holdToRecord
         self.escCancelWithoutConfirmation = prefs.escCancelWithoutConfirmation
         self.startHiddenInMenuBar = prefs.startHiddenInMenuBar
@@ -680,6 +688,7 @@ struct SettingsView: View {
     @StateObject private var permissionsManager = PermissionsManager()
     @Environment(\.dismiss) var dismiss
     @State private var isRecordingNewShortcut = false
+    @State private var isPickingSingleKey = false
     @State private var selectedTab = 0
     @State private var previousModelURL: URL?
     
@@ -1186,6 +1195,7 @@ struct SettingsView: View {
     private enum TriggerMode: Hashable {
         case keyCombo
         case modifier
+        case singleKey
         case mouse
     }
 
@@ -1210,6 +1220,7 @@ struct SettingsView: View {
     private var triggerMode: TriggerMode {
         if viewModel.mouseButtonHotkey != .none { return .mouse }
         if viewModel.modifierOnlyHotkey != .none { return .modifier }
+        if viewModel.singleKeyHotkey >= 0 || isPickingSingleKey { return .singleKey }
         return .keyCombo
     }
     
@@ -1226,10 +1237,17 @@ struct SettingsView: View {
                         Picker("", selection: Binding(
                             get: { triggerMode },
                             set: { newMode in
+                                isPickingSingleKey = false
+                                if newMode != .singleKey { viewModel.singleKeyHotkey = -1 }
                                 switch newMode {
                                 case .keyCombo:
                                     viewModel.mouseButtonHotkey = .none
                                     viewModel.modifierOnlyHotkey = .none
+                                case .singleKey:
+                                    viewModel.mouseButtonHotkey = .none
+                                    viewModel.modifierOnlyHotkey = .none
+                                    // No key chosen yet: wait for the user to press one.
+                                    isPickingSingleKey = viewModel.singleKeyHotkey < 0
                                 case .modifier:
                                     viewModel.mouseButtonHotkey = .none
                                     if viewModel.modifierOnlyHotkey == .none {
@@ -1246,6 +1264,7 @@ struct SettingsView: View {
                         )) {
                             Text("Key Combination").tag(TriggerMode.keyCombo)
                             Text("Single Modifier Key").tag(TriggerMode.modifier)
+                            Text("Single Key").tag(TriggerMode.singleKey)
                             Text("Mouse Button").tag(TriggerMode.mouse)
                         }
                         .pickerStyle(.segmented)
@@ -1279,6 +1298,31 @@ struct SettingsView: View {
                                     isGranted: permissionsManager.isInputMonitoringPermissionGranted
                                 ) {
                                     permissionsManager.requestInputMonitoringPermissionOrOpenSystemPreferences()
+                                }
+                            }
+                        case .singleKey:
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Key")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    SingleKeyRecorder(keyCode: $viewModel.singleKeyHotkey, isPicking: $isPickingSingleKey)
+                                        .frame(width: 150)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.textBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
+
+                                Text("Any key without modifiers, for example ' or F13. The key stops typing its normal character, but still works with ⌘, ⌥, ⌃ or ⇧ held.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                permissionWarning(
+                                    message: "⚠️ This mode requires Accessibility permission so the key can be detected globally and used only as a recording trigger. Only the selected key is intercepted — no other keystrokes are captured.",
+                                    isGranted: permissionsManager.isAccessibilityPermissionGranted
+                                ) {
+                                    permissionsManager.requestAccessibilityPermissionOrOpenSystemPreferences()
                                 }
                             }
                         case .mouse:
@@ -1858,3 +1902,40 @@ struct ModelDownloadItemView: View {
     }
 }
 
+
+/// Records one plain key (no modifiers) as the recording trigger. Esc cancels.
+struct SingleKeyRecorder: View {
+    @Binding var keyCode: Int
+    @Binding var isPicking: Bool
+    @State private var monitor: Any?
+
+    var body: some View {
+        Button {
+            isPicking = true
+        } label: {
+            Text(isPicking ? "Press a key…" : SingleKeyMonitor.displayName(for: keyCode))
+                .frame(minWidth: 110)
+        }
+        .onChange(of: isPicking) { _, picking in picking ? startCapture() : stopCapture() }
+        .onAppear { if isPicking { startCapture() } }
+        .onDisappear { isPicking = false; stopCapture() }
+    }
+
+    private func startCapture() {
+        guard monitor == nil else { return }
+        // Let the currently bound key be pressed again without starting a recording.
+        SingleKeyMonitor.shared.stop()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode != UInt16(kVK_Escape) { keyCode = Int(event.keyCode) }
+            isPicking = false
+            return nil
+        }
+    }
+
+    private func stopCapture() {
+        guard let m = monitor else { return }
+        NSEvent.removeMonitor(m)
+        monitor = nil
+        NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
+    }
+}
