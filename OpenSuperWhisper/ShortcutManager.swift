@@ -95,12 +95,14 @@ class ShortcutManager {
     private func setupRecordingTrigger() {
         let modifierKey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         let mouseButton = MouseButton(rawValue: AppPreferences.shared.mouseButtonHotkey) ?? .none
+        let singleKey = AppPreferences.shared.singleKeyHotkey
 
-        // The three trigger modes are mutually exclusive. Tear all of them down
-        // first, then enable exactly one. A configured mouse button takes priority
-        // over a modifier key, which takes priority over the regular shortcut.
+        // The trigger modes are mutually exclusive. Tear all of them down first,
+        // then enable exactly one, in priority order: mouse button, modifier key,
+        // single key, regular shortcut.
         ModifierKeyMonitor.shared.stop()
         MouseButtonMonitor.shared.stop()
+        SingleKeyMonitor.shared.stop()
 
         if mouseButton != .none {
             useMouseButtonHotkey = true
@@ -132,6 +134,13 @@ class ShortcutManager {
 
             ModifierKeyMonitor.shared.start(modifierKey: modifierKey)
             print("ShortcutManager: Using modifier-only hotkey: \(modifierKey.displayName)")
+        } else if singleKey >= 0 {
+            useMouseButtonHotkey = false
+            useModifierOnlyHotkey = false
+            KeyboardShortcuts.disable(.toggleRecord)
+            SingleKeyMonitor.shared.onKeyDown = { [weak self] in self?.handleKeyDown() }
+            SingleKeyMonitor.shared.onKeyUp = { [weak self] in self?.handleKeyUp() }
+            SingleKeyMonitor.shared.start(keyCode: singleKey)
         } else {
             useMouseButtonHotkey = false
             useModifierOnlyHotkey = false

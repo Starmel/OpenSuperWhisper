@@ -113,6 +113,10 @@ final class AppPreferences {
     @UserDefault(key: "mouseButtonHotkey", defaultValue: "none")
     var mouseButtonHotkey: String
 
+    /// Carbon key code of a plain key used as the recording trigger, or -1 for none.
+    @UserDefault(key: "singleKeyHotkey", defaultValue: -1)
+    var singleKeyHotkey: Int
+
 
     @UserDefault(key: "holdToRecord", defaultValue: true)
     var holdToRecord: Bool
