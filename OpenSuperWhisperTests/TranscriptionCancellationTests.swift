@@ -131,7 +131,7 @@ final class TranscriptionCancellationTests: XCTestCase {
         let viewModel = IndicatorViewModel(
             transcriptionService: service,
             stopRecording: { RecordedAudio(url: tempURL, samples: []) },
-            cancelAudioRecording: {}
+            cancelAudioRecording: {}, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
         )
         viewModel.state = .recording
 
@@ -173,7 +173,8 @@ final class TranscriptionCancellationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         let vm = IndicatorViewModel(transcriptionService: service,
                                     stopRecording: { RecordedAudio(url: url, samples: []) },
-                                    cancelAudioRecording: {})
+                                    cancelAudioRecording: {}, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
         vm.state = .recording
         let manager = IndicatorWindowManager.shared
         let original = manager.viewModel
@@ -232,10 +233,16 @@ final class TranscriptionCancellationTests: XCTestCase {
         let service = TranscriptionService(engine: engine)
         let store = try RecordingStore(databaseQueue: DatabaseQueue())
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
-        try Data([1, 2]).write(to: url)
+        // A real capture, not a stub file: the app reports a failure over audio
+        // that was recorded, and the audio it keeps is the file the recorder
+        // wrote. A few bytes with no samples stands for the case that is now
+        // deliberately silenced, so it cannot stand for this one.
+        let recorded = try TestFixtures.recordedAudio(at: url)
+        let recordedBytes = try Data(contentsOf: url)
         defer { try? FileManager.default.removeItem(at: url); AppErrorCenter.shared.issue = nil }
         let vm = IndicatorViewModel(transcriptionService: service, recordingStore: store,
-                                    stopRecording: { RecordedAudio(url: url, samples: []) }, cancelAudioRecording: {})
+                                    stopRecording: { recorded }, cancelAudioRecording: {}, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
         vm.state = .recording
         let started = expectation(description: "decode started")
         engine.notifyOnNextStart { started.fulfill() }
@@ -251,7 +258,7 @@ final class TranscriptionCancellationTests: XCTestCase {
         let row = try XCTUnwrap(rows.first)
         defer { try? FileManager.default.removeItem(at: row.url); vm.cleanup() }
         XCTAssertEqual(row.status, .failed)
-        XCTAssertEqual(try Data(contentsOf: row.url), Data([1, 2]))
+        XCTAssertEqual(try Data(contentsOf: row.url), recordedBytes)
         XCTAssertTrue(service.transcribedText.isEmpty)
     }
 
@@ -278,7 +285,7 @@ final class TranscriptionCancellationTests: XCTestCase {
             engine.complete(url: audioURL, with: .success("expected result"))
         )
         let result = try await transcription.value
-        XCTAssertEqual(result, "expected result")
+        XCTAssertEqual(result.text, "expected result")
     }
 
     func testCancelledNativeRunBlocksNextDecodeUntilItReturns() async throws {
@@ -343,13 +350,15 @@ final class TranscriptionCancellationTests: XCTestCase {
             engine.complete(url: secondURL, with: .success("second result"))
         )
         let secondResult = try await second.value
-        XCTAssertEqual(secondResult, "second result")
+        XCTAssertEqual(secondResult.text, "second result")
     }
 
     func testLateViewModelCompletionCannotHideCurrentSession() {
         let service = TranscriptionService(engine: ControlledTranscriptionEngine())
-        let oldViewModel = IndicatorViewModel(transcriptionService: service)
-        let currentViewModel = IndicatorViewModel(transcriptionService: service)
+        let oldViewModel = IndicatorViewModel(transcriptionService: service, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
+        let currentViewModel = IndicatorViewModel(transcriptionService: service, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
         let manager = IndicatorWindowManager.shared
         let originalViewModel = manager.viewModel
         defer { manager.viewModel = originalViewModel }

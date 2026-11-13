@@ -6,4 +6,6 @@
 //
 
 #include "whisper.h"
+#include "llama.h"
+#include "OpenSuperWhisper/Engines/Qwen3ASRBridge.h"
 #include "libautocorrect/autocorrect_swift.h"

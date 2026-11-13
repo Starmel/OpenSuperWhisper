@@ -28,14 +28,44 @@ class ClipboardUtil {
 
     /// Pastes text and restores original clipboard (legacy behavior)
     static func insertText(_ text: String) {
-        insertText(text, postEvent: { $0.post(tap: .cghidEventTap) })
+        insertText(text, postEvent: { $0.post(tap: .cghidEventTap) }, pasteboard: .general)
     }
 
-    static func insertText(_ text: String, postEvent: (CGEvent) -> Void) {
-        let pasteboard = NSPasteboard.general
+    /// Pastes `text` on `pasteboard` and restores what was there before.
+    ///
+    /// `pasteboard` is the general one in the app and a pasteboard of its own in
+    /// the tests, so a case can prove the restore without racing every other
+    /// process on the machine for the system clipboard.
+    ///
+    /// The restore is an in-process block, so the delivery can die before it
+    /// runs and leave the transcription on the clipboard with the user's contents
+    /// gone. `ClipboardRecovery` closes that: the displaced contents are written
+    /// to disk **before** the pasteboard is touched, and the next launch puts them
+    /// back if the record is still there. The record is cleared as soon as the
+    /// delivery restores the clipboard itself, which is the ordinary case.
+    static func insertText(_ text: String,
+                           postEvent: (CGEvent) -> Void,
+                           pasteboard: NSPasteboard = .general) {
+        // A test host must never write the machine's own clipboard. Every case
+        // that exercises this path passes a pasteboard of its own; the general
+        // board is left alone whenever this process is a test host, which is the
+        // same rule the event sink applies. The check is written with the test
+        // bundle's own marker rather than the app's flag because this file is
+        // compiled on its own into the crash-test child, which must not drag the
+        // rest of the app in.
+        guard !(NSClassFromString("XCTestCase") != nil && pasteboard.name == .general) else { return }
 
-        // Save current pasteboard contents
+        // Save current pasteboard contents — to disk first, because everything
+        // below this line can die with the process.
         let savedContents = saveCurrentPasteboardContents(from: pasteboard)
+        let record = ClipboardRecovery.record(for: pasteboard, writtenText: text)
+        if let record {
+            ClipboardRecovery.write(record)
+        } else {
+            // Nothing to restore, so a crash would have nothing to bring back;
+            // make sure no stale record from an earlier delivery is left behind.
+            ClipboardRecovery.clear()
+        }
 
         // Set new text to pasteboard
         pasteboard.declareTypes([.string], owner: nil)
@@ -45,15 +75,39 @@ class ClipboardUtil {
         // Simulate Cmd+V using layout-aware keycode resolution
         sendCmdV(postEvent: postEvent)
 
-        // Restore original contents only after the target app had a chance to
+        // Put the clipboard back only after the target app had a chance to
         // process the paste, and only if the pasteboard still holds our text:
         // a different changeCount means the user (or another app) took over
-        // the clipboard and restoring would clobber their data.
-        if let contents = savedContents {
-            DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
+        // the clipboard and putting anything back would clobber their data.
+        DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
+            if let contents = savedContents {
                 restoreIfUnchanged(contents, expectedChangeCount: changeCountAfterCopy, pasteboard: pasteboard)
+            } else {
+                // There was nothing on the clipboard to save, so there is nothing
+                // to put back — but the transcription is not the user's to keep
+                // either. Without this, a paste onto an empty clipboard left the
+                // dictation there with nothing scheduled to take it off, which is
+                // the wrong outcome for the app's own text: it should end up where
+                // the clipboard started.
+                clearIfUnchanged(pasteboard, expectedChangeCount: changeCountAfterCopy)
             }
+            // The delivery has done its own restore (or decided not to), so the
+            // crash-recovery record has nothing left to do and must not survive to
+            // put stale contents back on a later launch.
+            ClipboardRecovery.clear()
         }
+    }
+
+    /// Empties `pasteboard` when it still holds what this app put there.
+    ///
+    /// - Returns: Whether it cleared, which is also whether the pasteboard was
+    ///   untouched by anyone else since the copy.
+    @discardableResult
+    static func clearIfUnchanged(_ pasteboard: NSPasteboard = .general,
+                                 expectedChangeCount: Int) -> Bool {
+        guard pasteboard.changeCount == expectedChangeCount else { return false }
+        pasteboard.clearContents()
+        return true
     }
 
     @discardableResult
@@ -123,6 +177,94 @@ class ClipboardUtil {
         return qwertyCommandLayouts.contains { upperID.contains($0.uppercased()) }
     }
     
+    /// A key and the modifiers the active layout needs to produce a character.
+    struct ResolvedKey: Equatable {
+        let keyCode: CGKeyCode
+        let flags: CGEventFlags
+    }
+
+    /// The key the active layout produces `character` with, and the modifiers that
+    /// layer needs.
+    ///
+    /// The layers are tried in the order a keyboard would prefer them: none,
+    /// shift, option, then option+shift. `findKeycodeForCharacter` above walks the
+    /// base layer only, which is what a caller after a bare key needs; this is
+    /// what a *delivery* needs, because a target that rebuilds characters from key
+    /// codes instead of reading the event's Unicode field (a Citrix session, a
+    /// virtual machine, a remote desktop) gets a character only if the event
+    /// carries the key the layout uses for it **and** the modifiers held for that
+    /// layer. Measured on this machine's layout: `ą` is Option+A, `ó` Option+O,
+    /// `ź` Option+X, `Ś` Option+Shift+S — and every one of those diacritics used
+    /// to be sent as key code `0x7F` with no modifiers, which no target can turn
+    /// into a character.
+    ///
+    /// **What this cannot do.** Nothing here consults the *target's* keyboard
+    /// layout, and the sender cannot see it. Correct key code plus correct
+    /// modifiers is exactly what a physical keyboard sends and what a
+    /// HID-forwarding client forwards; if the target's layout is not the sender's,
+    /// the character it produces is not the one that was dictated. That gap is the
+    /// client's to close or the user's to work around, and it is stated in the
+    /// Readme with the other unclosed paths.
+    static func findKey(for character: Character) -> ResolvedKey? {
+        let layers: [CGEventFlags] = [[], .maskShift, .maskAlternate, [.maskAlternate, .maskShift]]
+        for flags in layers {
+            if let keyCode = keyCode(producing: character, layer: flags) {
+                return ResolvedKey(keyCode: keyCode, flags: flags)
+            }
+        }
+        return nil
+    }
+
+    /// The key code that produces exactly `character` on the current layout with
+    /// `layer` held, or `nil` when no key does.
+    ///
+    /// Carbon wants the modifier state as the Event Manager constant shifted right
+    /// by eight — the classic `UCKeyTranslate` convention — and the *down* action,
+    /// which is the one that applies modifiers (the display action this file's
+    /// other lookup uses reports the base layer's character whatever is held).
+    private static func keyCode(producing character: Character, layer: CGEventFlags) -> CGKeyCode? {
+        guard let inputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+              let layoutDataPtr = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+
+        let layoutData = unsafeBitCast(layoutDataPtr, to: CFData.self)
+        let keyboardLayout = unsafeBitCast(
+            CFDataGetBytePtr(layoutData),
+            to: UnsafePointer<UCKeyboardLayout>.self
+        )
+
+        var modifierState: UInt32 = 0
+        if layer.contains(.maskShift) { modifierState |= UInt32(shiftKey >> 8) }
+        if layer.contains(.maskAlternate) { modifierState |= UInt32(optionKey >> 8) }
+
+        let wanted = String(character)
+        // 0…127 rather than the 0…50 the base-layer walk uses: the layers above
+        // the base are not confined to the letter rows (Option+Shift+8, the
+        // character keys, the punctuation keys).
+        for keycode: UInt16 in 0...127 {
+            var deadKeyState: UInt32 = 0
+            var chars = [UniChar](repeating: 0, count: 8)
+            var length = 0
+            let status = UCKeyTranslate(
+                keyboardLayout,
+                keycode,
+                UInt16(kUCKeyActionDown),
+                modifierState,
+                UInt32(LMGetKbdType()),
+                UInt32(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
+            if status == noErr, length > 0,
+               String(utf16CodeUnits: chars, count: length) == wanted {
+                return CGKeyCode(keycode)
+            }
+        }
+        return nil
+    }
+
     static func findKeycodeForCharacter(_ char: Character) -> CGKeyCode? {
         guard let inputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
               let layoutDataPtr = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData)

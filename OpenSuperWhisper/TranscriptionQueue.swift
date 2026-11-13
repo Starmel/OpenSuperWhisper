@@ -178,7 +178,24 @@ class TranscriptionQueue: ObservableObject {
     }
 
     nonisolated static func shouldDiscardEmptyDictation(text: String, sourceURL: URL) -> Bool {
-        text.isEmpty && sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
+        text.isEmpty && isOurOwnRecording(sourceURL)
+    }
+
+    /// Whether the source is a recording of ours — the recorder's own temp
+    /// directory — rather than a file the user queued from disk, which is
+    /// theirs and is never moved, copied or deleted by a refusal.
+    nonisolated static func isOurOwnRecording(_ sourceURL: URL) -> Bool {
+        sourceURL.path.hasPrefix(AudioRecorder.temporaryRecordingsDirectory.path)
+    }
+
+    /// Whether the source *is* the audio the row keeps — a regeneration reads the
+    /// recording's own file — rather than a copy of it.
+    ///
+    /// Such a file is never deleted by any path here: removing it would remove
+    /// the recording its own row stands for. That is also why this case does not
+    /// go through `DictationFailurePolicy.settle`, whose discard would delete it.
+    nonisolated static func isTheRecordingsOwnAudio(_ sourceURL: URL, of recording: Recording) -> Bool {
+        sourceURL.standardizedFileURL == recording.url.standardizedFileURL
     }
 
     private func processQueue() async throws {
@@ -255,17 +272,82 @@ class TranscriptionQueue: ObservableObject {
                 }
 
                 let settings = Settings()
-                let text = try await transcriptionService.transcribeAudio(url: sourceURL, settings: settings, operationID: operationID)
+                // An outcome with no text — an engine that returned nothing, or a
+                // refusal that is silence rather than a failure — is invisible
+                // wherever the user looks: no alert, no history row, no copy
+                // left behind, nothing inserted.
+                var silentRefusal: Error?
+                var text = ""
+                do {
+                    text = try await transcriptionService.transcribeAudio(
+                        url: sourceURL,
+                        settings: settings,
+                        operationID: operationID
+                    ).text
+                } catch {
+                    // Everything that is not silence keeps today's failed row.
+                    guard DictationFailurePolicy.outcome(for: error) != .report else { throw error }
+                    silentRefusal = error
+                }
 
                 if isRecordingCancelled(recording.id) || Task.isCancelled {
                     return
                 }
 
-                if Self.shouldDiscardEmptyDictation(text: text, sourceURL: sourceURL) {
-                    await Task.detached(priority: .utility) {
-                        try? FileManager.default.removeItem(at: sourceURL)
-                    }.value
-                    try await recordingStore.deleteRecordingSync(recording, cancelTranscription: false)
+                if text.isEmpty {
+                    // An outcome with no text leaves nothing new behind: no
+                    // alert, no copy, nothing inserted. What happens to the audio
+                    // depends on whose it is.
+                    if Self.shouldDiscardEmptyDictation(text: text, sourceURL: sourceURL) {
+                        // Our own temp recording. The shared decision settles it:
+                        // deleted for silence, kept — moved into the recordings
+                        // directory with a row that records it — for a refusal
+                        // over audio that was really recorded. Either way the
+                        // pending row goes with it.
+                        if let silentRefusal {
+                            let outcome = DictationFailurePolicy.outcome(for: silentRefusal)
+                            await DictationFailurePolicy.settle(
+                                RecordedAudio(url: sourceURL, samples: []),
+                                error: silentRefusal,
+                                store: recordingStore
+                            )
+                            switch outcome {
+                            case .discard:
+                                print("Dictation refused for no speech; the temp audio was discarded")
+                            case .keepAudio, .keepAudioAndExplain:
+                                print("Dictation yielded no transcript; the recording was kept")
+                            case .report:
+                                // Unreachable: a failure that is not silence was
+                                // rethrown above.
+                                break
+                            }
+                        } else {
+                            await Task.detached(priority: .utility) {
+                                try? FileManager.default.removeItem(at: sourceURL)
+                            }.value
+                        }
+                        try await recordingStore.deleteRecordingSync(recording, cancelTranscription: false)
+                        return
+                    }
+                    // Anything else belongs to the user: a file he queued, or the
+                    // recording's own audio that a regeneration reads. Neither is
+                    // copied, moved or deleted, and — because he asked for this
+                    // recording — the row stays and says so, named by the file it
+                    // stands for (`sourceFileURL`, which History shows), with no
+                    // transcript of its own: silence would leave him unable to
+                    // tell whether it worked.
+                    try await recordingStore.updateRecordingProgressOnlySync(
+                        recording.id,
+                        transcription: "",
+                        progress: 0.0,
+                        status: .failed,
+                        isRegeneration: false
+                    )
+                    if Self.isTheRecordingsOwnAudio(sourceURL, of: recording) {
+                        print("Regenerated recording yielded no transcript; the recording and its audio were left as they are: \(sourceURL.path)")
+                    } else {
+                        print("Queued file produced no transcript; it was left exactly where it is: \(sourceURL.path)")
+                    }
                     return
                 }
 
@@ -297,9 +379,39 @@ class TranscriptionQueue: ObservableObject {
 
             } catch {
                 if !isRecordingCancelled(recording.id) && !Task.isCancelled {
+                    // The transcript column means "what the user dictated", so a
+                    // failure's own description never goes in it: the row stores
+                    // nothing and the reason goes to the log and the row's failed
+                    // status, exactly as a failed dictation does.
+                    print("Transcription failed: \(error.localizedDescription)")
+                    if Self.isOurOwnRecording(sourceURL) {
+                        // Our own temp recording is moved where a row's audio
+                        // lives before the row says it failed, so the failed row
+                        // never points at a file the temp cleanup will take.
+                        let destination = recording.url
+                        do {
+                            try FileManager.default.createDirectory(
+                                at: Recording.recordingsDirectory,
+                                withIntermediateDirectories: true
+                            )
+                            try FileManager.default.moveItem(at: sourceURL, to: destination)
+                            try await recordingStore.updateSourceFileURL(
+                                recording.id,
+                                sourceURL: destination.path
+                            )
+                        } catch {
+                            // The row is not written without its audio: the
+                            // recording is still here, and the user is told.
+                            AppErrorCenter.shared.report(
+                                "The recording could not be saved",
+                                message: "The failed dictation is still here: \(sourceURL.path)\n\(error.localizedDescription)"
+                            )
+                            return
+                        }
+                    }
                     try await recordingStore.updateRecordingProgressOnlySync(
                         recording.id,
-                        transcription: "Failed to transcribe: \(error.localizedDescription)",
+                        transcription: "",
                         progress: 0.0,
                         status: .failed,
                         isRegeneration: false

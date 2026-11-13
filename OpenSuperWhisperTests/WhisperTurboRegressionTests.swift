@@ -10,17 +10,13 @@ final class WhisperTurboRegressionTests: XCTestCase {
         guard let modelPath = ProcessInfo.processInfo.environment["OSW_TEST_TURBO_MODEL"] else {
             throw XCTSkip("Set OSW_TEST_TURBO_MODEL to large-v3-turbo")
         }
-        let originalPath = AppPreferences.shared.selectedWhisperModelPath
-        AppPreferences.shared.selectedWhisperModelPath = modelPath
-        defer { AppPreferences.shared.selectedWhisperModelPath = originalPath }
-        let engine = WhisperEngine()
+        let engine = WhisperEngine(modelPath: modelPath)
         try await engine.initialize()
 
         for language in ["en", "ru"] {
             let fixture = Self.repoRoot.appendingPathComponent("OpenSuperWhisperTests/Fixtures/long_\(language)")
             let reference = try String(contentsOf: fixture.appendingPathExtension("txt"), encoding: .utf8)
             var settings = Settings()
-            settings.selectedLanguage = language
             settings.showTimestamps = false
             settings.initialPrompt = ""
             settings.useBeamSearch = true
@@ -57,10 +53,7 @@ final class WhisperTurboRegressionTests: XCTestCase {
         guard let modelPath = ProcessInfo.processInfo.environment["OSW_TEST_TURBO_MODEL"] else {
             throw XCTSkip("Set OSW_TEST_TURBO_MODEL to large-v3-turbo")
         }
-        let originalPath = AppPreferences.shared.selectedWhisperModelPath
-        AppPreferences.shared.selectedWhisperModelPath = modelPath
-        defer { AppPreferences.shared.selectedWhisperModelPath = originalPath }
-        let engine = WhisperEngine()
+        let engine = WhisperEngine(modelPath: modelPath)
         try await engine.initialize()
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("turbo-pcm-\(UUID()).wav")
         defer { try? FileManager.default.removeItem(at: output) }
@@ -68,7 +61,6 @@ final class WhisperTurboRegressionTests: XCTestCase {
             file: Self.repoRoot.appendingPathComponent("OpenSuperWhisperTests/Fixtures/long_ru.m4a"), output: output
         )
         var settings = Settings()
-        settings.selectedLanguage = "ru"
         settings.showTimestamps = false
         settings.initialPrompt = ""
         settings.useBeamSearch = true

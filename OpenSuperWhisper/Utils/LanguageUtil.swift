@@ -53,11 +53,10 @@ class LanguageUtil {
 
     static func supportedLanguages(engine: String, fluidAudioModelVersion: String) -> [String] {
         guard engine == "fluidaudio" else { return availableLanguages }
-        return fluidAudioModelVersion == "v2" ? parakeetV2Languages : parakeetV3Languages
-    }
-
-    static func fallbackLanguage(engine: String) -> String {
-        engine == "fluidaudio" ? "en" : "auto"
+        // Redux is a ternary re-training of v3 with the same tokenizer, so it
+        // speaks the same 25 languages; only v2 is the English-only one.
+        let model = ParakeetModelVersion(stored: fluidAudioModelVersion) ?? .v3
+        return model == .v2 ? parakeetV2Languages : parakeetV3Languages
     }
 
     static func getSystemLanguage() -> String {

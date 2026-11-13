@@ -26,7 +26,7 @@ if [[ -z "$GITHUB_TOKEN" ]]; then
         echo "⚠️  WARNING: Proceeding without GitHub token"
         echo "   - Git tag will be created and pushed"
         echo "   - GitHub release will NOT be created automatically"
-        echo "   - DMG will NOT be uploaded to GitHub"
+        echo "   - The .pkg will NOT be uploaded to GitHub"
         echo ""
         read -p "Continue without GitHub release? (y/N): " CONTINUE
         if [[ "$CONTINUE" != "y" && "$CONTINUE" != "Y" ]]; then
@@ -85,12 +85,25 @@ fi
 
 echo "✅ Build and notarization successful!"
 
-DMG_PATH="./OpenSuperWhisper.dmg"
+# The package is the artifact users install: it carries the app AND the
+# uninstall command, and it registers the receipt the uninstaller forgets.
+# notarize_app.sh builds it next to the checkout.
+APP_PATH="./build/Build/Products/Release/OpenSuperWhisper.app"
+BUILT_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_PATH}/Contents/Info.plist" 2>/dev/null || echo "")
+PKG_PATH="./OpenSuperWhisper-${BUILT_VERSION}.pkg"
 
-# Verify DMG exists
-if [[ ! -f "$DMG_PATH" ]]; then
-    echo "❌ DMG not found at $DMG_PATH"
+if [[ ! -f "$PKG_PATH" ]]; then
+    echo "❌ Package not found at $PKG_PATH"
+    echo "   notarize_app.sh emits it for the version it built (${BUILT_VERSION:-unknown})."
     exit 1
+fi
+
+# The cask DMG is optional: swifty-dmg may not be installed, and the package
+# alone is a complete install.
+DMG_PATH="./OpenSuperWhisper.dmg"
+if [[ ! -f "$DMG_PATH" ]]; then
+    echo "ℹ️  No DMG at $DMG_PATH (swifty-dmg not installed): releasing the package only."
+    DMG_PATH=""
 fi
 
 # Find and prepare dSYM
@@ -111,9 +124,13 @@ fi
 
 # # Generate SHA256
 echo "🔍 Generating SHA256..."
-shasum -a 256 "$DMG_PATH" > "${DMG_PATH}.sha256"
-SHA256=$(cat "${DMG_PATH}.sha256" | cut -d' ' -f1)
-echo "SHA256: $SHA256"
+shasum -a 256 "$PKG_PATH" > "${PKG_PATH}.sha256"
+SHA256=$(cat "${PKG_PATH}.sha256" | cut -d' ' -f1)
+echo "PKG SHA256: $SHA256"
+if [[ -n "$DMG_PATH" ]]; then
+    shasum -a 256 "$DMG_PATH" > "${DMG_PATH}.sha256"
+    echo "DMG SHA256: $(cat "${DMG_PATH}.sha256" | cut -d' ' -f1)"
+fi
 
 # # Commit version changes
 echo "📝 Committing version changes..."
@@ -133,7 +150,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-# Create GitHub release and upload DMG if token is provided
+# Create GitHub release and upload the package if a token is provided
 if [[ -n "$GITHUB_TOKEN" ]]; then
     echo "🚀 Creating GitHub release..."
     
@@ -147,7 +164,7 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
             "tag_name": "'${NEW_VERSION}'",
             "target_commitish": "master",
             "name": "Release '${NEW_VERSION}'",
-            "body": "## OpenSuperWhisper '${NEW_VERSION}'\n\nReal-time audio transcription for macOS using Whisper.\n\n## Installation\n\n### Homebrew (Recommended)\n```bash\nbrew update\nbrew install opensuperwhisper\n```\n\n### Manual Installation\n1. Download the `OpenSuperWhisper.dmg` file below\n2. Open the DMG and drag OpenSuperWhisper to Applications\n3. Launch the app and grant necessary permissions\n\n## Requirements\n- macOS 14.0 (Sonoma) or later\n- Apple Silicon (ARM64) Mac",
+            "body": "## OpenSuperWhisper '${NEW_VERSION}'\n\nReal-time audio transcription for macOS using Whisper.\n\n## Installation\n\n### Homebrew (Recommended)\n```bash\nbrew update\nbrew install opensuperwhisper\n```\n\n### Manual Installation\n1. Download the `OpenSuperWhisper-${NEW_VERSION}.pkg` file below\n2. Open the package and follow the installer\n3. Launch the app and grant necessary permissions\n\n## Requirements\n- macOS 14.0 (Sonoma) or later\n- Apple Silicon (ARM64) Mac",
             "draft": false,
             "prerelease": false,
             "generate_release_notes": false
@@ -163,32 +180,39 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
     fi
     
     echo "✅ GitHub release created (ID: $RELEASE_ID)!"
-    echo "📤 Uploading DMG..."
-    
-    # Upload DMG using the correct API format
-    UPLOAD_RESPONSE=$(curl -s -L -X POST \
-        -H "Accept: application/vnd.github+json" \
-        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        -H "Content-Type: application/octet-stream" \
-        "https://uploads.github.com/repos/Starmel/OpenSuperWhisper/releases/${RELEASE_ID}/assets?name=OpenSuperWhisper.dmg" \
-        --data-binary @"${DMG_PATH}")
-    
-    # Check if upload was successful
-    if [[ $(echo "$UPLOAD_RESPONSE" | grep -c '"state":"uploaded"') -gt 0 ]] || [[ $(echo "$UPLOAD_RESPONSE" | grep -c '"state": "uploaded"') -gt 0 ]]; then
-        echo "✅ DMG uploaded successfully!"
-        # Extract download URL
-        DOWNLOAD_URL=$(echo "$UPLOAD_RESPONSE" | grep -o '"browser_download_url":"[^"]*' | cut -d'"' -f4)
-        echo "📥 Download URL: $DOWNLOAD_URL"
-    elif [[ $(echo "$UPLOAD_RESPONSE" | grep -c '"message"') -gt 0 ]]; then
-        echo "❌ Failed to upload DMG"
-        echo "Error: $(echo "$UPLOAD_RESPONSE" | grep -o '"message":"[^"]*' | cut -d'"' -f4)"
-        exit 1
-    else
-        echo "⚠️ Upload response unclear, but no error detected"
-        echo "Response: $UPLOAD_RESPONSE"
+
+    # Upload one release asset, exiting if GitHub rejects it. The package is
+    # the artifact every install path uses; the DMG only feeds the cask.
+    upload_asset() { # path, asset name, content type
+        local path="$1" name="$2" content_type="$3"
+        echo "📤 Uploading ${name}..."
+        local response
+        response=$(curl -s -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: ${content_type}" \
+            "https://uploads.github.com/repos/Starmel/OpenSuperWhisper/releases/${RELEASE_ID}/assets?name=${name}" \
+            --data-binary @"${path}")
+
+        if [[ $(echo "$response" | grep -c '"state":"uploaded"') -gt 0 ]] || [[ $(echo "$response" | grep -c '"state": "uploaded"') -gt 0 ]]; then
+            echo "✅ ${name} uploaded successfully!"
+            echo "📥 Download URL: $(echo "$response" | grep -o '"browser_download_url":"[^"]*' | cut -d'"' -f4)"
+        elif [[ $(echo "$response" | grep -c '"message"') -gt 0 ]]; then
+            echo "❌ Failed to upload ${name}"
+            echo "Error: $(echo "$response" | grep -o '"message":"[^"]*' | cut -d'"' -f4)"
+            exit 1
+        else
+            echo "⚠️ Upload response unclear, but no error detected"
+            echo "Response: $response"
+        fi
+    }
+
+    upload_asset "$PKG_PATH" "$(basename "$PKG_PATH")" "application/octet-stream"
+    if [[ -n "$DMG_PATH" ]]; then
+        upload_asset "$DMG_PATH" "OpenSuperWhisper.dmg" "application/octet-stream"
     fi
-    
+
     # Upload dSYM if available
     if [[ -n "$DSYM_ZIP_PATH" && -f "$DSYM_ZIP_PATH" ]]; then
         echo "📤 Uploading dSYM..."
@@ -215,7 +239,7 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
         fi
     fi
     
-    echo "✅ DMG uploaded successfully!"
+    echo "✅ Release assets uploaded successfully!"
     echo "🎉 GitHub release is complete!"
     echo "🔗 Release URL: https://github.com/Starmel/OpenSuperWhisper/releases/tag/${NEW_VERSION}"
 else
@@ -223,15 +247,19 @@ else
     echo "📋 Manual steps needed:"
     echo "1. Create GitHub release at:"
     echo "   https://github.com/Starmel/OpenSuperWhisper/releases/new?tag=${NEW_VERSION}"
-    echo "2. Upload the DMG file: OpenSuperWhisper.dmg"
+    echo "2. Upload the package: ${PKG_PATH}"
 fi
 
 echo ""
 echo "🎉 Release ${NEW_VERSION} is ready!"
 echo ""
 echo "📁 Files created:"
-echo "   - OpenSuperWhisper.dmg"
-echo "   - OpenSuperWhisper.dmg.sha256"
+echo "   - ${PKG_PATH}"
+echo "   - ${PKG_PATH}.sha256"
+if [[ -n "$DMG_PATH" ]]; then
+    echo "   - ${DMG_PATH}"
+    echo "   - ${DMG_PATH}.sha256"
+fi
 if [[ -f "$DSYM_ZIP_PATH" ]]; then
     echo "   - OpenSuperWhisper.app.dSYM.zip"
 fi
@@ -243,7 +271,7 @@ cask "opensuperwhisper" do
   version "${NEW_VERSION}"
   sha256 "${SHA256}"
 
-  url "https://github.com/starmel/OpenSuperWhisper/releases/download/#{version}/OpenSuperWhisper.dmg"
+  url "https://github.com/starmel/OpenSuperWhisper/releases/download/#{version}/OpenSuperWhisper-#{version}.pkg"
   name "OpenSuperWhisper"
   desc "Whisper dictation/transcription app"
   homepage "https://github.com/starmel/OpenSuperWhisper"
@@ -251,11 +279,28 @@ cask "opensuperwhisper" do
   depends_on macos: ">= :sonoma"
   depends_on arch: :arm64
 
-  app "OpenSuperWhisper.app"
+  pkg "OpenSuperWhisper-#{version}.pkg"
+
+  # The package's own uninstaller (inside the app, and at
+  # /Applications/Uninstall OpenSuperWhisper.command) is the primary operation;
+  # this is the Homebrew-side backstop for a cask uninstall. Keep it in step
+  # with packaging/uninstall.sh, which owns the list: the app, the uninstall
+  # command, the installed and downloaded models, the caches and the receipt —
+  # and deliberately not the recordings, the transcriptions or the settings.
+  # `zap` below is the full wipe and is the only thing here that takes them. It
+  # never touches ~/models or another app.
+  uninstall quit:    "ru.starmel.OpenSuperWhisper",
+            pkgutil: "ru.starmel.OpenSuperWhisper"
 
   zap trash: [
     "~/Library/Application Scripts/ru.starmel.OpenSuperWhisper",
     "~/Library/Application Support/ru.starmel.OpenSuperWhisper",
+    "~/Library/Application Support/CrashReporter/OpenSuperWhisper_*.plist",
+    "~/Library/Caches/ru.starmel.OpenSuperWhisper",
+    "~/Library/HTTPStorages/ru.starmel.OpenSuperWhisper",
+    "~/Library/Logs/DiagnosticReports/OpenSuperWhisper-*.ips",
+    "~/Library/Preferences/ru.starmel.OpenSuperWhisper.plist",
+    "~/Library/Saved Application State/ru.starmel.OpenSuperWhisper.savedState",
   ]
 end
 EOF

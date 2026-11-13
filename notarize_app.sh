@@ -10,8 +10,9 @@ KEYCHAIN_PROFILE="Slava"
 CODE_SIGN_IDENTITY="${1}"
 DEVELOPMENT_TEAM="8LLDD7HWZK"
 
-rm -rf libwhisper/build
-cmake -G Xcode -B libwhisper/build -S libwhisper
+# Both engines, one ggml: llama.cpp owns the ggml whisper.cpp builds against.
+rm -rf libllama/build libwhisper/build
+Scripts/build-native.sh Release
 
 rm -rf build
 mkdir -p build
@@ -25,11 +26,6 @@ cargo build -p autocorrect-swift --release --target aarch64-apple-darwin --manif
 cp ./libautocorrect/target/aarch64-apple-darwin/release/libautocorrect_swift.dylib ./build/libautocorrect_swift.dylib
 install_name_tool -id "@rpath/libautocorrect_swift.dylib" ./build/libautocorrect_swift.dylib
 codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libautocorrect_swift.dylib
-
-echo "Copying libomp.dylib..."
-cp /opt/homebrew/opt/libomp/lib/libomp.dylib ./build/libomp.dylib
-install_name_tool -id "@rpath/libomp.dylib" ./build/libomp.dylib
-codesign --force --sign "${CODE_SIGN_IDENTITY}" --timestamp ./build/libomp.dylib
 
 xcodebuild \
   -scheme "OpenSuperWhisper" \
@@ -53,10 +49,24 @@ xcrun notarytool submit "${ZIP_PATH}" --wait --keychain-profile "${KEYCHAIN_PROF
 
 xcrun stapler staple "${APP_PATH}"
 
-swifty-dmg --skipcodesign "${APP_PATH}" --output "${APP_NAME}.dmg" --verbose
+# The package is the artifact users install; the DMG only feeds the Homebrew cask.
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_PATH}/Contents/Info.plist")"
+packaging/build-pkg.sh \
+    --version "${VERSION}" \
+    --app "${APP_PATH}" \
+    --out "OpenSuperWhisper-${VERSION}.pkg" \
+    ${OSW_INSTALLER_IDENTITY:+--sign "${OSW_INSTALLER_IDENTITY}"} \
+    ${OSW_NOTARY_PROFILE:+--notarize "${OSW_NOTARY_PROFILE:-$KEYCHAIN_PROFILE}"}
 
-codesign --sign "${CODE_SIGN_IDENTITY}" "${APP_NAME}.dmg"
-xcrun notarytool submit "${APP_NAME}.dmg" --wait --keychain-profile "${KEYCHAIN_PROFILE}"
-xcrun stapler staple "${APP_NAME}.dmg"  
+if command -v swifty-dmg >/dev/null 2>&1; then
+    swifty-dmg --skipcodesign "${APP_PATH}" --output "${APP_NAME}.dmg" --verbose
+
+    codesign --sign "${CODE_SIGN_IDENTITY}" "${APP_NAME}.dmg"
+    xcrun notarytool submit "${APP_NAME}.dmg" --wait --keychain-profile "${KEYCHAIN_PROFILE}"
+    xcrun stapler staple "${APP_NAME}.dmg"
+else
+    echo "swifty-dmg is not installed: skipping the cask DMG (OpenSuperWhisper-${VERSION}.pkg is the artifact)."
+    echo "  brew install --cask swifty-dmg, or use the package directly."
+fi
 
 echo "Successfully notarized ${APP_NAME}"

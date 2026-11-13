@@ -2,13 +2,34 @@ import Cocoa
 import Combine
 import SwiftUI
 
-enum RecordingState {
+enum RecordingState: Equatable {
     case idle
     case connecting
     case recording
     case decoding
     case busy
     case noMicrophone
+    /// The selected speech model cannot hear the dictation's language — refused
+    /// rather than transcribed into invented English, and the recording kept for
+    /// the user. The notice is the line the panel shows; no alert accompanies it.
+    case incompatibleModel(KeptRecordingNotice)
+}
+
+/// The panel's line for a dictation that was refused because the model cannot
+/// hear its language, and kept.
+///
+/// A recording kept without a path the user can find is the same as a lost one,
+/// so the line carries all three things that matter: what went wrong, the one
+/// action, and where the recording is. The card is 200pt wide, so they are three
+/// short lines rather than one sentence.
+struct KeptRecordingNotice: Equatable {
+    /// What the model could not do, e.g. "Can't hear Polish".
+    let problem: String
+    /// The one action, e.g. "Install a multilingual model in Settings".
+    let action: String
+    /// Where the recording is, e.g. "Kept in the Transcriptions Directory" — or
+    /// the honest alternative when it could not be kept.
+    let location: String
 }
 
 @MainActor
@@ -44,7 +65,12 @@ class IndicatorViewModel: ObservableObject {
     private let transcriptionQueue: TranscriptionQueue
     private let stopRecordingOperation: () async -> RecordedAudio?
     private let cancelAudioRecordingOperation: () -> Void
-    
+    private let injectTextOperation: (String) -> KeyboardSimulator.InjectionResult
+    private let transformTextOperation: (String, String?, Bool) async -> TransformService.TransformOutcome
+    private let cleanUpOperation: (String) -> DictationScrubber.Result
+    private let cleanUpEnabledOperation: () -> Bool
+    private let reportCenter: DictationReportCenter
+
     init(
         transcriptionService: TranscriptionService = .shared,
         recordingStore: RecordingStore = .shared,
@@ -53,13 +79,44 @@ class IndicatorViewModel: ObservableObject {
         },
         cancelAudioRecording: @escaping () -> Void = {
             AudioRecorder.shared.cancelRecording()
-        }
+        },
+        injectText: @escaping (String) -> KeyboardSimulator.InjectionResult = {
+            // The live watch captures the delivery target as the delivery
+            // begins and stops it if the target changes or the user types; the
+            // ladder picks the mechanism from the application being typed into,
+            // and records which one it was — see `TextDelivery`.
+            TextDelivery.deliver($0, watch: .live())
+        },
+        transformText: @escaping (String, String?, Bool) async -> TransformService.TransformOutcome = {
+            await TransformService.shared.transformDetailed($0, sourceLanguage: $1, email: $2)
+        },
+        cleanUp: @escaping (String) -> DictationScrubber.Result = { text in
+            // The switch is read per dictation, so flipping it in Settings takes
+            // effect on the next one — and the scrub itself is a pure function
+            // with no model behind it.
+            guard AppPreferences.shared.cleanUpEnabled else {
+                return DictationScrubber.Result(
+                    text: text,
+                    removedFillers: 0,
+                    removedRepetitions: 0,
+                    removedAnnotations: 0
+                )
+            }
+            return DictationScrubber.scrub(text)
+        },
+        cleanUpEnabled: @escaping () -> Bool = { AppPreferences.shared.cleanUpEnabled },
+        reportCenter: DictationReportCenter = .shared
     ) {
         self.recordingStore = recordingStore
         self.transcriptionService = transcriptionService
         self.transcriptionQueue = TranscriptionQueue.shared
         self.stopRecordingOperation = stopRecording
         self.cancelAudioRecordingOperation = cancelAudioRecording
+        self.injectTextOperation = injectText
+        self.transformTextOperation = transformText
+        self.cleanUpOperation = cleanUp
+        self.cleanUpEnabledOperation = cleanUpEnabled
+        self.reportCenter = reportCenter
         
         recorder.$startFailure
             .compactMap { $0 }
@@ -128,15 +185,23 @@ class IndicatorViewModel: ObservableObject {
     }
 
     func startRecording() {
-        if isTranscriptionBusy {
-            showBusyMessage()
-            return
-        }
-
+        // The microphone is checked before the busy state, not after it. The
+        // engine load starts inside TranscriptionService's own initializer, so
+        // "busy" is the normal state for the first seconds after launch - and the
+        // old order answered "Processing..." to every attempt in that window,
+        // never mentioning the input device the user is missing. A missing
+        // microphone is a precondition for recording; busy only describes work
+        // that is already running.
+        //
         // getActiveMicrophone() only reads the cached currentMicrophone, so
         // this guard costs no CoreAudio HAL round-trip on the main thread.
         guard MicrophoneService.shared.getActiveMicrophone() != nil else {
             showAutoDismissingMessage(.noMicrophone)
+            return
+        }
+
+        if isTranscriptionBusy {
+            showBusyMessage()
             return
         }
         
@@ -241,20 +306,41 @@ class IndicatorViewModel: ObservableObject {
                     throw CancellationError()
                 }
 
-                let text = try await transcriptionService.transcribeAudio(
+                let output = try await transcriptionService.transcribeAudio(
                     url: tempURL,
                     settings: Settings(),
                     operationID: sessionID,
                     pcmSamples: audio.samples
                 )
+                let rawText = output.text
                 try Task.checkCancellation()
                 guard self.decodingSessionID == sessionID else {
                     throw CancellationError()
                 }
 
+                // The deterministic clean-up runs first and without a model:
+                // filler, stutters, repeated words and the recogniser's own
+                // annotations are gone before anything is asked of a transform.
+                // History keeps the raw transcript either way.
+                let scrub = self.cleanUpOperation(rawText)
+                // The spoken trigger picks the e-mail mode, and the phrase is
+                // taken off the front: what is left is the body the model is
+                // asked to shape into an e-mail. A phrase with nothing after it
+                // is a dictation with no body, and is discarded like one.
+                let spoken = DictationTrigger.email(in: scrub.text)
+                let body = spoken?.body ?? scrub.text
+                let isEmail = spoken != nil && !body.isEmpty
+                let text = body
+
                 if text.isEmpty {
                     try? FileManager.default.removeItem(at: tempURL)
-                    print("No speech detected, dictation discarded")
+                    print(
+                        spoken != nil
+                            ? "The e-mail trigger carried no body; dictation discarded"
+                            : (rawText.isEmpty
+                                ? "No speech detected, dictation discarded"
+                                : "Nothing but filler or an annotation; dictation discarded")
+                    )
                 } else {
                     let timestamp = Date()
                     let recordingId = UUID()
@@ -263,7 +349,7 @@ class IndicatorViewModel: ObservableObject {
                         id: recordingId,
                         timestamp: timestamp,
                         fileName: fileName,
-                        transcription: text,
+                        transcription: rawText,
                         duration: duration,
                         status: .completed,
                         progress: 1.0,
@@ -277,8 +363,25 @@ class IndicatorViewModel: ObservableObject {
 
                     try Task.checkCancellation()
                     guard self.decodingSessionID == sessionID else { throw CancellationError() }
-                    insertText(text)
-                    print("Transcription result: \(text)")
+                    let outcome = await transformTextOperation(text, output.language, isEmail)
+                    try Task.checkCancellation()
+                    guard self.decodingSessionID == sessionID else { throw CancellationError() }
+                    self.reportCenter.publish(DictationReport(
+                        language: output.language,
+                        raw: rawText,
+                        cleaned: text,
+                        final: outcome.text,
+                        policy: outcome.policy,
+                        didRunModel: outcome.didRunModel,
+                        guardRejection: outcome.guardRejection,
+                        cleanUpEnabled: cleanUpEnabledOperation(),
+                        removedFillers: scrub.removedFillers,
+                        removedRepetitions: scrub.removedRepetitions,
+                        removedAnnotations: scrub.removedAnnotations,
+                        date: timestamp
+                    ))
+                    insertText(outcome.text)
+                    print("Transcription result: \(rawText)")
                 }
             } catch is CancellationError {
                 if let savedRecording {
@@ -298,13 +401,64 @@ class IndicatorViewModel: ObservableObject {
                     }
                     print("Transcription cancelled")
                 } else {
+                    // The one decision every surface shares: a failure that is
+                    // silence leaves no alert and no history row, and the audio
+                    // goes with it — or is kept, with a row that records it, when
+                    // the audio is the user's. A genuine failure keeps today's
+                    // report and its audio.
                     let source = (error as? PreservedAudioError)?.url ?? audio.url
-                    await self.recordingStore.preserveFailedDictation(RecordedAudio(url: source, samples: audio.samples), error: error)
+                    let outcome = DictationFailurePolicy.outcome(for: error)
+                    let keptURL = await DictationFailurePolicy.settle(
+                        RecordedAudio(url: source, samples: audio.samples),
+                        error: error,
+                        store: self.recordingStore
+                    )
+                    switch outcome {
+                    case .discard:
+                        print("Dictation discarded: the recording held no speech")
+                    case .keepAudio:
+                        print("Dictation refused for no speech; the recording was kept")
+                    case .keepAudioAndExplain:
+                        // Real speech this model cannot hear: the recording was
+                        // kept, and the panel says what happened, what to do and
+                        // where it is. No alert, nothing pasted, and the kept row
+                        // carries no transcript.
+                        if case TranscriptionError.speechLanguageConflict(let conflict) = error {
+                            self.showAutoDismissingMessage(
+                                .incompatibleModel(Self.refusalNotice(conflict, keptAt: keptURL))
+                            )
+                        }
+                    case .report:
+                        break
+                    }
                 }
             }
 
             self.finishDecoding(sessionID: sessionID)
         }
+    }
+
+    /// The panel's line for a language conflict: what the model cannot hear, the
+    /// one action, and where the kept recording is.
+    ///
+    /// The fix lives in Settings, where the model is chosen — the panel only says
+    /// so. The location names the Transcriptions Directory, the Settings section
+    /// that shows that folder's path and opens it: a recording kept without a
+    /// place the user can find is the same as a lost one. When it could not be
+    /// kept the line never claims it was, and the failure itself has already been
+    /// reported with the recording's path.
+    static func refusalNotice(
+        _ conflict: SpeechLanguageConflict,
+        keptAt: URL?
+    ) -> KeptRecordingNotice {
+        KeptRecordingNotice(
+            problem: "Can't hear \(conflict.detectedLanguageName)",
+            action: conflict.remedyModelName.map { "Select a multilingual model (\($0)) in Settings" }
+                ?? "Install a multilingual model in Settings",
+            location: keptAt == nil
+                ? "Could not be moved out of the temporary folder"
+                : "Kept in the Transcriptions Directory"
+        )
     }
 
     private func finishDecoding(sessionID: UUID) {
@@ -322,19 +476,155 @@ class IndicatorViewModel: ObservableObject {
         let prefs = AppPreferences.shared
 
         if prefs.autoPasteTranscription {
+            // Deliver the transcription as synthetic keystrokes. When the user
+            // also asked to keep it on the clipboard, copy first so the
+            // "keep in clipboard" toggle still holds; otherwise leave the
+            // clipboard untouched on this path.
             if prefs.autoCopyToClipboard {
-                // Paste and keep in clipboard
-                ClipboardUtil.insertTextAndKeepInClipboard(finalText)
-            } else {
-                // Paste but restore original clipboard (legacy behavior)
-                ClipboardUtil.insertText(finalText)
+                ClipboardUtil.copyToClipboard(finalText)
             }
-        } else if prefs.autoCopyToClipboard {
-            // Only copy to clipboard, don't paste
-            ClipboardUtil.copyToClipboard(finalText)
+            let result = injectTextOperation(finalText)
+            KeyboardSimulator.logDictation(
+                trusted: result.trusted,
+                characters: finalText.count,
+                injected: result.injected,
+                eventsPosted: result.eventsPosted,
+                deliveredCharacters: result.deliveredCharacters,
+                interruptedBy: result.interruptedBy,
+                mechanism: result.mechanism,
+                target: result.targetBundleIdentifier,
+                match: result.targetMatch
+            )
+            if !result.trusted {
+                reportInjectionWithoutAccessibilityTrust()
+            } else if let interruption = result.interruptedBy {
+                // The delivery stopped itself to keep the transcript out of the
+                // wrong place; say which interference did it and how much got
+                // through instead of leaving the short text unexplained.
+                reportInterruptedInjection(
+                    interruption,
+                    delivered: result.deliveredCharacters,
+                    total: finalText.count
+                )
+            } else if !result.injected {
+                // Trusted, uninterfered with, and the delivery still handed the
+                // system nothing: the events could not be built, so the
+                // dictation reached nowhere. That is the one outcome the
+                // per-dictation record cannot show the user, so it is said out
+                // loud rather than left to look delivered.
+                reportInjectionThatPostedNothing(result.mechanism)
+            } else if result.mechanism == .clipboardPaste {
+                // Last, because it is information and not a failure: a delivery
+                // that reached nobody must report that instead, not the notice
+                // that would explain a delivery that worked.
+                reportClipboardDeliveryOnce()
+            }
+        } else {
+            KeyboardSimulator.logDictation(
+                trusted: KeyboardSimulator.isTrustedForInjection,
+                characters: finalText.count,
+                injected: false,
+                eventsPosted: 0
+            )
+            if prefs.autoCopyToClipboard {
+                // Only copy to clipboard, don't paste
+                ClipboardUtil.copyToClipboard(finalText)
+            }
         }
         // If both are false, do nothing
+    }
 
+    /// The delivery stopped itself to keep the transcript out of the wrong
+    /// place, so the user gets told what happened to the rest of it rather than
+    /// finding a truncated dictation and no reason for it. The whole
+    /// transcription is in the History tab either way, which is where the
+    /// message points.
+    private func reportInterruptedInjection(
+        _ interruption: KeyboardSimulator.DeliveryInterruption,
+        delivered: Int,
+        total: Int
+    ) {
+        let whatHappened: String
+        switch interruption {
+        case .focusChanged:
+            whatHappened = "Another application came to the front while OpenSuperWhisper was typing, so "
+                + "the rest of the transcription would have been typed into that window."
+        case .userTyping:
+            whatHappened = "You started typing while OpenSuperWhisper was typing, so the rest of the "
+                + "transcription would have been mixed into your own keystrokes."
+        }
+        AppErrorCenter.shared.report(
+            "Transcription was not typed in full",
+            message: "\(whatHappened)\n\n"
+                + "Typing stopped after \(delivered) of the dictation's \(total) characters, and nothing "
+                + "else was typed. The whole transcription is in the History tab."
+        )
+    }
+
+    /// A dictation that went through the clipboard is said out loud, once.
+    ///
+    /// The paste path is the default for the applications the measurement
+    /// recognised, and its failure mode is invisible from here: if the
+    /// application's clipboard is not shared with the session, the paste lands
+    /// nowhere and this app cannot tell — the user would simply see nothing,
+    /// which is worse than seeing something wrong. So the first delivery through
+    /// the clipboard says what happened, why, where the switch is, and what to
+    /// look at if the text did not appear. Once per install: after that it is in
+    /// the Settings copy and in every dictation's record.
+    private func reportClipboardDeliveryOnce() {
+        guard !AppPreferences.shared.clipboardDeliveryExplained else { return }
+        AppPreferences.shared.clipboardDeliveryExplained = true
+        AppErrorCenter.shared.report(
+            "This dictation went through the clipboard",
+            message: "The app in front is one that reads key codes rather than the text "
+                + "OpenSuperWhisper types (a Citrix session, a virtual machine or a remote "
+                + "desktop), so the transcription was put on the clipboard and pasted with "
+                + "⌘V — and what was on the clipboard was written to disk and put back "
+                + "afterwards.\n\n"
+                + "If the text does not appear there, that application's clipboard is not "
+                + "shared with the session, and nothing this app can see says so. "
+                + "Settings → Transcription → Delivery switches to Keystrokes only.\n\n"
+                + "This notice is shown once."
+        )
+    }
+
+    /// The delivery was trusted and nothing interfered, and it still handed the
+    /// system no event at all: the dictation reached nowhere. Nothing about that
+    /// is visible to the user afterwards — the dictation looks delivered — so it
+    /// is reported with the same voice as the other two failures, and the
+    /// transcript is in the history either way.
+    private func reportInjectionThatPostedNothing(_ mechanism: DeliveryMechanism) {
+        let how = mechanism == .clipboardPaste
+            ? "the ⌘V that pastes the dictation"
+            : "the keystrokes that spell it out"
+        AppErrorCenter.shared.report(
+            "Transcription was not typed",
+            message: "OpenSuperWhisper could not build \(how), so the dictation was typed nowhere. "
+                + "It is saved in the History tab."
+        )
+    }
+
+    /// macOS drops every event an untrusted process posts, so a dictation that
+    /// reached this point was typed nowhere. Say so through the app's existing
+    /// permission surface instead of letting the text look lost — the
+    /// transcript stays in the history, and the grant can be restored.
+    private func reportInjectionWithoutAccessibilityTrust() {
+        // The permission UI reads a value refreshed while a window was key; the
+        // indicator is a non-activating panel, so that value can still claim
+        // the grant is present while macOS refuses the keystrokes. Ask for a
+        // fresh check now rather than trusting the cached one.
+        NotificationCenter.default.post(name: .accessibilityPermissionNeededForInjection, object: nil)
+        AppErrorCenter.shared.report(
+            "Transcription was not typed",
+            message: "macOS discarded OpenSuperWhisper's simulated keystrokes because this copy of "
+                + "the app is not trusted for Accessibility, so the dictation did not reach the "
+                + "focused app. It is saved in the History tab.\n\n"
+                + "Open System Settings › Privacy & Security › Accessibility and make sure the "
+                + "OpenSuperWhisper entry for this copy is switched on. If it already looks "
+                + "enabled, switch it off and on again — several builds of the app share that "
+                + "name, and a grant made for a different copy does not apply to the one "
+                + "running. Removing the stale row and granting the app again also works."
+        )
     }
     
     static func applyPostProcessing(_ text: String) -> String {
@@ -529,6 +819,28 @@ struct IndicatorWindow: View {
                     Text("No microphone")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            case .incompatibleModel(let notice):
+                HStack(alignment: .center, spacing: 8) {
+                    Image(systemName: "waveform.slash")
+                        .foregroundColor(.orange)
+                        .frame(width: 24)
+
+                    // Three short lines rather than one: the card is 200pt wide
+                    // with 24pt of padding a side, so a single sentence would be
+                    // shrunk past reading. What the model cannot hear, the one
+                    // action, and where the kept recording is.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(notice.problem)
+                        Text(notice.action)
+                        Text(notice.location)
+                    }
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.orange)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 

@@ -17,14 +17,12 @@ private actor DownloadGate {
 final class DownloadCancellationTests: XCTestCase {
     func testFluidDownloadFailureReachesSettingsAndOnboarding() async throws {
         let prefs = AppPreferences.shared
-        let language = prefs.whisperLanguage
         let engine = prefs.selectedEngine
         let version = prefs.fluidAudioModelVersion
         let modelPath = prefs.selectedWhisperModelPath
         let modifier = prefs.modifierOnlyHotkey
         let lastModifier = prefs.lastModifierOnlyHotkey
         defer {
-            prefs.whisperLanguage = language
             prefs.selectedEngine = engine
             prefs.fluidAudioModelVersion = version
             prefs.selectedWhisperModelPath = modelPath
@@ -51,8 +49,6 @@ final class DownloadCancellationTests: XCTestCase {
     }
 
     func testLateCancelledDownloadCannotResetReplacement() async throws {
-        let language = AppPreferences.shared.whisperLanguage
-        defer { AppPreferences.shared.whisperLanguage = language }
         let gate = DownloadGate()
         let vm = SettingsViewModel(downloadWhisper: { _, name, progress in
             try await gate.download(name, progress: progress)

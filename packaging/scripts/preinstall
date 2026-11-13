@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# Installer preinstall script. Runs as root before the payload is placed.
+#
+# The package replaces the app bundle in place. Doing that while the app is
+# running can cut a recording or a database write in half, so the app is shut
+# down first: politely, then with SIGTERM, then with SIGKILL. Every wait is
+# bounded and this script always succeeds -- refusing to install would strand the
+# user on a wedged process, and both the recording files and the SQLite
+# database are safe under a hard kill.
+
+set -u
+
+APP_NAME="OpenSuperWhisper"
+
+app_running() {
+    /usr/bin/pgrep -x "$APP_NAME" >/dev/null 2>&1
+}
+
+if app_running; then
+    /usr/bin/osascript -e "quit app \"$APP_NAME\"" >/dev/null 2>&1
+    for _ in $(/usr/bin/seq 1 60); do
+        app_running || break
+        /usr/bin/sleep 0.5
+    done
+fi
+
+if app_running; then
+    /usr/bin/pkill -x "$APP_NAME" >/dev/null 2>&1
+    for _ in $(/usr/bin/seq 1 20); do
+        app_running || break
+        /usr/bin/sleep 0.5
+    done
+fi
+
+if app_running; then
+    /usr/bin/pkill -9 -x "$APP_NAME" >/dev/null 2>&1
+    /usr/bin/sleep 1
+fi
+
+exit 0

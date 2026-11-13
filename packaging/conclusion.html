@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+body { font: 13px -apple-system, "Helvetica Neue", sans-serif; color: #333; }
+h2 { font-size: 15px; margin: 0 0 8px 0; }
+ul { margin: 6px 0 12px 18px; padding: 0; }
+li { margin: 3px 0; }
+code { font-family: Menlo, monospace; font-size: 12px; }
+</style></head>
+<body>
+<h2>OpenSuperWhisper is installed</h2>
+
+<p>The app is in <code>/Applications</code>, and everything it needs to run is inside it:
+the whisper speech engine and the llama.cpp transform engine are linked into the same
+binary, and neither one needs Homebrew, a background server or a listening port. The
+package carries no model weights, so it stays small and an update ships no weights again.</p>
+
+<h2>The models download on first use</h2>
+
+<p>Dictation needs a speech model, and translation or tone need a language model, one per
+output direction: about 1.6 GB for the speech model, about 1 GB for English output and about
+5 GB for Polish output. Turn on <strong>Translate into &hellip;</strong> or
+<strong>Apply tone</strong> in Settings &rarr; Transcription, press
+<strong>Download model</strong> next to the direction you use, and the app fetches the
+weights into its own folder, verifies the pinned checksum, and keeps them there. Until then,
+dictation in that direction is pasted unchanged — one direction's model never stands in for
+the other's.</p>
+
+<h2>Uninstalling</h2>
+
+<p><code>/Applications/Uninstall OpenSuperWhisper.command</code>, or
+Settings &rarr; Advanced &rarr; <strong>Uninstall OpenSuperWhisper&hellip;</strong>, removes the
+app, this uninstall command, the models the app downloaded and its caches &mdash; and stops
+there. <strong>Your recordings, your transcriptions and your settings are kept</strong>, so a
+later install finds them again.</p>
+
+<p>To remove those too, run it with the one flag that does that:</p>
+
+<ul>
+  <li><code>/Applications/Uninstall OpenSuperWhisper.command --remove-user-data</code></li>
+</ul>
+
+<p>It leaves <code>~/models</code>, <code>/opt/homebrew</code> and every other
+application's data untouched, and running it twice is harmless.</p>
+</body>
+</html>
