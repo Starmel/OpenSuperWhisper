@@ -1774,6 +1774,37 @@ struct SettingsView: View {
         .padding()
     }
     
+    private var longPausesExplanationText: String {
+        "Whisper: a pause of "
+            + "\(WhisperEngine.PauseBoundaryPolicy.restored.sentenceThreshold) s or longer "
+            + "keeps its silence and closes the sentence, instead of dissolving "
+            + "into a breath that lets two thoughts merge. "
+            + "With no prompt of your own the decoder prompt is chosen by the "
+            + "language of the dictation, and that costs one extra detect-only "
+            + "language pass over the audio before each dictation — measured "
+            + "+1.34 s against a 3.5 s decode, \u{2248} 38 % — paid only while this "
+            + "switch is on and no prompt is set; and on pause-heavy English "
+            + "speech the switch changes two words against the switch off "
+            + "(\u{201C}Basically now it creates a sentences\u{201D} where the switch "
+            + "off says \u{201C}Basically how it creates a sentence\u{201D}), a "
+            + "change the captain accepted on 2026-09-25 with the measurement "
+            + "in front of him, because no prompt removes it and the Polish "
+            + "fix rides on the same silence."
+    }
+
+    private var deliveryExplanationText: String {
+        viewModel.deliveryPreference.explanation
+            + ". Text is typed as synthetic keystrokes, which no keyboard layout "
+            + "changes and which leaves the clipboard alone. A Citrix session, a "
+            + "virtual machine or a remote desktop may never read that text — "
+            + "measured on the Citrix client, its viewer links no Unicode-payload "
+            + "reader at all — so those get the transcript through the clipboard "
+            + "instead, and what was in the clipboard is written to disk (readable "
+            + "by you alone) and put back 1.5 s later, or on the next launch if "
+            + "the app does not survive that long. Keystrokes only turns the "
+            + "clipboard path off."
+    }
+
     var transcriptionSettings: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -1822,26 +1853,10 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Long Pauses End the Sentence")
                                     .font(.subheadline)
-                                Text(
-                                    "Whisper: a pause of "
-                                        + "\(WhisperEngine.PauseBoundaryPolicy.restored.sentenceThreshold) s or longer "
-                                        + "keeps its silence and closes the sentence, instead of dissolving "
-                                        + "into a breath that lets two thoughts merge. "
-                                        + "With no prompt of your own the decoder prompt is chosen by the "
-                                        + "language of the dictation, and that costs one extra detect-only "
-                                        + "language pass over the audio before each dictation — measured "
-                                        + "+1.34 s against a 3.5 s decode, \u{2248} 38 % — paid only while this "
-                                        + "switch is on and no prompt is set; and on pause-heavy English "
-                                        + "speech the switch changes two words against the switch off "
-                                        + "(\u{201C}Basically now it creates a sentences\u{201D} where the switch "
-                                        + "off says \u{201C}Basically how it creates a sentence\u{201D}), a "
-                                        + "change the captain accepted on 2026-09-25 with the measurement "
-                                        + "in front of him, because no prompt removes it and the Polish "
-                                        + "fix rides on the same silence."
-                                )
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                Text(longPausesExplanationText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer()
                             Toggle("", isOn: $viewModel.longPausesEndSentences)
@@ -1986,16 +2001,7 @@ struct SettingsView: View {
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
-                                Text(viewModel.deliveryPreference.explanation
-                                     + ". Text is typed as synthetic keystrokes, which no keyboard layout "
-                                     + "changes and which leaves the clipboard alone. A Citrix session, a "
-                                     + "virtual machine or a remote desktop may never read that text — "
-                                     + "measured on the Citrix client, its viewer links no Unicode-payload "
-                                     + "reader at all — so those get the transcript through the clipboard "
-                                     + "instead, and what was in the clipboard is written to disk (readable "
-                                     + "by you alone) and put back 1.5 s later, or on the next launch if "
-                                     + "the app does not survive that long. Keystrokes only turns the "
-                                     + "clipboard path off.")
+                                Text(deliveryExplanationText)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
