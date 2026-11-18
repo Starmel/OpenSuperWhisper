@@ -86,6 +86,18 @@ if [[ ! -f "$ENTITLEMENTS" ]]; then
     exit 1
 fi
 
+# In headless CI environments (e.g. GitHub Actions), there is no GUI session to
+# authorize keychain modifications or interactive trust prompts, and no persistent
+# TCC database across runs. Sign ad-hoc with entitlements non-interactively.
+if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "CI environment detected: signing ad-hoc with entitlements..."
+    codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP"
+    echo "Verifying..."
+    codesign --verify --deep --strict --verbose=2 "$APP"
+    echo "Signature OK (ad-hoc in CI)."
+    exit 0
+fi
+
 # Signing key material lives in a dedicated keychain, so target it explicitly
 # rather than relying on the user's keychain search list.
 find_identity() {

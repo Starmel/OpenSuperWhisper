@@ -348,25 +348,27 @@ assert_single_binary_layout
 
 "$SCRIPT_DIR/dev-sign.sh" "$APP"
 
-assert_identity_requirement
+if [[ -z "${CI:-}" && -z "${GITHUB_ACTIONS:-}" ]]; then
+    assert_identity_requirement
 
-# A designated requirement that changes between rebuilds is the exact failure
-# this whole path exists to avoid, so remember it and compare. `$DESIGNATED` was
-# read back off the bundle by assert_identity_requirement above.
-mkdir -p "$(dirname "$DR_RECORD")"
-if [[ -f "$DR_RECORD" ]]; then
-    PREVIOUS="$(cat "$DR_RECORD")"
-    if [[ "$PREVIOUS" == "$DESIGNATED" ]]; then
-        echo "Designated requirement unchanged since the previous build:"
-        echo "  $DESIGNATED"
-    else
-        echo "WARNING: the designated requirement changed since the previous build." >&2
-        echo "  previous: $PREVIOUS" >&2
-        echo "  current:  $DESIGNATED" >&2
-        echo "Existing permission grants will no longer match; re-grant once." >&2
+    # A designated requirement that changes between rebuilds is the exact failure
+    # this whole path exists to avoid, so remember it and compare. `$DESIGNATED` was
+    # read back off the bundle by assert_identity_requirement above.
+    mkdir -p "$(dirname "$DR_RECORD")"
+    if [[ -f "$DR_RECORD" ]]; then
+        PREVIOUS="$(cat "$DR_RECORD")"
+        if [[ "$PREVIOUS" == "$DESIGNATED" ]]; then
+            echo "Designated requirement unchanged since the previous build:"
+            echo "  $DESIGNATED"
+        else
+            echo "WARNING: the designated requirement changed since the previous build." >&2
+            echo "  previous: $PREVIOUS" >&2
+            echo "  current:  $DESIGNATED" >&2
+            echo "Existing permission grants will no longer match; re-grant once." >&2
+        fi
     fi
+    printf '%s' "$DESIGNATED" > "$DR_RECORD"
 fi
-printf '%s' "$DESIGNATED" > "$DR_RECORD"
 
 xattr -d com.apple.quarantine "$APP" 2>/dev/null || true
 
