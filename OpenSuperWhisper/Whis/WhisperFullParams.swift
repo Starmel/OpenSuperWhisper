@@ -4,6 +4,61 @@
 
 import Foundation
 
+/// The silero VAD's parameters, mirroring `whisper_vad_params`.
+///
+/// The VAD is the engine's own pre-filter (`WhisperEngine.detectSpeech`), not
+/// whisper_full's built-in `params.vad` path, so its parameters go to
+/// `whisper_vad_segments_from_samples` directly instead of through
+/// `whisper_full_params`.
+///
+/// A default-constructed value is byte for byte what the engine used to call
+/// implicitly: every field is read from `whisper_vad_default_params()`, so this
+/// type cannot drift from upstream's defaults. The values stay internal — what
+/// the product exposes is only whether the pre-filter runs at all
+/// (`WhisperFullParams.vad`), because the measurement found no threshold that
+/// beats switching it off:
+///
+/// * VAD off recovered 35 words with 0 still missing across the four worst
+///   dictations; today's defaults recovered 0 and still missed 35.
+/// * A threshold of 0.15 recovered 29 of those 35 and still missed 8.
+/// * Min-silence (0.5 s, 1.0 s), min-speech and speech-pad changed almost
+///   nothing (5–6 of 35), and part of what they recovered was invention.
+public struct WhisperVadParams {
+    /// Probability threshold to consider as speech.
+    public var threshold: Float
+    /// Min duration for a valid speech segment.
+    public var minSpeechDurationMs: Int32
+    /// Min silence duration to consider speech as ended.
+    public var minSilenceDurationMs: Int32
+    /// Max duration of a speech segment before forcing a new segment.
+    public var maxSpeechDurationS: Float
+    /// Padding added before and after speech segments.
+    public var speechPadMs: Int32
+    /// Overlap in seconds when copying audio samples from speech segment.
+    public var samplesOverlap: Float
+
+    public init() {
+        let defaults = whisper_vad_default_params()
+        threshold = defaults.threshold
+        minSpeechDurationMs = defaults.min_speech_duration_ms
+        minSilenceDurationMs = defaults.min_silence_duration_ms
+        maxSpeechDurationS = defaults.max_speech_duration_s
+        speechPadMs = defaults.speech_pad_ms
+        samplesOverlap = defaults.samples_overlap
+    }
+
+    public func toC() -> whisper_vad_params {
+        var params = whisper_vad_params()
+        params.threshold = threshold
+        params.min_speech_duration_ms = minSpeechDurationMs
+        params.min_silence_duration_ms = minSilenceDurationMs
+        params.max_speech_duration_s = maxSpeechDurationS
+        params.speech_pad_ms = speechPadMs
+        params.samples_overlap = samplesOverlap
+        return params
+    }
+}
+
 public struct WhisperFullParams {
     public var strategy: WhisperSamplingStrategy = .greedy
     public var nThreads: Int32 = 1
@@ -58,6 +113,26 @@ public struct WhisperFullParams {
     public var grammarRules: [UnsafePointer<whisper_grammar_element>?]?
     public var iStartRule: Int = 0
     public var grammarPenalty: Float = 0.0
+
+    /// Whether the engine's own silero pre-filter runs before the decoder.
+    ///
+    /// This is **not** whisper_full's `params.vad`: that path only exists in
+    /// `whisper_full`, which shares decoding state the engine must keep per
+    /// recording, so the engine runs the VAD itself and stitches the speech back
+    /// together. The flag therefore stays out of `toC()` on purpose — copy it
+    /// into `whisper_full_params.vad` and the audio would be filtered twice.
+    ///
+    /// **Off by default**, on measurement: the speech-only audio the pre-filter
+    /// builds dropped whole phrases on quiet recordings, and switching it off
+    /// recovered 35 words with 0 still missing across the four worst of the
+    /// captain's own dictations, against 0 recovered and 35 still missing with
+    /// it on. See `WhisperVadParams` for the rest of the numbers, and
+    /// `AppPreferences.useVAD` for where the setting comes from.
+    public var vad: Bool = false
+
+    /// The parameters the pre-filter is called with while `vad` is on. Internal:
+    /// no threshold beat turning the pre-filter off, so none is exposed.
+    public var vadParams: WhisperVadParams = WhisperVadParams()
 
     public init() {}
 

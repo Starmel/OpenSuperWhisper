@@ -248,8 +248,15 @@ class ContentViewModel: ObservableObject {
                         print("Transcription result: \(text)")
                     }
                 } catch {
+                    // The same decision the indicator takes, so a dictation
+                    // refused for no speech is silent whichever record button
+                    // started it.
                     let source = (error as? PreservedAudioError)?.url ?? audio.url
-                    await self.recordingStore.preserveFailedDictation(RecordedAudio(url: source, samples: audio.samples), error: error)
+                    await DictationFailurePolicy.settle(
+                        RecordedAudio(url: source, samples: audio.samples),
+                        error: error,
+                        store: self.recordingStore
+                    )
                 }
 
                 await MainActor.run {
@@ -308,10 +315,12 @@ class ContentViewModel: ObservableObject {
 
 struct ContentView: View {
     @ObservedObject private var errors = AppErrorCenter.shared
+    @ObservedObject private var lastReport = DictationReportCenter.shared
     @StateObject private var viewModel = ContentViewModel()
     @StateObject private var permissionsManager = PermissionsManager()
     @Environment(\.colorScheme) private var colorScheme
     @State private var isSettingsPresented = false
+    @State private var settingsTab = 0
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var showDeleteConfirmation = false
@@ -354,13 +363,13 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            if permissionsManager.hasCompletedInitialCheck,
-               !permissionsManager.isMicrophonePermissionGranted
-                || !permissionsManager.isAccessibilityPermissionGranted
-            {
-                PermissionsView(permissionsManager: permissionsManager)
-            } else {
-                VStack(spacing: 0) {
+            // Nothing in this window is gated on a permission. A missing grant
+            // is the inline notice above the content, and the notice removes
+            // itself the moment the grant lands because PermissionsManager
+            // re-reads both values live.
+            PermissionNoticeStack(permissionsManager: permissionsManager)
+
+            VStack(spacing: 0) {
                     // Search bar
                     HStack {
                         Image(systemName: "magnifyingglass")
@@ -394,6 +403,71 @@ struct ContentView: View {
                     )
                     .cornerRadius(20)
                     .padding([.horizontal, .top])
+
+                    // The last dictation's pipeline, where the user already is:
+                    // the language the engine heard, what the deterministic
+                    // clean-up removed, and — when a transform ran — the raw
+                    // transcript beside what was actually pasted. History keeps
+                    // the raw transcript; this is the window onto what the app
+                    // did with it.
+                    if let report = lastReport.last {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "waveform")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Last dictation")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(report.languageLabel)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            Text(report.transformLabel)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            // A rejected tone answer is why the user's own
+                            // words came back: the reason belongs where the
+                            // language and the raw-to-final text already are.
+                            if let notice = report.guardNotice {
+                                Text(notice)
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Heard")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Text(report.raw)
+                                        .font(.caption)
+                                }
+                                if report.changedAnything {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Pasted")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(report.final)
+                                            .font(.caption)
+                                    }
+                                }
+                            }
+                            Text(report.scrubSummary)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ThemePalette.panelSurface(colorScheme))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(ThemePalette.panelBorder(colorScheme), lineWidth: 1)
+                        )
+                        .cornerRadius(12)
+                        .padding([.horizontal, .top])
+                    }
 
                     ScrollView(showsIndicators: false) {
                         if viewModel.recordings.isEmpty {
@@ -618,7 +692,6 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                }
             }
         }
         .frame(minWidth: 400, idealWidth: 400)
@@ -647,10 +720,9 @@ struct ContentView: View {
             viewModel.loadInitialData()
         }
         .overlay {
-            let isPermissionsGranted = permissionsManager.isMicrophonePermissionGranted
-                && permissionsManager.isAccessibilityPermissionGranted
-
-            if viewModel.transcriptionService.isLoading && isPermissionsGranted {
+            // No permission term here: this reports a model load, and a
+            // missing grant must not change what the window shows.
+            if viewModel.transcriptionService.isLoading {
                 ZStack {
                     Color.black.opacity(0.3)
                     VStack(spacing: 16) {
@@ -665,7 +737,18 @@ struct ContentView: View {
             }
         }
         .alert(item: $errors.issue) { issue in
-            Alert(title: Text(issue.title), message: Text(issue.message), dismissButton: .default(Text("OK")))
+            // A report that carries a fix shows it as the default button, so the
+            // problem and the way out of it are in the same place. Everything
+            // else keeps the plain OK alert.
+            if let remedyTitle = issue.remedyTitle, let remedy = issue.remedy {
+                return Alert(
+                    title: Text(issue.title),
+                    message: Text(issue.message),
+                    primaryButton: .default(Text(remedyTitle), action: remedy),
+                    secondaryButton: .cancel(Text("Not now"))
+                )
+            }
+            return Alert(title: Text(issue.title), message: Text(issue.message), dismissButton: .default(Text("OK")))
         }
         .onReceive(errors.$issue.compactMap { $0 }) { _ in
             (NSApplication.shared.delegate as? AppDelegate)?.showMainWindow()
@@ -678,9 +761,13 @@ struct ContentView: View {
         }
         .fileDropHandler()
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView()
+            SettingsView(selectedTab: settingsTab)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+        // Read the card here, before the sheet exists: `SettingsView` takes its
+        // tab as an initial value, so telling the sheet afterwards would land a
+        // beat late — a remedy button that opens the sheet and then jumps cards.
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { notification in
+            settingsTab = (notification.userInfo?[SettingsDestination.userInfoKey] as? Int) ?? 0
             isSettingsPresented = true
         }
         .onChange(of: viewModel.shouldClearSearch) { _, shouldClear in
@@ -694,70 +781,107 @@ struct ContentView: View {
     }
 }
 
-struct PermissionsView: View {
+/// Inline permission state for a window that is never gated on one.
+///
+/// The app is meant to be usable the moment it starts: history, settings, the
+/// menu bar and every dictation whose permission is present all work while one
+/// of these is on screen. `PermissionsManager` re-reads TCC live, so a notice
+/// disappears on its own as soon as the switch in System Settings is flipped -
+/// there is no "check again" to press and no screen to get stuck on.
+struct PermissionNoticeStack: View {
     @ObservedObject var permissionsManager: PermissionsManager
 
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Required Permissions")
-                .font(.title)
-                .padding()
+    private var notices: [Permission] {
+        PermissionsManager.notices(
+            hasChecked: permissionsManager.hasCompletedInitialCheck,
+            microphoneGranted: permissionsManager.isMicrophonePermissionGranted,
+            accessibilityGranted: permissionsManager.isAccessibilityPermissionGranted
+        )
+    }
 
-            PermissionRow(
-                isGranted: permissionsManager.isMicrophonePermissionGranted,
-                title: "Microphone Access",
-                description: "Required for audio recording",
+    var body: some View {
+        if !notices.isEmpty {
+            VStack(spacing: 1) {
+                ForEach(notices, id: \.self) { notice in
+                    noticeView(for: notice)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func noticeView(for notice: Permission) -> some View {
+        switch notice {
+        case .accessibility:
+            PermissionNotice(
+                title: "Keystrokes are off — grant Accessibility",
+                message: "Transcriptions are still saved to the History tab, but macOS "
+                    + "will not let this copy type them into other apps until it is "
+                    + "switched on in System Settings › Privacy & Security › "
+                    + "Accessibility. If OpenSuperWhisper already looks enabled there, "
+                    + "switch it off and on again — a grant made for another copy of "
+                    + "the app does not apply to this one.",
+                buttonTitle: "Open Accessibility Settings",
+                action: {
+                    permissionsManager.requestAccessibilityPermissionOrOpenSystemPreferences()
+                }
+            )
+
+        case .microphone:
+            PermissionNotice(
+                title: "Recording is off — grant Microphone",
+                message: "Dictation cannot start until this copy may use the microphone. "
+                    + "Switch it on in System Settings › Privacy & Security › "
+                    + "Microphone.",
+                buttonTitle: "Open Microphone Settings",
                 action: {
                     permissionsManager.requestMicrophonePermissionOrOpenSystemPreferences()
                 }
             )
-
-            PermissionRow(
-                isGranted: permissionsManager.isAccessibilityPermissionGranted,
-                title: "Accessibility Access",
-                description: "Required for global keyboard shortcuts",
-                action: { permissionsManager.openSystemPreferences(for: .accessibility) }
-            )
-
-            Spacer()
         }
-        .padding()
     }
 }
 
-struct PermissionRow: View {
-    let isGranted: Bool
+struct PermissionNotice: View {
     let title: String
-    let description: String
+    let message: String
+    let buttonTitle: String
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundColor(isGranted ? .green : .red)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
 
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.headline)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
 
-                Spacer()
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                if !isGranted {
-                    Button("Grant Access") {
-                        action()
-                    }
-                    .buttonStyle(.borderedProminent)
+                Button(buttonTitle) {
+                    action()
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
 
-            Text(description)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            Spacer(minLength: 0)
         }
-        .padding()
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(ThemePalette.panelSurface(colorScheme))
-        .cornerRadius(10)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(ThemePalette.panelBorder(colorScheme)),
+            alignment: .bottom
+        )
     }
 }
 
@@ -859,16 +983,26 @@ struct RecordingRow: View {
             
             if recording.status == .failed {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
+                    if recording.transcription.isEmpty {
+                        // A row with no transcript is not a failure to report: the
+                        // audio held nothing transcribable, or the recording was
+                        // kept for the user to find. Plain secondary text, no
+                        // alarm — the app did not break, and it must not read as
+                        // if it had.
+                        Text("No transcript")
                             .font(.caption)
-                            .foregroundColor(.red)
-                        Text("Transcription failed")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                    
-                    if !recording.transcription.isEmpty {
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Only rows written before the transcript column stopped
+                        // carrying failure text can still have text here.
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                            Text("Transcription failed")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
                         Text(recording.transcription)
                             .font(.caption)
                             .foregroundColor(.secondary)

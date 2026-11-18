@@ -9,7 +9,18 @@ import SwiftUI
 
 extension KeyboardShortcuts.Name {
     static let toggleRecord = Self("toggleRecord", initial: .init(.backtick, modifiers: .option))
-    static let escape = Self("escape", initial: .init(.escape))
+
+    /// Escape cancels the dictation on screen: the indicator enables the name
+    /// while it is up and disables it again when it goes away.
+    ///
+    /// Declaring it is a write of its own — `Name.init` stores the initial
+    /// combination in `UserDefaults.standard` when that key holds nothing
+    /// (`KeyboardShortcuts.setInitialShortcutIfNeeded`) — and under test that
+    /// domain is the one the app the developer is using reads, with nothing to
+    /// put the key back. So a test process declares the name without a
+    /// combination; `enable`, `disable` and reading a missing shortcut then only
+    /// touch the library's in-memory state.
+    static let escape = Self("escape", initial: OpenSuperWhisperApp.isRunningTests ? nil : .init(.escape))
 }
 
 @MainActor
@@ -33,9 +44,11 @@ class ShortcutManager {
         setupRecordingTrigger()
         let permissions = PermissionsManager()
         triggerPermissions = permissions
+        // Reconfigure the trigger when Accessibility changes: the modifier-only
+        // hotkey is gated by it (the mouse button and the global key monitor
+        // both are), so a fresh grant must rebuild the trigger.
         observeTriggerPermissions(permissions.$isAccessibilityPermissionGranted
-            .combineLatest(permissions.$isInputMonitoringPermissionGranted)
-            .map { ($0 ? 1 : 0) | ($1 ? 2 : 0) }
+            .map { $0 ? 1 : 0 }
             .eraseToAnyPublisher()) { [weak self] in self?.setupRecordingTrigger() }
         
         NotificationCenter.default.addObserver(
@@ -135,6 +148,15 @@ class ShortcutManager {
         } else {
             useMouseButtonHotkey = false
             useModifierOnlyHotkey = false
+            // A stored `false` — what the library writes when a combination is
+            // cleared — also stops `Name.init` from ever applying the initial
+            // this app declares for `toggleRecord`, so this mode could be
+            // selected with no shortcut behind it: no trigger at all, and
+            // nothing on screen saying so. The mode is the one the user picked,
+            // so it gets its declared combination instead of silence.
+            if KeyboardShortcuts.getShortcut(for: .toggleRecord) == nil {
+                KeyboardShortcuts.reset(.toggleRecord)
+            }
             KeyboardShortcuts.enable(.toggleRecord)
             print("ShortcutManager: Using regular keyboard shortcut")
         }

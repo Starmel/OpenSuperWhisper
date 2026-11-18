@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Installer distribution for OpenSuperWhisper.
+
+  One artifact, one receipt id (ru.starmel.OpenSuperWhisper), no choices: the
+  payload is the app plus the uninstall command, and nothing is written to the
+  user's home directory at install time. The models are downloaded by the app
+  from the URLs and pinned digests it carries; the recordings, the transcriptions
+  database and the settings are the app's to create, and an uninstall keeps them.
+  `@@VERSION@@` is substituted by packaging/build-pkg.sh.
+-->
+<installer-gui-script minSpecVersion="2">
+    <title>OpenSuperWhisper @@VERSION@@</title>
+    <organization>ru.starmel</organization>
+    <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false" />
+    <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="arm64" />
+    <allowed-os-versions>
+        <os-version min="14.0" />
+    </allowed-os-versions>
+    <conclusion file="conclusion.html" mime-type="text/html" />
+    <choices-outline>
+        <line choice="default" />
+    </choices-outline>
+    <choice id="default" title="OpenSuperWhisper" visible="true">
+        <pkg-ref id="ru.starmel.OpenSuperWhisper" />
+    </choice>
+    <pkg-ref id="ru.starmel.OpenSuperWhisper" version="@@VERSION@@" onConclusion="none">OpenSuperWhisper-component.pkg</pkg-ref>
+</installer-gui-script>

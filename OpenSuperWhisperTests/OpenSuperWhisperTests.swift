@@ -192,21 +192,12 @@ final class WhisperEngineConversionTests: XCTestCase {
 
 final class WhisperStateIsolationTests: XCTestCase {
 
-    private static let repoRoot = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-
     // Each transcription runs whisper_full_with_state on a fresh whisper_state,
     // so noContext = false keeps context between 30s windows of one recording
     // but a silent/hallucinated recording can never poison the next one.
     func testFreshStatePerCallKeepsRecordingsIsolated() async throws {
-        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
-        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
-        try XCTSkipUnless(
-            FileManager.default.fileExists(atPath: modelURL.path)
-                && FileManager.default.fileExists(atPath: audioURL.path),
-            "tiny model / jfk sample not present in repo root"
-        )
+        let modelURL = try TestFixtures.tinyEnglishModel()
+        let audioURL = try TestFixtures.speechSample()
 
         let context = try XCTUnwrap(
             MyWhisperContext.initFromFileNoState(path: modelURL.path, params: WhisperContextParams())
@@ -253,13 +244,8 @@ final class WhisperStateIsolationTests: XCTestCase {
     // speech segments (no hallucinations), while trimmed speech still
     // transcribes correctly.
     func testBundledVadDropsSilenceAndKeepsSpeech() async throws {
-        let modelURL = Self.repoRoot.appendingPathComponent("ggml-tiny.en.bin")
-        let audioURL = Self.repoRoot.appendingPathComponent("jfk.wav")
-        try XCTSkipUnless(
-            FileManager.default.fileExists(atPath: modelURL.path)
-                && FileManager.default.fileExists(atPath: audioURL.path),
-            "tiny model / jfk sample not present in repo root"
-        )
+        let modelURL = try TestFixtures.tinyEnglishModel()
+        let audioURL = try TestFixtures.speechSample()
 
         let vadModelPath = try XCTUnwrap(
             WhisperEngine.vadModelPath,
@@ -401,6 +387,13 @@ final class MicrophoneInventoryTests: XCTestCase {
 
 // MARK: - Keyboard Layout Tests
 
+/// Every case below except the two source-listing ones switches to a layout it
+/// names and skips when the machine does not have it, which is the honest state
+/// of a machine with one layout installed. The translation and delivery those
+/// cases check for a named layout are exercised on any machine by
+/// `ClipboardUtilPasteIntegrationTests.testPasteWithActiveInputSource` (the ⌘V
+/// key code the delivery path posts, on the active layout) and
+/// `KeyboardSimulatorDeliveryTests` (the typed text itself).
 final class ClipboardUtilKeyboardLayoutTests: XCTestCase {
     
     private var originalInputSourceID: String?
@@ -682,37 +675,90 @@ final class MicrophoneServiceRequiresConnectionTests: XCTestCase {
 
 // MARK: - Paste Integration Tests
 
+/// The cases below name the layout they need and skip when the machine does not
+/// have it — an honest skip, and one that makes nearly all of this class silent
+/// on a machine with a single layout installed.
+/// `testPasteWithActiveInputSource` and `testPasteAllAvailableLayouts` are the
+/// two that run everywhere, because they take the input source the machine
+/// actually has instead of naming one.
+/// The Paste command of the paste-integration case's own Edit menu.
+///
+/// It reads the pasteboard the case owns, because AppKit's own `paste:` reads
+/// the machine's general clipboard: keeping the general one out of the suite and
+/// keeping the key-equivalent assertion are both possible this way, and what the
+/// case gives up is the coverage of AppKit's own paste implementation (which the
+/// test it replaced was really only borrowing for the board).
+@MainActor
+private final class PasteCommand: NSObject {
+    private let pasteboard: NSPasteboard
+    private weak var editor: NSTextView?
+
+    static func targetting(_ pasteboard: NSPasteboard, editor: NSTextView) -> PasteCommand {
+        PasteCommand(pasteboard: pasteboard, editor: editor)
+    }
+
+    private init(pasteboard: NSPasteboard, editor: NSTextView) {
+        self.pasteboard = pasteboard
+        self.editor = editor
+    }
+
+    @objc func paste(_ sender: Any?) {
+        _ = editor?.readSelection(from: pasteboard)
+    }
+}
+
 @MainActor
 final class ClipboardUtilPasteIntegrationTests: XCTestCase {
     private func pasteText(_ text: String, layoutID: String) async throws {
         let originalInputSourceID = ClipboardUtil.getCurrentInputSourceID()
+        guard ClipboardUtil.switchToInputSource(withID: layoutID) else {
+            throw XCTSkip("\(layoutID) layout not available")
+        }
+        try await pasteText(
+            text,
+            describedAs: layoutID,
+            restoringInputSource: originalInputSourceID
+        )
+    }
+
+    /// Pastes on whatever input source is active and restores the one that was
+    /// active before. No layout is named and none is switched, so a machine
+    /// without any of the layouts above still runs the delivery contract: the
+    /// ⌘V the delivery path posts is the Paste key equivalent of the frontmost
+    /// application, and the text arrives.
+    private func pasteText(
+        _ text: String,
+        describedAs description: String,
+        restoringInputSource originalInputSourceID: String?
+    ) async throws {
         defer {
             if let originalInputSourceID {
                 _ = ClipboardUtil.switchToInputSource(withID: originalInputSourceID)
             }
         }
-        guard ClipboardUtil.switchToInputSource(withID: layoutID) else {
-            throw XCTSkip("\(layoutID) layout not available")
-        }
 
-        let pasteboard = NSPasteboard.general
-        let originalContents = ClipboardUtil.saveCurrentPasteboardContents(from: pasteboard)
+        // A pasteboard of this case's own. AppKit's own Paste command reads
+        // `NSPasteboard.general`, which is why this case used to write the
+        // machine's clipboard — and why a suite that wants to leave other
+        // applications' data alone cannot use that command: the case's point is
+        // that the ⌘V the delivery posts is the frontmost application's Paste key
+        // equivalent and that a paste from the board the pipeline wrote delivers
+        // the transcript, not that AppKit's paste implementation works. So the
+        // menu item's action is this case's own, and it reads the board the
+        // delivery wrote to.
+        let boardName = NSPasteboard.Name("osw-paste-integration-\(UUID().uuidString)")
+        let pasteboard = NSPasteboard(name: boardName)
+        defer { pasteboard.releaseGlobally() }
         let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         editor.isRichText = false
+        let pasteTarget = PasteCommand.targetting(pasteboard, editor: editor)
         let editMenu = NSMenu(title: "Edit")
         let pasteItem = editMenu.addItem(
             withTitle: "Paste",
-            action: #selector(NSText.paste(_:)),
+            action: #selector(PasteCommand.paste(_:)),
             keyEquivalent: "v"
         )
-        pasteItem.target = editor
-        defer {
-            if let originalContents {
-                ClipboardUtil.restorePasteboardContents(originalContents, to: pasteboard)
-            } else {
-                pasteboard.clearContents()
-            }
-        }
+        pasteItem.target = pasteTarget
 
         var eventTypes: [CGEventType] = []
         ClipboardUtil.insertText(text, postEvent: { event in
@@ -724,14 +770,33 @@ final class ClipboardUtilPasteIntegrationTests: XCTestCase {
                 return
             }
             XCTAssertTrue(editMenu.performKeyEquivalent(with: keyEvent))
-        })
+        }, pasteboard: pasteboard)
         XCTAssertEqual(eventTypes, [.keyDown, .keyUp])
         let pasteDeadline = Date().addingTimeInterval(3)
         while editor.string != text && Date() < pasteDeadline {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
-        XCTAssertEqual(editor.string, text, "Paste failed for \(layoutID)")
+        XCTAssertEqual(editor.string, text, "Paste failed for \(description)")
         try await Task.sleep(nanoseconds: UInt64((ClipboardUtil.clipboardRestoreDelay + 0.1) * 1_000_000_000))
+    }
+
+    // MARK: - The layout this machine has
+
+    /// The one case in this class that cannot skip: it takes the input source
+    /// that is active and never switches it, so the layout-aware key code the
+    /// delivery path posts for ⌘V is exercised for the layout the machine
+    /// actually runs — including the `findKeycodeForCharacter` branch, which no
+    /// layout-named case can reach on a machine without that layout.
+    func testPasteWithActiveInputSource() async throws {
+        let activeSourceID = try XCTUnwrap(
+            ClipboardUtil.getCurrentInputSourceID(),
+            "a machine in a GUI session always has an active input source"
+        )
+        try await pasteText(
+            "Hello from the active input source (\(activeSourceID))",
+            describedAs: "the active input source \(activeSourceID)",
+            restoringInputSource: activeSourceID
+        )
     }
 
     // MARK: - Basic Layouts
@@ -917,6 +982,9 @@ final class ClipboardUtilPasteIntegrationTests: XCTestCase {
 
 // MARK: - Keyboard Layout Provider Tests
 
+/// The US/Russian/German cases below are gated on layouts a normal machine does
+/// not have; `testResolveInfo_ActiveLayout_returnsInfo` runs the same validation
+/// path on the layout the machine has.
 final class KeyboardLayoutProviderTests: XCTestCase {
     
     private let provider = KeyboardLayoutProvider.shared
@@ -979,6 +1047,24 @@ final class KeyboardLayoutProviderTests: XCTestCase {
     
     // MARK: - resolveInfo (full validation)
     
+    /// The cases either side of this one name a layout. This one takes the input
+    /// source that is active — the layout the app is actually running under — and
+    /// asserts the provider resolves full info for it on an ANSI keyboard, the
+    /// same contract as the US case, minus the layout name.
+    func testResolveInfo_ActiveLayout_returnsInfo() throws {
+        let activeSourceID = try XCTUnwrap(
+            ClipboardUtil.getCurrentInputSourceID(),
+            "a machine in a GUI session always has an active input source"
+        )
+        let info = provider.resolveInfo()
+        if provider.detectPhysicalType() == .ansi {
+            XCTAssertNotNil(
+                info,
+                "the active layout \(activeSourceID) on an ANSI keyboard should produce info"
+            )
+        }
+    }
+
     func testResolveInfo_USLayout_returnsInfo() throws {
         let switched = ClipboardUtil.switchToInputSource(withID: "US")
         if !switched { throw XCTSkip("US layout not available") }
@@ -1127,7 +1213,7 @@ final class AddSpaceAfterSentenceTests: XCTestCase {
     }
     
     func testApplyPostProcessing_defaultPreferenceIsEnabled() {
-        UserDefaults.standard.removeObject(forKey: "addSpaceAfterSentence")
+        AppPreferences.defaults.removeObject(forKey: "addSpaceAfterSentence")
         let result = IndicatorViewModel.applyPostProcessing("Test.")
         XCTAssertEqual(result, "Test. ")
     }
@@ -1350,27 +1436,45 @@ final class IndicatorWindowGeometryTests: XCTestCase {
 @MainActor
 final class NoMicrophoneGuardTests: XCTestCase {
 
-    /// Forces `MicrophoneService.shared` to report no active microphone for the
-    /// duration of `body`, restoring the previous state afterwards.
-    private func withNoMicrophone(_ body: () -> Void) {
+    /// Makes `MicrophoneService.shared` report `device` as the active input for
+    /// the duration of `body`, restoring the previous state afterwards. `nil`
+    /// means "no microphone".
+    private func withActiveMicrophone(_ device: MicrophoneService.AudioDevice?, _ body: () -> Void) {
         let service = MicrophoneService.shared
         let savedSelected = service.selectedMicrophone
         let savedCurrent = service.currentMicrophone
 
-        service.selectedMicrophone = nil
-        service.currentMicrophone = nil
+        service.selectedMicrophone = device
+        service.currentMicrophone = device
         defer {
             service.selectedMicrophone = savedSelected
             service.currentMicrophone = savedCurrent
         }
 
-        XCTAssertNil(service.getActiveMicrophone(), "Precondition: no active microphone")
+        XCTAssertEqual(service.getActiveMicrophone()?.id, device?.id,
+                       "Precondition: the active input device is the injected one")
         body()
     }
 
+    /// Holds a `TranscriptionService` in its loading state: the engine loader it
+    /// was built with never returns until the test resumes it, so `isLoading` -
+    /// and with it `IndicatorViewModel.isTranscriptionBusy` - is deterministic
+    /// rather than a race against a real model load.
+    private func busyService(named engine: String, gate: EngineLoadGate) -> TranscriptionService {
+        TranscriptionService(
+            selection: TranscriptionService.EngineSelection(engine: engine, modelPath: nil, modelVersion: "v3"),
+            engineLoader: { try await gate.load($0) }
+        )
+    }
+
+    private func finishBusyLoad(_ engine: String, gate: EngineLoadGate) async {
+        await gate.finish(engine, result: .failure(NSError(domain: "NoMicrophoneGuardTests", code: 0)))
+    }
+
     func testIndicatorViewModel_startRecording_withNoMicrophone_showsNoMicrophoneState() {
-        withNoMicrophone {
-            let viewModel = IndicatorViewModel()
+        withActiveMicrophone(nil) {
+            let viewModel = IndicatorViewModel(injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
             viewModel.startRecording()
 
             XCTAssertTrue(viewModel.state == .noMicrophone,
@@ -1383,7 +1487,7 @@ final class NoMicrophoneGuardTests: XCTestCase {
     }
 
     func testContentViewModel_startRecording_withNoMicrophone_doesNotStartRecording() {
-        withNoMicrophone {
+        withActiveMicrophone(nil) {
             let viewModel = ContentViewModel()
             viewModel.startRecording()
 
@@ -1392,6 +1496,60 @@ final class NoMicrophoneGuardTests: XCTestCase {
             XCTAssertFalse(viewModel.recorder.isRecording,
                            "Recorder must not be recording when there is no microphone")
         }
+    }
+
+    /// `TranscriptionService` starts loading its engine inside its own
+    /// initializer, so `isTranscriptionBusy` is true from the first touch of the
+    /// service until the model is ready - the window a fresh launch first sees a
+    /// hotkey press in. Checking busy first made the microphone guard unreachable
+    /// there: the indicator answered "Processing..." and the user was never told
+    /// that nothing was being recorded because there is no input device.
+    func testIndicatorViewModel_startRecording_withNoMicrophone_whileTheEngineIsLoading_showsNoMicrophoneState() async {
+        let gate = EngineLoadGate()
+        let overloaded = busyService(named: "no-mic-busy", gate: gate)
+        XCTAssertTrue(overloaded.isLoading, "Precondition: the engine load holds the service busy")
+
+        withActiveMicrophone(nil) {
+            let viewModel = IndicatorViewModel(transcriptionService: overloaded, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .noMicrophone,
+                          "A loading engine must not hide the missing microphone")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording when there is no microphone")
+
+            viewModel.cleanup()
+        }
+
+        await finishBusyLoad("no-mic-busy", gate: gate)
+    }
+
+    /// The other half of that precedence: with an input device present, a busy
+    /// engine still refuses with the busy message instead of starting a recording.
+    func testIndicatorViewModel_startRecording_withMicrophone_whileTheEngineIsLoading_showsBusy() async {
+        let gate = EngineLoadGate()
+        let overloaded = busyService(named: "mic-busy", gate: gate)
+        XCTAssertTrue(overloaded.isLoading, "Precondition: the engine load holds the service busy")
+
+        let device = MicrophoneService.AudioDevice(id: "no-microphone-guard-test-input",
+                                                  name: "Test Input",
+                                                  manufacturer: "Test",
+                                                  isBuiltIn: true)
+        withActiveMicrophone(device) {
+            let viewModel = IndicatorViewModel(transcriptionService: overloaded, injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
+            viewModel.startRecording()
+
+            XCTAssertTrue(viewModel.state == .busy,
+                          "A busy engine must still refuse to start a recording")
+            XCTAssertFalse(viewModel.recorder.isRecording,
+                           "Recorder must not be recording while the engine is busy")
+
+            viewModel.cleanup()
+        }
+
+        await finishBusyLoad("mic-busy", gate: gate)
     }
 }
 
@@ -1403,21 +1561,22 @@ final class EscapeCancelConfirmationTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        savedPrefValue = UserDefaults.standard.object(forKey: prefsKey)
-        UserDefaults.standard.removeObject(forKey: prefsKey)
+        savedPrefValue = AppPreferences.defaults.object(forKey: prefsKey)
+        AppPreferences.defaults.removeObject(forKey: prefsKey)
     }
 
     override func tearDown() {
         if let savedPrefValue {
-            UserDefaults.standard.set(savedPrefValue, forKey: prefsKey)
+            AppPreferences.defaults.set(savedPrefValue, forKey: prefsKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: prefsKey)
+            AppPreferences.defaults.removeObject(forKey: prefsKey)
         }
         super.tearDown()
     }
 
     private func makeRecordingViewModel(elapsed: TimeInterval) -> IndicatorViewModel {
-        let viewModel = IndicatorViewModel()
+        let viewModel = IndicatorViewModel(injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
         viewModel.state = .recording
         viewModel.recordingStartedAt = Date().addingTimeInterval(-elapsed)
         return viewModel
@@ -1447,7 +1606,7 @@ final class EscapeCancelConfirmationTests: XCTestCase {
     }
 
     func testLongRecording_withToggleEnabled_cancelsImmediately() {
-        UserDefaults.standard.set(true, forKey: prefsKey)
+        AppPreferences.defaults.set(true, forKey: prefsKey)
         let viewModel = makeRecordingViewModel(elapsed: 15)
 
         XCTAssertTrue(viewModel.handleCancelRequest(),
@@ -1458,7 +1617,8 @@ final class EscapeCancelConfirmationTests: XCTestCase {
     }
 
     func testDecodingState_cancelsImmediately() {
-        let viewModel = IndicatorViewModel()
+        let viewModel = IndicatorViewModel(injectText: { _ in KeyboardSimulator.InjectionResult(trusted: true, eventsPosted: 2) }
+)
         viewModel.state = .decoding
         viewModel.recordingStartedAt = Date().addingTimeInterval(-15)
 
@@ -1607,22 +1767,11 @@ final class HebrewIvritSupportTests: XCTestCase {
         XCTAssertTrue(ivrit?.url.absoluteString.contains("ivrit-ai/whisper-large-v3-turbo-ggml") ?? false)
     }
 
-    // MARK: Task 4 — preferred-language lookup
-    func testPreferredLanguageLookupForIvritModel() {
-        XCTAssertEqual(
-            SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-ivrit-large-v3-turbo.bin"),
-            "he")
-    }
-
-    func testPreferredLanguageLookupForStandardModelIsNil() {
-        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "ggml-large-v3-turbo.bin"))
-    }
-
-    func testPreferredLanguageLookupForUnknownFilenameIsNil() {
-        XCTAssertNil(SettingsDownloadableModels.preferredLanguage(forFilename: "does-not-exist.bin"))
-    }
-
     // MARK: Task 5 — conditional model visibility
+    //
+    // The transcription language is always auto-detected now, so the only thing
+    // left that can decide whether a language-specific model is worth offering
+    // is the machine's own language.
     private func makeLanguageModel(downloaded: Bool) -> SettingsDownloadableModel {
         SettingsDownloadableModel(
             name: "Turbo V3 Hebrew", isDownloaded: downloaded,
@@ -1631,24 +1780,19 @@ final class HebrewIvritSupportTests: XCTestCase {
             filename: "ggml-ivrit-large-v3-turbo.bin", preferredLanguage: "he")
     }
 
-    func testLanguageModelHiddenWhenNotDownloadedAndLanguageNotSelected() {
+    func testLanguageModelHiddenWhenNotDownloadedAndSystemLanguageDiffers() {
         let model = makeLanguageModel(downloaded: false)
-        XCTAssertFalse(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
-    }
-
-    func testLanguageModelVisibleWhenSelectedLanguageMatches() {
-        let model = makeLanguageModel(downloaded: false)
-        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "he", systemLanguage: "en"))
+        XCTAssertFalse(SettingsDownloadableModels.isVisible(model, systemLanguage: "en"))
     }
 
     func testLanguageModelVisibleWhenSystemLanguageMatches() {
         let model = makeLanguageModel(downloaded: false)
-        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "he"))
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, systemLanguage: "he"))
     }
 
     func testLanguageModelVisibleWhenAlreadyDownloaded() {
         let model = makeLanguageModel(downloaded: true)
-        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, systemLanguage: "en"))
     }
 
     func testStandardModelAlwaysVisible() {
@@ -1656,7 +1800,7 @@ final class HebrewIvritSupportTests: XCTestCase {
             name: "Turbo V3 large", isDownloaded: false,
             url: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true")!,
             size: 1, description: "d")
-        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, selectedLanguage: "en", systemLanguage: "en"))
+        XCTAssertTrue(SettingsDownloadableModels.isVisible(model, systemLanguage: "en"))
     }
 
     // MARK: Task 6 — Hugging Face page URL
@@ -1691,22 +1835,22 @@ final class WhisperModelDownloadTests: XCTestCase {
     }
 
     func testValidationError_successStatusCodes_returnNil() {
-        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 200)))
-        XCTAssertNil(WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: 206)))
+        XCTAssertNil(ModelDownloadDelegate.validationError(for: httpResponse(statusCode: 200)))
+        XCTAssertNil(ModelDownloadDelegate.validationError(for: httpResponse(statusCode: 206)))
     }
 
     func testValidationError_nonHTTPResponse_returnsNil() {
-        XCTAssertNil(WhisperDownloadDelegate.validationError(for: nil))
+        XCTAssertNil(ModelDownloadDelegate.validationError(for: nil))
         let plainResponse = URLResponse(
             url: URL(string: "https://huggingface.co")!,
             mimeType: nil, expectedContentLength: 0, textEncodingName: nil
         )
-        XCTAssertNil(WhisperDownloadDelegate.validationError(for: plainResponse))
+        XCTAssertNil(ModelDownloadDelegate.validationError(for: plainResponse))
     }
 
     func testValidationError_errorStatusCodes_returnError() {
         for statusCode in [403, 404, 429, 500, 503] {
-            let error = WhisperDownloadDelegate.validationError(for: httpResponse(statusCode: statusCode))
+            let error = ModelDownloadDelegate.validationError(for: httpResponse(statusCode: statusCode))
             XCTAssertNotNil(error, "Expected error for HTTP \(statusCode)")
             XCTAssertEqual((error as NSError?)?.code, statusCode)
             XCTAssertTrue((error as NSError?)?.localizedDescription.contains("\(statusCode)") ?? false)
@@ -1715,23 +1859,23 @@ final class WhisperModelDownloadTests: XCTestCase {
 
     func testProgressFraction_knownLength_returnsFraction() {
         XCTAssertEqual(
-            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 1000),
+            ModelDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 1000),
             0.5
         )
         XCTAssertEqual(
-            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1000, expectedContentLength: 1000),
+            ModelDownloadDelegate.progressFraction(totalBytesWritten: 1000, expectedContentLength: 1000),
             1.0
         )
     }
 
     func testProgressFraction_unknownLength_returnsNil() {
-        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: NSURLSessionTransferSizeUnknown))
-        XCTAssertNil(WhisperDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 0))
+        XCTAssertNil(ModelDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: NSURLSessionTransferSizeUnknown))
+        XCTAssertNil(ModelDownloadDelegate.progressFraction(totalBytesWritten: 500, expectedContentLength: 0))
     }
 
     func testProgressFraction_overflowPastExpected_clampsToOne() {
         XCTAssertEqual(
-            WhisperDownloadDelegate.progressFraction(totalBytesWritten: 1500, expectedContentLength: 1000),
+            ModelDownloadDelegate.progressFraction(totalBytesWritten: 1500, expectedContentLength: 1000),
             1.0
         )
     }

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import Foundation
 
 enum ModifierKey: String, CaseIterable, Identifiable, Codable {
@@ -72,34 +71,6 @@ enum ModifierKey: String, CaseIterable, Identifiable, Codable {
         }
     }
     
-    var cgEventFlag: CGEventFlags {
-        switch self {
-        case .none: return []
-        case .leftCommand, .rightCommand: return .maskCommand
-        case .leftOption, .rightOption: return .maskAlternate
-        case .leftShift, .rightShift: return .maskShift
-        case .leftControl, .rightControl: return .maskControl
-        case .fn: return .maskSecondaryFn
-        }
-    }
-    
-    var physicalEventFlag: CGEventFlags {
-        let mask: Int32
-        switch self {
-        case .leftCommand: mask = NX_DEVICELCMDKEYMASK
-        case .rightCommand: mask = NX_DEVICERCMDKEYMASK
-        case .leftOption: mask = NX_DEVICELALTKEYMASK
-        case .rightOption: mask = NX_DEVICERALTKEYMASK
-        case .leftShift: mask = NX_DEVICELSHIFTKEYMASK
-        case .rightShift: mask = NX_DEVICERSHIFTKEYMASK
-        case .leftControl: mask = NX_DEVICELCTLKEYMASK
-        case .rightControl: mask = NX_DEVICERCTLKEYMASK
-        case .fn: return .maskSecondaryFn
-        case .none: return []
-        }
-        return CGEventFlags(rawValue: UInt64(mask))
-    }
-
     var isCommandOrOption: Bool {
         switch self {
         case .leftCommand, .rightCommand, .leftOption, .rightOption:
@@ -113,8 +84,8 @@ enum ModifierKey: String, CaseIterable, Identifiable, Codable {
 class ModifierKeyMonitor {
     static let shared = ModifierKeyMonitor()
     
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
     private var selectedModifierKey: ModifierKey = .none
     private var isModifierPressed = false
     
@@ -134,79 +105,73 @@ class ModifierKeyMonitor {
         selectedModifierKey = modifierKey
         isModifierPressed = false
         
-        let eventMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
-        
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: eventMask,
-            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else {
-                    return Unmanaged.passUnretained(event)
-                }
-                
-                let monitor = Unmanaged<ModifierKeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    monitor.reenableTap()
-                    return Unmanaged.passUnretained(event)
-                }
-                
-                monitor.handleFlagsChanged(event: event)
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            print("ModifierKeyMonitor: Failed to create event tap. Check accessibility permissions.")
-            return
+        // `NSEvent` global monitors are gated by Accessibility trust alone.
+        // The previous `CGEvent` tap at `.cgSessionEventTap` with `.listenOnly`
+        // saw the same `.flagsChanged` events but additionally required Input
+        // Monitoring, so users had to grant two permissions for one hotkey.
+        // The global monitor covers events going to other apps, the local one
+        // covers events delivered to this app's own windows; neither consumes
+        // the event, so normal Command usage is untouched.
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlagsChanged(event: event)
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlagsChanged(event: event)
+            return event
         }
         
-        eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        
-        if let source = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: true)
-            print("ModifierKeyMonitor: Started monitoring for \(modifierKey.displayName)")
+        if globalMonitor == nil {
+            print("ModifierKeyMonitor: Failed to install global monitor. Check accessibility permissions.")
         }
+        
+        print("ModifierKeyMonitor: Started monitoring for \(modifierKey.displayName)")
     }
     
     func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = runLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
-            }
+        if let globalMonitor = globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
         }
-        eventTap = nil
-        runLoopSource = nil
+        if let localMonitor = localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+        globalMonitor = nil
+        localMonitor = nil
         isModifierPressed = false
         print("ModifierKeyMonitor: Stopped")
     }
     
-    fileprivate func reenableTap() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: true)
-            print("ModifierKeyMonitor: Re-enabled tap after timeout")
-        }
+    func handleFlagsChanged(event: NSEvent) {
+        handleFlagsChanged(keyCode: event.keyCode, flags: event.modifierFlags)
     }
     
-    func handleFlagsChanged(event: CGEvent) {
-        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags
-        
+    /// The press/release state machine, separated from the monitor plumbing so
+    /// it can be driven without a real keyboard.
+    ///
+    /// `flags` is the modifier state *after* the change, and `AppKit` reports
+    /// modifiers device-independently: both ⌘ keys produce `.command`. That is
+    /// enough to tell the two sides apart, because `keyCode` already identifies
+    /// which key changed, but not on its own to tell a press from a release:
+    /// while the other side of the same pair is held, the family flag stays set
+    /// for both. The event itself carries the answer — it was generated because
+    /// *this* key changed — so an edge already seen in `isModifierPressed` is
+    /// the release. Without that, releasing the bound side while the other side
+    /// is held would leave the hold open.
+    func handleFlagsChanged(keyCode: UInt16, flags: NSEvent.ModifierFlags) {
         guard keyCode == selectedModifierKey.keyCode else { return }
         
-        let cgFlag = selectedModifierKey.physicalEventFlag
-        let isPressed = flags.contains(cgFlag)
+        // `familyDown` is the state of the whole modifier family, both sides
+        // included; `isModifierPressed` is the state of the bound side alone.
+        // The event says the bound side changed, so a family that is still down
+        // while this side was already down can only mean this side came up.
+        let familyDown = flags.contains(selectedModifierKey.modifierFlag)
+        let isPressed = familyDown && !isModifierPressed
         
-        if isPressed && !isModifierPressed {
+        if isPressed {
             isModifierPressed = true
             DispatchQueue.main.async {
                 self.onKeyDown?()
             }
-        } else if !isPressed && isModifierPressed {
+        } else if isModifierPressed {
             isModifierPressed = false
             DispatchQueue.main.async {
                 self.onKeyUp?()

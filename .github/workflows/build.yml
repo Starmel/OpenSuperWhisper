@@ -13,7 +13,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: brew install cmake libomp rust
+        run: brew install cmake rust
       - name: Set up Ruby (for xcpretty)
         uses: ruby/setup-ruby@v1
         with:
@@ -23,4 +23,24 @@ jobs:
       - name: Make run.sh executable
         run: chmod +x ./run.sh
       - name: Build with run.sh
-        run: ./run.sh build 
+        run: ./run.sh build
+      - name: Verify the packaging contract (uninstaller path list, idempotence)
+        run: ./Scripts/verify-packaging.sh
+      - name: Check the images (both engines in process, no OpenMP)
+        run: |
+          APP=build/Build/Products/Debug/OpenSuperWhisper.app/Contents/MacOS
+          BINARY="$APP/OpenSuperWhisper.debug.dylib"
+          [ -f "$BINARY" ] || BINARY="$APP/OpenSuperWhisper"
+          nm -a "$BINARY" | grep -q "_llama_model_load_from_file"    # the transform engine is linked in
+          nm -a "$BINARY" | grep -q "_whisper_init_from_file_with_params"   # so is the speech engine
+          # `set -e` ignores a pipeline beginning with `!`, so the absence
+          # assertions are written as explicit failures instead.
+          if nm -u "$BINARY" | grep -q "_omp_"; then
+            echo "OpenMP symbols in $BINARY" >&2   # nothing calls OpenMP
+            exit 1
+          fi
+          if otool -L "$BINARY" | grep -q "libomp"; then
+            echo "libomp is linked into $BINARY" >&2   # and nothing links it
+            exit 1
+          fi
+

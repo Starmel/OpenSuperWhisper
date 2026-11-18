@@ -13,16 +13,13 @@ final class ModifierReleaseTests: XCTestCase {
             let up = expectation(description: "up")
             monitor.onKeyDown = { down.fulfill() }
             monitor.onKeyUp = { up.fulfill() }
-            func send(_ key: ModifierKey, _ flags: CGEventFlags) throws {
-                let event = try XCTUnwrap(CGEvent(keyboardEventSource: nil, virtualKey: key.keyCode, keyDown: true))
-                event.type = .flagsChanged
-                event.flags = flags
-                monitor.handleFlagsChanged(event: event)
+            func send(_ key: ModifierKey, _ flags: NSEvent.ModifierFlags) {
+                monitor.handleFlagsChanged(keyCode: key.keyCode, flags: flags)
             }
-            try send(bound, [bound.cgEventFlag, bound.physicalEventFlag])
-            try send(other, [bound.cgEventFlag, bound.physicalEventFlag, other.physicalEventFlag])
-            try send(bound, [other.cgEventFlag, other.physicalEventFlag])
-            try send(other, [])
+            send(bound, [bound.modifierFlag])
+            send(other, [bound.modifierFlag, other.modifierFlag])
+            send(bound, [other.modifierFlag])
+            send(other, [])
             await fulfillment(of: [down, up], timeout: 1)
         }
     }

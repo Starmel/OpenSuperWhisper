@@ -33,13 +33,37 @@ struct Recording: Identifiable, Codable, FetchableRecord, PersistableRecord, Equ
                lhs.isRegeneration == rhs.isRegeneration
     }
 
+    /// Where a recording's audio lives: the app's own Application Support in
+    /// production, and a directory of this process's own under test.
+    ///
+    /// The test root is not tidiness. A test host is the app, so a case that
+    /// builds a view model with its default arguments uses `RecordingStore.shared`
+    /// and writes into the recordings directory of the app the developer is
+    /// using — which is what happened: the captain's own directory had 4-byte
+    /// `.wav` files with no database row behind them, left by suite runs at
+    /// 14:32, 14:38, 14:41, 14:45, 14:51, 14:54 and 14:59 on the day this was
+    /// written. Same seam and same reasoning as `AppPreferences.defaults`.
     static var recordingsDirectory: URL {
+        guard !OpenSuperWhisperApp.isRunningTests else {
+            return testRoot.appendingPathComponent("recordings")
+        }
         let applicationSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!
         let appDirectory = applicationSupport.appendingPathComponent(Bundle.main.bundleIdentifier!)
         return appDirectory.appendingPathComponent("recordings")
     }
+
+    /// A root of this process's own for everything a test writes: one temporary
+    /// directory per pid, so two suites running in parallel cannot meet, and none
+    /// of it is the app the developer is using.
+    static let testRoot: URL = {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenSuperWhisperTests.recordings.\(ProcessInfo.processInfo.processIdentifier)",
+                                    isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }()
 
     static func fileName(for id: UUID) -> String {
         "\(id.uuidString).wav"
@@ -192,10 +216,19 @@ class RecordingStore: ObservableObject {
         let name = alreadySaved ? audio.url.lastPathComponent : Recording.fileName(for: id)
         let destination = Recording.recordingsDirectory.appendingPathComponent(name)
         if !alreadySaved {
-            try AudioRecorder.shared.moveTemporaryRecording(from: audio.url, to: destination)
+            do {
+                try AudioRecorder.shared.moveTemporaryRecording(from: audio.url, to: destination)
+            } catch {
+                // A move can fail where a copy succeeds (a lock, a race with the
+                // temp cleanup). Copy and remove rather than leaving the audio in
+                // the directory whose age sweeper deletes it: a dictation kept
+                // and reported to the user must not be swept away afterwards.
+                try FileManager.default.copyItem(at: audio.url, to: destination)
+                try? FileManager.default.removeItem(at: audio.url)
+            }
         }
         let row = Recording(id: id, timestamp: Date(), fileName: name,
-                            transcription: error.localizedDescription, duration: audio.duration,
+                            transcription: "", duration: audio.duration,
                             status: .failed, progress: 0, sourceFileURL: destination.path)
         do { try await addRecordingSync(row) }
         catch { throw PreservedAudioError(url: destination, underlying: error) }

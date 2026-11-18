@@ -154,6 +154,17 @@ class MicrophoneService: ObservableObject {
     }
     
     func getDefaultMicrophone() -> AudioDevice? {
+        #if os(macOS)
+        // The microphone the system uses as default input right now is the one the
+        // user actually talks into elsewhere, so it beats any guess: a built-in
+        // device may exist while the real microphone is an external or webcam one.
+        if let defaultID = getCurrentSystemDefaultInputDevice(),
+           isValidInputDeviceID(defaultID),
+           let matching = availableMicrophones.first(where: { getCoreAudioDeviceID(for: $0) == defaultID }) {
+            return matching
+        }
+        #endif
+        
         if let builtIn = availableMicrophones.first(where: { $0.isBuiltIn }) {
             return builtIn
         }
@@ -222,7 +233,12 @@ class MicrophoneService: ObservableObject {
     }
     
     private func getTransportType(for device: AudioDevice) -> Int32 {
-        guard let deviceID = getCoreAudioDeviceID(for: device) else { return 0 }
+        guard let deviceID = getCoreAudioDeviceID(for: device),
+              isValidInputDeviceID(deviceID) else {
+            // Not a device we can read from: report "unknown" rather than a 0 that
+            // looks like a transport type the HAL actually returned.
+            return Int32(kAudioDeviceTransportTypeUnknown)
+        }
         
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyTransportType,
@@ -242,7 +258,7 @@ class MicrophoneService: ObservableObject {
             &transportType
         )
         
-        return status == noErr ? Int32(transportType) : 0
+        return status == noErr ? Int32(transportType) : Int32(kAudioDeviceTransportTypeUnknown)
     }
     
     func isActiveMicrophoneContinuity() -> Bool {
@@ -316,36 +332,50 @@ class MicrophoneService: ObservableObject {
             &translation
         )
         
-        return status == noErr ? audioDeviceID : nil
+        // A successful lookup can still hand back 0 (`kAudioObjectUnknown`),
+        // which means "no such device": there is nothing to point the engine at.
+        guard status == noErr, audioDeviceID != kAudioObjectUnknown else { return nil }
+        return audioDeviceID
     }
     
-    func setAsSystemDefaultInput(_ device: AudioDevice) -> Bool {
-        guard let deviceID = getCoreAudioDeviceID(for: device) else {
-            return false
-        }
-        return setSystemDefaultInputDevice(deviceID)
-    }
-    
-    func setSystemDefaultInputDevice(_ deviceID: AudioDeviceID) -> Bool {
+    /// Whether `deviceID` can actually record: 0 is `kAudioObjectUnknown`, the HAL
+    /// does not know unknown ids, and an id with no input streams is not a microphone.
+    /// Aggregates, virtual devices and loopbacks all have input streams, so they are
+    /// valid here: only a class check would have thrown them out.
+    func isValidInputDeviceID(_ deviceID: AudioDeviceID) -> Bool {
+        guard deviceID != AudioDeviceID(kAudioObjectUnknown) else { return false }
+        
         var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeInput,
             mElement: kAudioObjectPropertyElementMain
         )
         
-        var mutableDeviceID = deviceID
-        let status = AudioObjectSetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            0,
-            nil,
-            UInt32(MemoryLayout<AudioDeviceID>.size),
-            &mutableDeviceID
-        )
+        var propertySize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &propertyAddress, 0, nil, &propertySize) == noErr,
+              propertySize >= UInt32(MemoryLayout<UInt32>.size) else {
+            return false
+        }
         
-        return status == noErr
+        let bufferListRawPointer = UnsafeMutableRawPointer.allocate(byteCount: Int(propertySize), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { bufferListRawPointer.deallocate() }
+        
+        guard AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, bufferListRawPointer) == noErr else {
+            return false
+        }
+        
+        // mNumberBuffers is the first field of AudioBufferList, and the list was
+        // sized for at least one field: no input buffers means nothing to record.
+        return bufferListRawPointer.assumingMemoryBound(to: UInt32.self).pointee > 0
     }
     
+    /// The system's default input device, read and never written.
+    ///
+    /// This is the app's only reach of `kAudioHardwarePropertyDefaultInputDevice`:
+    /// it is what the picker falls back to, and what recording is measured
+    /// against. Nothing here — or anywhere else in the app — writes it, so a
+    /// capture that dies mid-recording cannot leave the user's own setting
+    /// pointing somewhere he did not choose.
     func getCurrentSystemDefaultInputDevice() -> AudioDeviceID? {
         var deviceID = AudioDeviceID()
         var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
@@ -369,6 +399,10 @@ class MicrophoneService: ObservableObject {
     }
     
     func getInputVolume(for deviceID: AudioDeviceID) -> Float? {
+        // 0 (`kAudioObjectUnknown`) and ids without input streams are not devices,
+        // so there is no volume to read: unavailable, not a value.
+        guard isValidInputDeviceID(deviceID) else { return nil }
+        
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
             mScope: kAudioDevicePropertyScopeInput,
@@ -402,6 +436,10 @@ class MicrophoneService: ObservableObject {
     }
     
     func setInputVolume(_ volume: Float, for deviceID: AudioDeviceID) -> Bool {
+        // Writing a volume to 0 (`kAudioObjectUnknown`) or to an id with no input
+        // streams would report success for a device that cannot record at all.
+        guard isValidInputDeviceID(deviceID) else { return false }
+        
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyVolumeScalar,
             mScope: kAudioDevicePropertyScopeInput,
@@ -451,39 +489,6 @@ class MicrophoneService: ObservableObject {
             return false
         }
         return setInputVolume(volume, for: deviceID)
-    }
-    
-    func getInputChannelCount(for device: AudioDevice) -> Int {
-        guard let deviceID = getCoreAudioDeviceID(for: device) else { return 1 }
-        
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioDevicePropertyScopeInput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        
-        var propertySize: UInt32 = 0
-        let sizeStatus = AudioObjectGetPropertyDataSize(deviceID, &propertyAddress, 0, nil, &propertySize)
-        guard sizeStatus == noErr, propertySize > 0 else { return 1 }
-        
-        let bufferListRawPointer = UnsafeMutableRawPointer.allocate(byteCount: Int(propertySize), alignment: MemoryLayout<AudioBufferList>.alignment)
-        defer { bufferListRawPointer.deallocate() }
-        
-        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, bufferListRawPointer)
-        guard status == noErr else { return 1 }
-        
-        let bufferList = bufferListRawPointer.assumingMemoryBound(to: AudioBufferList.self)
-        let bufferCount = Int(bufferList.pointee.mNumberBuffers)
-        
-        var totalChannels = 0
-        withUnsafeMutablePointer(to: &bufferList.pointee.mBuffers) { firstBufferPtr in
-            let buffers = UnsafeMutableBufferPointer<AudioBuffer>(start: firstBufferPtr, count: bufferCount)
-            for buffer in buffers {
-                totalChannels += Int(buffer.mNumberChannels)
-            }
-        }
-        
-        return max(totalChannels, 1)
     }
     #endif
 }

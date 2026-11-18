@@ -10,10 +10,32 @@ project(libwhisper)
 
 option(BUILD_SHARED_LIBS "build shared libraries" OFF)
 
-# Disable i8mm/MATMUL_INT8 to fix compilation on GitHub Actions runners
-# The feature detection passes but compilation fails with the newer Xcode toolchain
-# Undefine the feature macro to prevent i8mm intrinsics from being used
-add_compile_definitions(GGML_MATMUL_INT8=0)
-add_compile_options(-U__ARM_FEATURE_MATMUL_INT8)
+# ONE ggml in the app image.
+#
+# The transform engine vendors llama.cpp, which carries a much newer ggml than
+# the copy inside whisper.cpp (0.25.0 vs 0.20.2). Linking both archives into one
+# binary fails with duplicate symbols (936 shared globals in libggml-base, 602 in
+# libggml-cpu, 259 in libggml-metal), so whisper has to build against llama.cpp's
+# ggml. That is upstream's supported configuration: WHISPER_USE_SYSTEM_GGML=ON
+# makes whisper.cpp `find_package(ggml REQUIRED)` instead of adding its own copy.
+#
+# The package below is produced by libllama/ (the vendored llama.cpp), which owns
+# the single ggml: Scripts/build-native.sh configures and builds libllama, then
+# `cmake --install`s its ggml package here before libwhisper is configured. The
+# libggml*.a the app links come from libllama's build tree -- the installed
+# copies exist only so this configure step can find them.
+set(WHISPER_USE_SYSTEM_GGML ON CACHE BOOL "whisper: use system-installed GGML library" FORCE)
+
+if(NOT DEFINED ggml_DIR)
+    set(ggml_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libllama/build/ggml-prefix/lib/cmake/ggml"
+        CACHE PATH "directory holding the ggml CMake package installed from libllama")
+endif()
+
+if(NOT EXISTS "${ggml_DIR}/ggml-config.cmake")
+    message(FATAL_ERROR
+        "The vendored ggml package is missing at ${ggml_DIR}.\n"
+        "Build it first:  Scripts/build-native.sh\n"
+        "(run.sh and notarize_app.sh call that script for you before configuring this project.)")
+endif()
 
 add_subdirectory(whisper.cpp)

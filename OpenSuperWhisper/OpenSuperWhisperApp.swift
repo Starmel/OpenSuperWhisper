@@ -88,7 +88,6 @@ class AppState: ObservableObject {
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject {
     private var statusItem: NSStatusItem?
     private var mainWindow: NSWindow?
-    private var languageSubmenu: NSMenu?
     private var copyTranscriptionItem: NSMenuItem?
     private var microphoneService = MicrophoneService.shared
     private var microphoneObserver: AnyCancellable?
@@ -97,18 +96,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     
     private var terminationTask: Task<Void, Never>?
 
+    /// Set when Settings is asked for while the main window is not on screen.
+    /// ContentView is what presents the sheet, and it does not exist until the
+    /// window does, so the request is held until the window is key again.
+    private var hasPendingSettingsRequest = false
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard terminationTask == nil else { return .terminateLater }
         terminationTask = Task { @MainActor in
             await TranscriptionService.shared.shutdown()
             await TranscriptionQueue.shared.stopProcessingQueue()
+            TransformRuntime.shared.unload()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        guard !OpenSuperWhisperApp.isRunningTests else { return }
+        // A paste delivery writes the transcript over the clipboard and puts the
+        // previous contents back 1.5 s later, from a block inside this process. If
+        // the process died inside that window, the contents are still on disk
+        // (`ClipboardRecovery`) and this is where they come back — before anything
+        // else in the app has a chance to put something else on the clipboard.
+        // Nothing is pending in the ordinary case, so this is a file-existence
+        // check on a normal launch; under test it is a no-op by construction (the
+        // decision lives in `launchStep`, which a test drives for both branches —
+        // this one line is verified by reading it, and the Readme says so).
+        ClipboardRecovery.launchStep(isRunningTests: OpenSuperWhisperApp.isRunningTests)
+
+        guard !OpenSuperWhisperApp.isRunningTests else {
+            disableWindowFrameAutosave()
+            return
+        }
 
         setupStatusBarItem()
 
@@ -248,29 +267,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         
         menu.addItem(NSMenuItem(title: "OpenSuperWhisper", action: #selector(openApp), keyEquivalent: "o"))
 
-        let transcriptionLanguageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
-        languageSubmenu = NSMenu()
-        
-        if let languageSubmenu {
-            populateLanguageSubmenu(languageSubmenu)
-        }
-        
-        transcriptionLanguageItem.submenu = languageSubmenu
-        menu.addItem(transcriptionLanguageItem)
-
         let copyItem = NSMenuItem(title: "Copy", action: #selector(copyLastTranscription(_:)), keyEquivalent: "")
         copyItem.target = self
         copyItem.isHidden = true
         copyTranscriptionItem = copyItem
         menu.addItem(copyItem)
-        
-        // Listen for language preference changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(languagePreferenceChanged),
-            name: .appPreferencesLanguageChanged,
-            object: nil
-        )
         
         menu.addItem(NSMenuItem.separator())
         
@@ -329,6 +330,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         menu.addItem(microphoneMenu)
         
         menu.addItem(NSMenuItem.separator())
+
+        // The status menu is the only way into Settings for a window that is
+        // hidden or closed, so it needs the counterpart of the app menu's
+        // Settings… item (see `openSettings(_:)`).
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettings(_:)),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        let uninstallItem = NSMenuItem(
+            title: "Uninstall OpenSuperWhisper…",
+            action: #selector(uninstallApp(_:)),
+            keyEquivalent: ""
+        )
+        uninstallItem.target = self
+        menu.addItem(uninstallItem)
+
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
         
         statusItem?.menu = menu
@@ -375,52 +396,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     @objc private func openApp() {
         showMainWindow()
     }
+
+    /// The status menu's counterpart of the app menu's Settings… item. Unlike
+    /// that one it cannot assume a window is on screen: ContentView is what
+    /// presents the sheet, so the window is brought forward first and the
+    /// notification is posted as soon as there is something to receive it.
+    @objc private func openSettings(_ sender: Any?) {
+        let windowWasOnScreen = mainWindow?.isVisible == true
+        showMainWindow()
+
+        if windowWasOnScreen {
+            NotificationCenter.default.post(name: .openSettings, object: nil)
+        } else {
+            // Posted from anyWindowDidBecomeKey once the window is back.
+            hasPendingSettingsRequest = true
+        }
+    }
+
+    private func presentPendingSettingsRequest() {
+        guard hasPendingSettingsRequest else { return }
+        hasPendingSettingsRequest = false
+        NotificationCenter.default.post(name: .openSettings, object: nil)
+    }
     
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
     }
-    
-    @objc private func selectLanguage(_ sender: NSMenuItem) {
-        guard let languageCode = sender.representedObject as? String else { return }
-        
-        // Update preferences
-        AppPreferences.shared.whisperLanguage = languageCode
-        
-        // Update menu item states
-        if let submenu = sender.menu {
-            for item in submenu.items {
-                item.state = .off
-            }
-            sender.state = .on
+
+    /// The menu-bar entry point for the same operation Settings offers. A menu
+    /// item cannot present a sheet, so the consequences are spelled out in an
+    /// alert instead.
+    @objc private func uninstallApp(_ sender: Any?) {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall OpenSuperWhisper?"
+        alert.informativeText = """
+            This removes the app and everything it has stored on this Mac: your \
+            dictation history, the downloaded speech and transform models, your \
+            settings and the installer receipt. It cannot be undone.
+
+            \(UninstallService.untouchedNote)
+            """
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        do {
+            try UninstallService.startUninstall(resetPermissions: false)
+        } catch {
+            let failure = NSAlert()
+            failure.messageText = "Uninstall failed"
+            failure.informativeText = error.localizedDescription
+            failure.alertStyle = .warning
+            failure.runModal()
+            return
         }
-    }
-    
-    @objc private func languagePreferenceChanged() {
-        updateLanguageMenuSelection()
-    }
-    
-    private func updateLanguageMenuSelection() {
-        guard let languageSubmenu = languageSubmenu else { return }
-        populateLanguageSubmenu(languageSubmenu)
-    }
-    
-    private func populateLanguageSubmenu(_ submenu: NSMenu) {
-        submenu.removeAllItems()
-        
-        let supportedLanguages = LanguageUtil.supportedLanguages(
-            engine: AppPreferences.shared.selectedEngine,
-            fluidAudioModelVersion: AppPreferences.shared.fluidAudioModelVersion
-        )
-        let currentLanguage = AppPreferences.shared.whisperLanguage
-        
-        for languageCode in supportedLanguages {
-            let languageName = LanguageUtil.languageNames[languageCode] ?? languageCode
-            let languageItem = NSMenuItem(title: languageName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
-            languageItem.target = self
-            languageItem.representedObject = languageCode
-            languageItem.state = (currentLanguage == languageCode) ? .on : .off
-            submenu.addItem(languageItem)
-        }
+        NSApplication.shared.terminate(nil)
     }
     
     /// The WindowGroup window must be told apart from the other windows the
@@ -439,10 +471,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     /// main-type window becomes key.
     @objc private func anyWindowDidBecomeKey(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
-              Self.isMainAppWindow(window),
-              window !== mainWindow
+              Self.isMainAppWindow(window)
         else { return }
-        adoptMainWindow(window)
+
+        if window !== mainWindow {
+            adoptMainWindow(window)
+        }
+
+        presentPendingSettingsRequest()
     }
 
     private func adoptMainWindow(_ window: NSWindow) {
@@ -456,6 +492,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
             window.orderOut(nil)
             NSApplication.shared.setActivationPolicy(.accessory)
         }
+    }
+
+    /// No window of a test process may autosave its frame.
+    ///
+    /// AppKit writes `NSWindow Frame <name>` into `UserDefaults.standard` — the
+    /// domain the developer's own app reads, since the test bundle runs under the
+    /// app's bundle id — for a window that carries a frame autosave name, on its
+    /// own and with no test able to put the key back. The name SwiftUI gives the
+    /// WindowGroup window is exactly the one production remembers the user's
+    /// position under, and SwiftUI sets it after this method returns, so every
+    /// window AppKit announces is cleared of it. Production keeps its name: the
+    /// position he left his window in still persists.
+    private func disableWindowFrameAutosave() {
+        for window in NSApplication.shared.windows {
+            window.setFrameAutosaveName("")
+        }
+
+        for name in [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification,
+            NSWindow.didUpdateNotification
+        ] {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(clearFrameAutosaveName(_:)),
+                name: name,
+                object: nil
+            )
+        }
+    }
+
+    @objc private func clearFrameAutosaveName(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.frameAutosaveName.isEmpty
+        else { return }
+
+        window.setFrameAutosaveName("")
     }
 
     @objc private func anyWindowWillClose(_ notification: Notification) {

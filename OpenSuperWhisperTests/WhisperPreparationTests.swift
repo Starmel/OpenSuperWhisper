@@ -21,9 +21,12 @@ private final class PreparingWhisperEngine: WhisperEngine {
         if let preparationError { throw preparationError }
     }
 
-    override func transcribeAudio(url: URL, settings: Settings) async throws -> String {
+    override func transcribeAudioDetailed(
+        url: URL,
+        settings: Settings
+    ) async throws -> WhisperEngine.DetailedTranscription {
         decodeCount += 1
-        return "prepared text"
+        return DetailedTranscription(text: "prepared text", segments: [], language: nil)
     }
 }
 
@@ -50,9 +53,7 @@ final class WhisperPreparationTests: XCTestCase {
 
     @MainActor
     func testShutdownReleasesLoadedMetalModelAndPreparedState() async throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let model = root.appendingPathComponent("ggml-tiny.en.bin")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: model.path))
+        let model = try TestFixtures.tinyEnglishModel()
         let engine = WhisperEngine(modelPath: model.path)
         try await engine.initialize()
         try engine.prepareForRecording()
@@ -106,20 +107,14 @@ final class WhisperPreparationTests: XCTestCase {
     }
 
     func testPreparedStatePreservesTextAndIsReleasedAfterUse() async throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let model = root.appendingPathComponent("ggml-tiny.en.bin")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: model.path))
-        let original = AppPreferences.shared.selectedWhisperModelPath
-        AppPreferences.shared.selectedWhisperModelPath = model.path
-        defer { AppPreferences.shared.selectedWhisperModelPath = original }
-        let engine = WhisperEngine()
+        let model = try TestFixtures.tinyEnglishModel()
+        let engine = WhisperEngine(modelPath: model.path)
         try await engine.initialize()
         var settings = Settings()
-        settings.selectedLanguage = "en"
         settings.initialPrompt = ""
         settings.useBeamSearch = false
         settings.temperature = 0
-        let audio = root.appendingPathComponent("jfk.wav")
+        let audio = try TestFixtures.speechSample()
         let cold = try await engine.transcribeAudio(url: audio, settings: settings)
         XCTAssertFalse(engine.hasPreparedState)
         let silenceURL = FileManager.default.temporaryDirectory.appendingPathComponent("vad-silence-\(UUID()).wav")

@@ -42,11 +42,21 @@ public class MyWhisperVadContext {
         }
     }
     
-    public func speechSegments(in samples: [Float]) -> [WhisperVadSegment]? {
+    /// The speech segments in `samples`, in centiseconds of the audio handed in.
+    ///
+    /// `params` are the silero parameters the detection runs with. A
+    /// default-constructed `WhisperVadParams` is upstream's own defaults, which
+    /// is what this call used to hardcode; the engine passes its parameters in
+    /// so the values it runs with are one named value instead of a hidden C
+    /// default.
+    public func speechSegments(
+        in samples: [Float],
+        params: WhisperVadParams = WhisperVadParams()
+    ) -> [WhisperVadSegment]? {
         guard let vctx = vctx else { return nil }
         
         let segmentsPtr = samples.withUnsafeBufferPointer { buffer in
-            whisper_vad_segments_from_samples(vctx, whisper_vad_default_params(), buffer.baseAddress, Int32(buffer.count))
+            whisper_vad_segments_from_samples(vctx, params.toC(), buffer.baseAddress, Int32(buffer.count))
         }
         guard let segmentsPtr = segmentsPtr else { return nil }
         defer { whisper_vad_free_segments(segmentsPtr) }

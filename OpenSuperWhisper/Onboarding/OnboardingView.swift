@@ -16,12 +16,6 @@ enum OnboardingShortcutOption: String, CaseIterable {
 
 @MainActor
 class OnboardingViewModel: ObservableObject {
-    @Published var selectedLanguage: String {
-        didSet {
-            AppPreferences.shared.whisperLanguage = selectedLanguage
-        }
-    }
-    
     @Published var useAsianAutocorrect: Bool {
         didSet {
             AppPreferences.shared.useAsianAutocorrect = useAsianAutocorrect
@@ -57,15 +51,12 @@ class OnboardingViewModel: ObservableObject {
         try await AsrModels.downloadAndLoad(version: $0, progressHandler: $1)
     }) {
         self.downloadFluid = downloadFluid
-        let systemLanguage = LanguageUtil.getSystemLanguage()
-        AppPreferences.shared.whisperLanguage = systemLanguage
-        self.selectedLanguage = systemLanguage
         self.useAsianAutocorrect = AppPreferences.shared.useAsianAutocorrect
         
         let currentHotkey = ModifierKey(rawValue: AppPreferences.shared.modifierOnlyHotkey) ?? .none
         if currentHotkey == .none && !AppPreferences.shared.hasCompletedOnboarding {
-            // Default to key combination mode — does NOT require Input Monitoring permission.
-            // Users can switch to single modifier key mode later in Settings if they prefer.
+            // New installs start in key-combination mode; single modifier key
+            // mode is available later in Settings for users who prefer it.
             self.selectedShortcut = .keyCombination
             AppPreferences.shared.modifierOnlyHotkey = ModifierKey.none.rawValue
             NotificationCenter.default.post(name: .hotkeySettingsChanged, object: nil)
@@ -95,7 +86,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func isFluidAudioModelDownloaded(version: String) -> Bool {
-        let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
+        let asrVersion = AsrModelVersion(storedParakeetVersion: version)
         let cacheDirectory = AsrModels.defaultCacheDirectory(for: asrVersion)
         return AsrModels.modelsExist(at: cacheDirectory, version: asrVersion)
     }
@@ -226,7 +217,7 @@ class OnboardingViewModel: ObservableObject {
                 if downloadID == id { downloadTask = nil; downloadID = nil }
             }
             do {
-                let asrVersion: AsrModelVersion = version == "v2" ? .v2 : .v3
+                let asrVersion: AsrModelVersion = AsrModelVersion(storedParakeetVersion: version)
                 
                 guard !Task.isCancelled else {
                     await MainActor.run {
@@ -376,26 +367,20 @@ struct OnboardingView: View {
                 }
                 .padding(.bottom, 8)
                 
-                // Language Selection
+                // Language detection is automatic: there is no picker any more,
+                // and the app never changes the language of what is dictated.
                 HStack(spacing: 8) {
-                    
-                    Picker("Language", selection: $viewModel.selectedLanguage) {
-                        ForEach(LanguageUtil.availableLanguages, id: \.self) { code in
-                            Text(LanguageUtil.languageNames[code] ?? code)
-                                .tag(code)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 150)
+                    Text("Language: detected automatically — dictate in Polish, English or anything else")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                if Settings.asianLanguages.contains(viewModel.selectedLanguage) {
-                    Toggle(isOn: $viewModel.useAsianAutocorrect) {
-                        Text("Use Asian Autocorrect")
-                            .font(.caption)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
+                Toggle(isOn: $viewModel.useAsianAutocorrect) {
+                    Text("Use Asian Autocorrect")
+                        .font(.caption)
                 }
+                .toggleStyle(SwitchToggleStyle(tint: Color.accentColor))
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -449,7 +434,7 @@ struct OnboardingView: View {
                         }
                         
                         if viewModel.selectedShortcut == .rightOption {
-                            Text("⚠️ Single modifier key mode requires Input Monitoring permission (macOS needs it to detect modifier keys globally). Only modifier key events are monitored — no regular keystrokes.")
+                            Text("Single modifier key mode detects modifier key presses globally through Accessibility permission. Only modifier key events are monitored — no regular keystrokes.")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
@@ -482,9 +467,21 @@ struct OnboardingView: View {
             
             Divider()
             
-            // Footer with Continue button
+            // Footer with Continue button. Onboarding is never a dead end:
+            // Continue needs a downloaded model, and a download can fail, be
+            // refused, or be pointless on a machine that already has one.
+            // Skip finishes onboarding exactly as Continue does - every choice
+            // here is also in Settings.
             HStack {
+                Button("Skip for now") {
+                    handleContinueButtonTap()
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary)
+                .help("Continue to the app without downloading a model")
+
                 Spacer()
+
                 Button(action: {
                     handleContinueButtonTap()
                 }) {
